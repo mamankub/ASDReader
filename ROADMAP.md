@@ -191,6 +191,7 @@ Ranked; detail and the full milestone table in [docs/roadmap.md](docs/roadmap.md
 
 ## Progress log
 
+- **2026-11-03 (ASDReader release security):** CI passed 4,616 tests before the advisory gate rejected inherited crypto-bigint 0.7.5. Updated only crypto-bigint/ctutils to patched, non-yanked 0.7.10/0.4.8; cargo-deny passes without new exceptions. Release candidates must be rebuilt from the patched commit.
 - **2026-11-03 (ASDReader archive notices):** Archives now carry ATTRIBUTION.md and complete notices for embedded UI fonts, icons and PDF resources; source-relative licence paths are shared by Linux/Windows packaging.
 - **2026-11-03 (ASDReader release packaging repair):** The first Linux binary compiled, but deprecated RTEN model URLs returned HTTP 403. Migrated downloads to the author's supported ONNX pair with pinned hashes and complete-pair legacy fallback; added download preflight before application builds.
 - **2026-11-03 (ASDReader v0.13.1 release preparation):** Owner authorized commit, push and first release. Version continues upstream 0.13.0; candidate builds target Linux x86_64 and unsigned Windows x64 portable with pinned Thai fonts. See `docs/releases/v0.13.1.md`.

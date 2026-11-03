@@ -58,6 +58,12 @@ Release candidate แรกคอมไพล์ Linux สำเร็จ แต
 
 CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate memory`) ก่อนถึง build/test ของโค้ด จึงยังไม่มีผลรับรอง FreeBSD
 
+## Dependency audit ก่อนเผยแพร่
+
+[CI บน commit 9c03919](https://github.com/mamankub/ASDReader/actions/runs/41594502355) ผ่าน 4,616 tests (ข้าม 16 tests), doctests, fmt, workspace clippy, CLI without default features, layers, wasm และ assets แต่หยุดที่ `cargo deny` เนื่องจาก `crypto-bigint 0.7.5` มี [RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387.html)
+
+ตรวจแพตช์ [upstream #4366](https://github.com/storytold/pdfcraft/pull/4366) และ changelog จากผู้พัฒนาแล้ว: รุ่น 0.7.6 ถูกถอนภายหลัง จึงใช้รุ่นที่ยังเผยแพร่ `crypto-bigint 0.7.10` พร้อม `ctutils 0.4.8` โดยเปลี่ยนเฉพาะสองแพ็กเกจนี้ใน Cargo.lock ผล `cargo-deny 0.20.2 --log-level error check` ผ่าน advisories, bans, licenses และ sources โดยไม่เพิ่มข้อยกเว้น หลังอัปเดต ทดสอบลายเซ็น 139 tests ผ่าน (ข้าม 1 test), clippy ของ sign/engine ทุก target แบบ `-D warnings`, fmt, layers 37 crates, assets, wasm 31 crates และ parity ผ่าน รุ่นเผยแพร่ต้องสร้างใหม่จาก commit ที่แก้แล้ว
+
 ## เอกสารสิทธิ์ในแพ็กเกจ
 
 แพ็กเกจ archive แนบ ATTRIBUTION.md และไฟล์ใบอนุญาตที่ NOTICE อ้างถึงสำหรับ Inter, JetBrains Mono, Dancing Script, ฟอนต์เริ่มต้นของ egui, Lucide และทรัพยากร PDF ที่ฝังมากับแอป เพิ่มจากใบอนุญาต craft-fonts/โมเดล OCR ที่คัดลอกอยู่แล้ว สคริปต์ Linux และ Windows ใช้รายการเดียวกันใน `packaging/asset-licences.txt` และ NOTICE ระบุการเปลี่ยนแบรนด์พร้อมเก็บเครดิตต้นทาง ตรวจ staging helpers จริงทั้ง Bash และ PowerShell แล้ว: คัดลอกครบ 11 ไฟล์และ byte ตรงต้นฉบับ; ฝั่ง Linux คงใบอนุญาตฟอนต์ไทยและ ATTRIBUTION.md ครบ
@@ -72,7 +78,7 @@ CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate m
 - ยังไม่มีการตัดคำไทยด้วยพจนานุกรม และไม่ได้เพิ่ม OCR ภาษาไทย
 - ตรวจบน Linux; ไม่ได้เปิดแอปบน Windows/macOS จริงหรือทดสอบตัวติดตั้งและการเซ็นแพ็กเกจ
 - Release workflow ปรับเป็น candidate builds สำหรับ Linux x86_64 และ Windows x64 portable โดยบังคับฟอนต์ไทยและตรวจ hash; ผล build และไฟล์ที่เผยแพร่ให้ตรวจจากหน้า release ของ v0.13.1
-- ผลข้างต้นเป็นการตรวจในเครื่อง ไม่ใช่ผล GitHub CI; ผล CI ที่ผูกกับ commit ให้ตรวจจาก PR และ workflow run โดยตรง
+- ผลในตารางเป็นการตรวจในเครื่อง; ผล GitHub CI แยกตาม commit ในหัวข้อ Dependency audit และลิงก์ workflow ของ release ไม่ถือว่า CI รอบก่อนเป็นผลของ commit ใหม่
 
 ## การนำแบรนด์เก่าออก
 
