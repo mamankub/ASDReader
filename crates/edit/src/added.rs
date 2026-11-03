@@ -285,8 +285,9 @@ fn wrapped(t: &AddedText) -> Vec<(String, bool)> {
     out
 }
 
-/// Thai wrapping at shaped cluster boundaries never detaches a tone/vowel mark from its base.
-/// This is glyph-safe wrapping, not dictionary-based Thai word segmentation.
+/// Thai wrapping keeps shaped marks, leading vowels and spacing vowels with their base.
+/// OpenType clusters alone are insufficient: Sara Aa can be a separate advancing cluster.
+/// This is orthographic wrapping, not dictionary-based Thai word segmentation.
 fn thai_lines(t: &AddedText, para: &str, width: f64) -> Result<Vec<String>, EditError> {
     let (pieces, _) = shaped_layout(t, para, false)?;
     let mut atoms = Vec::new();
@@ -300,9 +301,20 @@ fn thai_lines(t: &AddedText, para: &str, width: f64) -> Result<Vec<String>, Edit
             })),
         }
     }
+    let mut syllables: Vec<(String, f64)> = Vec::new();
+    for (text, advance) in atoms {
+        if let Some((previous, width)) = syllables.last_mut()
+            && (previous.ends_with(['เ', 'แ', 'โ', 'ใ', 'ไ']) || text.starts_with(['ะ', 'า', 'ำ', 'ๅ']))
+        {
+            previous.push_str(&text);
+            *width += advance;
+        } else {
+            syllables.push((text, advance));
+        }
+    }
     let mut lines = Vec::new();
     let (mut line, mut used) = (String::new(), 0.0);
-    for (text, advance) in atoms {
+    for (text, advance) in syllables {
         if !line.is_empty() && used + advance > width {
             lines.push(std::mem::take(&mut line));
             used = 0.0;

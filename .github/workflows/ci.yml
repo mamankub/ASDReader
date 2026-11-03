@@ -74,6 +74,12 @@ jobs:
       os: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '["ubuntu-24.04","windows-latest"]' || '["ubuntu-24.04"]' }}
       # Same craft-fonts commit as release.yml and freebsd.yml.
       craft-fonts-ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
+      require-craft-fonts: true
+      # ASDReader's Thai regressions must use shipped fonts on every runner.
+      # Missing Thai input is a build error; system fonts must not mask missing glyphs.
+      env: |
+        ASDREADER_REQUIRE_THAI=1
+        PDFCRAFT_SYSTEM_FONTS=0
       # egui/winit/rfd, and the independent oracles (crates/oracle).
       packages: >-
         libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev

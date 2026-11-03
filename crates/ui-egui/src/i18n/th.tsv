@@ -161,9 +161,9 @@
 	Use now	ใช้ตอนนี้
 	Open file	เปิดไฟล์
 	Recent	ล่าสุด
-	Files you open in PdfCraft appear here. Drop a PDF anywhere to open it.	ไฟล์ที่คุณเปิดใน PdfCraft จะแสดงที่นี่ วาง PDF ที่ใดก็ได้เพื่อเปิด
+	Files you open in ASDReader appear here. Drop a PDF anywhere to open it.	ไฟล์ที่คุณเปิดใน ASDReader จะแสดงที่นี่ วาง PDF ที่ใดก็ได้เพื่อเปิด
 	Privacy	ความเป็นส่วนตัว
-	PdfCraft works offline. No telemetry, no account, and no cloud processing unless you add a provider.	PdfCraft ทำงานแบบออฟไลน์ ไม่มีการเก็บข้อมูลการใช้งาน ไม่ต้องมีบัญชี และไม่ประมวลผลบนคลาวด์ เว้นแต่คุณจะเพิ่มผู้ให้บริการเอง
+	ASDReader works offline. No telemetry, no account, and no cloud processing unless you add a provider.	ASDReader ทำงานแบบออฟไลน์ ไม่มีการเก็บข้อมูลการใช้งาน ไม่ต้องมีบัญชี และไม่ประมวลผลบนคลาวด์ เว้นแต่คุณจะเพิ่มผู้ให้บริการเอง
 	Scripts run in a sandbox without file or network access. With JavaScript off, Acrobat's standard format, validate and calculate functions still work.	สคริปต์ทำงานในแซนด์บ็อกซ์ที่เข้าถึงไฟล์และเครือข่ายไม่ได้ เมื่อปิด JavaScript ฟังก์ชันมาตรฐานของ Acrobat สำหรับจัดรูปแบบ ตรวจสอบ และคำนวณยังคงทำงานได้
 	Back to all tools	กลับไปที่เครื่องมือทั้งหมด
 	Close panel	ปิดแผง
@@ -306,7 +306,7 @@
 	PdfCraft on GitHub	PdfCraft บน GitHub
 	ArtCraft website	เว็บไซต์ ArtCraft
 	Check for updates…	ตรวจหาการอัปเดต…
-	About PdfCraft	เกี่ยวกับ PdfCraft
+	About ASDReader	เกี่ยวกับ ASDReader
 	Export a PDF	ส่งออก PDF
 	Export to	ส่งออกเป็น
 	Microsoft Word (.docx)	Microsoft Word (.docx)
@@ -761,9 +761,9 @@
 	Check for updates	ตรวจหาการอัปเดต
 	No check has run yet.	ยังไม่ได้ตรวจสอบ
 	Checking for a newer version…	กำลังตรวจหารุ่นที่ใหม่กว่า…
-	PdfCraft {v} is available.	มี PdfCraft {v} ให้ใช้งานแล้ว
+	ASDReader {v} is available.	มี ASDReader {v} ให้ใช้งานแล้ว
 	You have version {c}. Download the new version from its release page.	คุณใช้รุ่น {c} ดาวน์โหลดรุ่นใหม่ได้จากหน้ารุ่นที่เผยแพร่
-	PdfCraft {c} is up to date.	PdfCraft {c} เป็นรุ่นล่าสุดแล้ว
+	ASDReader {c} is up to date.	ASDReader {c} เป็นรุ่นล่าสุดแล้ว
 	Couldn't check for updates: {e}	ตรวจหาการอัปเดตไม่ได้: {e}
 	You have version {c}. All releases are listed at {page}.	คุณใช้รุ่น {c} รายการรุ่นทั้งหมดอยู่ที่ {page}
 	Asks GitHub for the latest release. Nothing is downloaded or installed automatically.	ถาม GitHub ว่ามีรุ่นล่าสุดหรือไม่ จะไม่มีการดาวน์โหลดหรือติดตั้งโดยอัตโนมัติ
@@ -2681,3 +2681,12 @@ key	Space	Space
 	Page properties	คุณสมบัติหน้า
 	The password must have at least 8 characters.	รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร
 theme	Appearance	ลักษณะที่ปรากฏ
+	Welcome to ASDReader	ยินดีต้อนรับสู่ ASDReader
+	ASDReader support	ช่วยเหลือ ASDReader
+	ASDReader documentation	คู่มือ ASDReader
+	ASDReader on GitHub	ASDReader บน GitHub
+	ASDReader releases	รุ่นเผยแพร่ ASDReader
+	Report issues and follow ASDReader development on GitHub.	แจ้งปัญหาและติดตามการพัฒนา ASDReader บน GitHub
+	Based on PdfCraft (MIT OR Apache-2.0)	พัฒนาต่อยอดจาก PdfCraft (MIT OR Apache-2.0)
+	Support	ช่วยเหลือ
+	Help and development	ช่วยเหลือและติดตามการพัฒนา

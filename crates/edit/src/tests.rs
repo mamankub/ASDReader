@@ -3752,6 +3752,22 @@ fn added_thai_text_wraps_clusters_and_survives_reopen() {
 }
 
 #[test]
+fn thai_wrapping_keeps_leading_and_spacing_vowels_with_their_base() {
+    if pdfcraft_fonts::document_thai_font().is_none() {
+        return;
+    }
+    for text in ["เก้า", "แก้", "โก้", "ใส่", "ไก่", "กากา", "น้ำ", "ฤๅ"] {
+        let t = AddedText { text: text.into(), size: 12.0, rect: [0.0, 0.0, 12.0, 200.0], ..AddedText::default() };
+        let lines = super::added::lines(&t);
+        assert_eq!(lines.concat(), text);
+        for line in &lines {
+            assert!(!line.ends_with(['เ', 'แ', 'โ', 'ใ', 'ไ']), "detached leading vowel: {lines:?}");
+            assert!(!line.starts_with(['ะ', 'า', 'ำ', 'ๅ']), "detached spacing vowel: {lines:?}");
+        }
+    }
+}
+
+#[test]
 fn group_moves_preserve_glyph_bytes_and_unselected_text_state() {
     for content in [
         "BT /F1 12 Tf 1.3 Tc 2 Tw 80 Tz 14 TL 1 0.2 -0.1 1 50 600 Tm (A\\101) Tj 1 0 0 rg (Neighbour) Tj T* (Next) Tj ET",

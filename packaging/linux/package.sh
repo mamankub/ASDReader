@@ -48,9 +48,9 @@ case "$ARCH" in
 esac
 export PDFCRAFT_MAINTAINER="${PDFCRAFT_MAINTAINER:-PdfCraft maintainers <pdfcraft@storyteller.ai>}"
 LABEL_SUFFIX="${PDFCRAFT_BUILD_LABEL:+-$PDFCRAFT_BUILD_LABEL}"
-BASENAME="pdfcraft-$VERSION$LABEL_SUFFIX-linux-$ARCH"
+BASENAME="ASDReader-$VERSION$LABEL_SUFFIX-linux-$ARCH"
 
-echo "==> PdfCraft $VERSION$LABEL_SUFFIX for Linux $ARCH ($FORMATS)"
+echo "==> ASDReader $VERSION$LABEL_SUFFIX for Linux $ARCH ($FORMATS)"
 
 if [[ "$SKIP_BUILD" = 0 ]]; then
   if [[ -n "${CROSS_TARGET:-}" ]]; then

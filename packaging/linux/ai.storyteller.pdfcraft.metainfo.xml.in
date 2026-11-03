@@ -5,24 +5,24 @@
   <id>ai.storyteller.pdfcraft</id>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT OR Apache-2.0</project_license>
-  <name>PdfCraft</name>
+  <name>ASDReader</name>
   <summary>Read, organize, combine, split and secure PDFs</summary>
-  <developer id="ai.storyteller">
-    <name>Learning Machines LLC</name>
+  <developer id="io.github.mamankub">
+    <name>ASDReader contributors</name>
   </developer>
   <description>
     <p>
-      PdfCraft is an open-source PDF workbench. Read, comment on, fill in and sign PDFs;
+      ASDReader is an open-source PDF workbench. Read, comment on, fill in and sign PDFs;
       organize, combine and split pages; edit, redact, protect and export documents.
     </p>
   </description>
   <launchable type="desktop-id">ai.storyteller.pdfcraft.desktop</launchable>
   <icon type="stock">ai.storyteller.pdfcraft</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://getartcraft.com/apps/pdfcraft</url>
-  <url type="bugtracker">https://github.com/storytold/pdfcraft/issues</url>
-  <url type="help">https://github.com/storytold/pdfcraft</url>
-  <url type="contact">https://discord.gg/artcraft</url>
+  <url type="homepage">https://github.com/mamankub/ASDReader</url>
+  <url type="bugtracker">https://github.com/mamankub/ASDReader/issues</url>
+  <url type="help">https://github.com/mamankub/ASDReader</url>
+  <url type="contact">https://github.com/mamankub/ASDReader/issues</url>
   <categories>
     <category>Office</category>
     <category>Viewer</category>
@@ -35,13 +35,13 @@
   </keywords>
   <screenshots>
     <screenshot type="default">
-      <caption>A PDF open with its threaded comments</caption>
-      <image>https://raw.githubusercontent.com/storytold/pdfcraft/main/docs/images/pdfcraft-viewer.png</image>
+      <caption>ASDReader displaying a Thai PDF</caption>
+      <image>https://raw.githubusercontent.com/mamankub/ASDReader/v0.13.1/docs/images/asdreader-thai.png</image>
     </screenshot>
   </screenshots>
   <branding>
-    <color type="primary" scheme_preference="light">#9fd0ff</color>
-    <color type="primary" scheme_preference="dark">#1f64ba</color>
+    <color type="primary" scheme_preference="light">#FF1744</color>
+    <color type="primary" scheme_preference="dark">#FF1744</color>
   </branding>
   <requires>
     <display_length compare="ge">760</display_length>

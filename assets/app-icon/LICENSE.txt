@@ -1,3 +1,7 @@
+ASDReader replacement artwork (2026): original document/A geometry by ASDReader contributors, MIT OR Apache-2.0.
+
+Historical artwork notices, retained verbatim:
+
 PdfCraft app icon (pdfcraft.svg, pdfcraft-small.svg and every file derived from them in this
 directory: pdfcraft-1024.png, pdfcraft.icns, pdfcraft.ico, hicolor/).
 

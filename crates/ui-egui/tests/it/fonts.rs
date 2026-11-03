@@ -11,6 +11,30 @@ const TELUGU: &str = "తెలుగు ఫైల్";
 const HEBREW: &str = "ייפוי כח.pdf";
 const DEVANAGARI: &str = "हिंदी पाठ सम्पादन";
 
+/// Real Thai glyphs in every interface family, with system fallback disabled by the caller.
+/// All assigned Thai codepoints, including obsolete consonants and digits, must be present.
+#[test]
+fn thai_ui_covers_consonants_vowels_tones_and_digits() {
+    if pdfcraft_fonts::document_thai_font().is_none() {
+        assert!(option_env!("ASDREADER_REQUIRE_THAI").is_none(), "ASDReader must be tested with its Thai face");
+        return;
+    }
+    let thai: String = ('\u{0e01}'..='\u{0e3a}').chain('\u{0e3f}'..='\u{0e5b}').collect();
+    let mut fonts = Fonts::new(TextOptions::default(), theme::font_definitions());
+    for id in families() {
+        assert!(fonts.has_glyphs(&id, &thai), "{id:?} lacks Thai glyphs");
+        for text in ["น้ำ กิ่ กี้ กึ้ กื๊ ปู่ ญู ผู้ใช้ เก้า", "ASDReader ภาษาไทย ๑๒๓๔๕๖๗๘๙๐"]
+        {
+            for scale in [1.0, 1.5, 2.0] {
+                let galley = fonts.with_pixels_per_point(scale).layout_no_wrap(text.into(), id.clone(), Color32::BLACK);
+                assert!(galley.size().x.is_finite() && galley.size().x > 0.0);
+                assert_eq!(galley.text(), text);
+                assert_eq!(galley.rows.len(), 1);
+            }
+        }
+    }
+}
+
 fn families() -> Vec<FontId> {
     vec![FontId::proportional(13.0), FontId::monospace(13.0), theme::medium(13.0), theme::semibold(17.0)]
 }

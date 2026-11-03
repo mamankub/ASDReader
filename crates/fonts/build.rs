@@ -13,15 +13,19 @@ mod cjk_scripts;
 fn main() {
     println!("cargo::rerun-if-env-changed=CRAFT_FONTS_DIR");
     println!("cargo::rerun-if-env-changed=CRAFT_FONTS_REQUIRED");
+    println!("cargo::rerun-if-env-changed=ASDREADER_REQUIRE_THAI");
+    let required = std::env::var_os("CRAFT_FONTS_REQUIRED").is_some() || std::env::var_os("ASDREADER_REQUIRE_THAI").is_some();
     let mut src = String::from("pub static CRAFT_FONTS: &[CraftFont] = &[\n");
     if let Some(dir) = std::env::var_os("CRAFT_FONTS_DIR").map(PathBuf::from) {
         match craft_fonts(&dir) {
             Ok(entries) => src.push_str(&entries),
-            Err(e) if std::env::var_os("CRAFT_FONTS_REQUIRED").is_some() => {
+            Err(e) if required => {
                 println!("cargo::error=CRAFT_FONTS_DIR={}: {e}", dir.display());
             }
             Err(e) => println!("cargo::warning=building without craft-fonts: CRAFT_FONTS_DIR={}: {e}", dir.display()),
         }
+    } else if required {
+        println!("cargo::error=CRAFT_FONTS_DIR is required; set it to the pinned craft-fonts checkout before building ASDReader");
     }
     src.push_str("];\n");
     let out = PathBuf::from(std::env::var_os("OUT_DIR").unwrap_or_default()).join("craft_fonts.rs");
@@ -37,6 +41,7 @@ fn craft_fonts(dir: &std::path::Path) -> Result<String, String> {
     let text = std::fs::read_to_string(&manifest).map_err(|e| format!("{}: {e}", manifest.display()))?;
     let wasm = std::env::var("CARGO_CFG_TARGET_ARCH").is_ok_and(|a| a == "wasm32");
     let mut out = String::new();
+    let mut has_thai = false;
     for line in text.lines().map(str::trim).filter(|l| !l.is_empty() && !l.starts_with('#')) {
         let f: Vec<&str> = line.split(" | ").map(str::trim).collect();
         let [family, style, file, scripts, ..] = f.as_slice() else {
@@ -68,6 +73,7 @@ fn craft_fonts(dir: &std::path::Path) -> Result<String, String> {
         if wasm && !web_face {
             continue;
         }
+        has_thai |= scripts.split(',').any(|s| s.trim() == "Thai");
         let path = dir.join(file).canonicalize().map_err(|e| format!("{file}: {e}"))?;
         println!("cargo::rerun-if-changed={}", path.display());
         let scripts: Vec<String> = scripts.split(',').map(|s| format!("{:?}", s.trim())).collect();
@@ -77,6 +83,9 @@ fn craft_fonts(dir: &std::path::Path) -> Result<String, String> {
             scripts.join(", "),
             path.display().to_string(),
         );
+    }
+    if std::env::var_os("ASDREADER_REQUIRE_THAI").is_some() && !has_thai {
+        return Err("the font manifest has no Thai face; use the pinned craft-fonts checkout with Noto Sans Thai".into());
     }
     Ok(out)
 }

@@ -62,12 +62,13 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     });
                     ui.add_space(window_controls::SIDE_GAP - 4.0);
                 }
+                widgets::asdreader_mark(ui, button.min(24.0));
                 if icons::button(ui, "house", button, app.active.is_none() && !app.combine_showing(), tl!("Home")).clicked() {
                     app.active = None;
                     app.combine_tab.focused = false;
                 }
-                // Keep the two icon buttons, Discord's text/padding and three gaps outside the scrolling tabs.
-                let controls_width = ui.fonts_mut(|f| f.layout_no_wrap("Discord".into(), theme::medium(13.0), t.text).size().x)
+                // Keep the two icon buttons, Support's text/padding and three gaps outside the scrolling tabs.
+                let controls_width = ui.fonts_mut(|f| f.layout_no_wrap(tl!("Support").into(), theme::medium(13.0), t.text).size().x)
                     + 2.0 * button
                     + 50.0
                     + window_controls::width(&controls.right);
@@ -300,7 +301,10 @@ pub fn tab_strip(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                         app.dialog = Some(Dialog::Shortcuts);
                     }
                     // One click to the community, from anywhere in the app.
-                    if widgets::ghost_button_sized(ui, "messages-square", "Discord", tab_h).on_hover_text(pdfcraft_engine::links::DISCORD).clicked() {
+                    if widgets::ghost_button_sized(ui, "messages-square", tl!("Support"), tab_h)
+                        .on_hover_text(pdfcraft_engine::links::DISCORD)
+                        .clicked()
+                    {
                         app.execute("help.discord");
                     }
                 });

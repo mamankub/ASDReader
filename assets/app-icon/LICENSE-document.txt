@@ -1,3 +1,7 @@
+ASDReader replacement artwork (2026): original document/A geometry by ASDReader contributors, MIT OR Apache-2.0.
+
+Historical artwork notices, retained verbatim:
+
 PdfCraft PDF document icon (pdfcraft-document.svg and pdfcraft-document.ico).
 SPDX-License-Identifier: ISC AND (MIT OR Apache-2.0)
 

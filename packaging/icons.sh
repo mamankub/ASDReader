@@ -3,7 +3,7 @@
 # from assets/app-icon/pdfcraft-document.svg. Both are master vectors.
 #
 # Needs: resvg (brew install resvg / cargo install resvg) and python3 (stdlib only, for the .ico).
-# On macOS, iconutil also writes the .icns. The outputs are committed, so building and packaging
+# ICNS is written with iconutil on macOS or PNG container entries elsewhere. The outputs are committed, so building and packaging
 # never need these tools. After running it, update the sha256 values in ATTRIBUTION.toml, then
 # `cargo xtask assets --write`.
 #
@@ -76,6 +76,20 @@ if command -v iconutil >/dev/null; then
   done
   iconutil -c icns -o "$DIR/pdfcraft.icns" "$SET"
 else
-  echo "warning: iconutil not found (macOS only); pdfcraft.icns not regenerated" >&2
+  # Modern ICNS entries contain PNG data; generate the same sizes on Linux/CI too.
+  for s in 16 32 64 128 256 512 1024; do
+    render "$MAC" "$s" "$TMP/mac-$s.png"
+  done
+  python3 - "$DIR/pdfcraft.icns" "$TMP" <<'PY'
+import pathlib, struct, sys
+out, folder = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+entries = []
+for tag, size in [(b'icp4', 16), (b'icp5', 32), (b'icp6', 64),
+                  (b'ic07', 128), (b'ic08', 256), (b'ic09', 512), (b'ic10', 1024)]:
+    data = (folder / f'mac-{size}.png').read_bytes()
+    entries.append(tag + struct.pack('>I', len(data) + 8) + data)
+body = b''.join(entries)
+out.write_bytes(b'icns' + struct.pack('>I', len(body) + 8) + body)
+PY
 fi
 echo "icons written to $DIR"

@@ -96,3 +96,36 @@ fn contextual_arabic_marks_ligatures_and_mixed_bidi_keep_logical_text_after_reop
     }
     exercise(font.bytes.to_vec(), "سَلَام 123", "NotoSansArabic-Regular");
 }
+
+#[test]
+fn thai_added_text_keeps_pixels_and_unicode_after_save_reopen_and_undo() {
+    let Some(_) = pdfcraft_fonts::document_thai_font() else {
+        assert!(option_env!("ASDREADER_REQUIRE_THAI").is_none(), "ASDReader acceptance requires Thai fonts");
+        return;
+    };
+    let text = "ASD น้ำ กิ่ กี้ กึ้ กื๊ ผู้ใช้ ปู่ ญู เก้า แก้ โก้ ใส่ ไก่ ฤๅ ๑๒๓";
+    let mut s = Session::new();
+    let id = s.open("thai.pdf", None, document(), None).unwrap();
+    let before = pixels(s.get(id).unwrap().display.clone());
+    s.apply(
+        id,
+        Edit::AddText {
+            page: 0,
+            text: pdfcraft_engine::AddedText { text: text.into(), rect: [20.0, 20.0, 280.0, 130.0], size: 14.0, ..Default::default() },
+        },
+    )
+    .unwrap();
+    let expected = pixels(s.get(id).unwrap().display.clone());
+    assert_ne!(expected, before);
+    let saved = s.save_bytes(id).unwrap();
+    let reopened = s.open("saved-thai.pdf", None, saved.clone(), None).unwrap();
+    assert_eq!(pixels(s.get(reopened).unwrap().display.clone()), expected);
+    let mut renderer = PageRenderer::new(saved, Default::default());
+    let copied = renderer.filtered_text(0, Default::default()).unwrap().plain_text();
+    let compact = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    assert_eq!(compact(&copied), compact(&format!("Source{text}")), "copy text must preserve every Thai codepoint exactly once");
+    s.undo(id).unwrap();
+    assert_eq!(pixels(s.get(id).unwrap().display.clone()), before);
+    s.redo(id).unwrap();
+    assert_eq!(pixels(s.get(id).unwrap().display.clone()), expected);
+}

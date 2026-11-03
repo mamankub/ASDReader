@@ -12,7 +12,8 @@
   warning when no signing secrets are set).
 
   Needs: Rust (MSVC toolchain + the target), curl and the network (the OCR models), the Windows SDK (rc.exe, signtool.exe),
-  and WiX v5: dotnet tool install --global wix --version 5.0.2
+  and WiX v5 unless -PortableOnly: dotnet tool install --global wix --version 5.0.2
+  -PortableOnly produces only the zip and does not build or install an MSI.
 
 .EXAMPLE
   pwsh packaging/windows/package.ps1 -Arch x64
@@ -21,7 +22,8 @@
 #>
 param(
   [ValidateSet('x64', 'x86', 'arm64')] [string] $Arch = 'x64',
-  [switch] $SkipBuild
+  [switch] $SkipBuild,
+  [switch] $PortableOnly
 )
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
@@ -53,7 +55,7 @@ New-Item -ItemType Directory -Force -Path $Dist | Out-Null
 if (-not $env:PDFCRAFT_BUILD_SHA) { $env:PDFCRAFT_BUILD_SHA = (git -C $Root rev-parse HEAD 2>$null) }
 if (-not $env:PDFCRAFT_BUILD_DATE) { $env:PDFCRAFT_BUILD_DATE = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd') }
 
-Write-Output "PdfCraft $Version for Windows $Arch ($Target)"
+Write-Output "ASDReader $Version for Windows $Arch ($Target)"
 
 if (-not $SkipBuild) {
   # Static CRT: no VC++ redistributable needed. Scoped to the target so host build scripts and
@@ -109,22 +111,24 @@ if (-not (Test-Path (Join-Path $Models 'ATTRIBUTION.txt')) -or -not (Get-ChildIt
 }
 
 # ---- MSI ---------------------------------------------------------------------------------------
-$Msi = Join-Path $Dist "pdfcraft-$Version-windows-$Arch.msi"
-Invoke-Native 'wix build' {
-  wix build (Join-Path $PSScriptRoot 'pdfcraft.wxs') -arch $Arch `
-    (Join-Path $PSScriptRoot 'installer-ui.wxs') `
-    -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "ModelsDir=$Models" -d "IconPath=$(Join-Path $Root 'assets\app-icon\pdfcraft.ico')" `
-    -o $Msi
+if (-not $PortableOnly) {
+  $Msi = Join-Path $Dist "pdfcraft-$Version-windows-$Arch.msi"
+  Invoke-Native 'wix build' {
+    wix build (Join-Path $PSScriptRoot 'pdfcraft.wxs') -arch $Arch `
+      (Join-Path $PSScriptRoot 'installer-ui.wxs') `
+      -d "Version=$MsiVersion" -d "BinDir=$Stage" -d "ModelsDir=$Models" -d "IconPath=$(Join-Path $Root 'assets\app-icon\pdfcraft.ico')" `
+      -o $Msi
+  }
+  # Inspect the built MSI, not just the XML, before signing/publishing it. In a child process, so
+  # its Windows Installer database handle is gone before signtool opens the MSI.
+  Invoke-Native 'test-msi' { & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'test-msi.ps1') $Msi }
+  # wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
+  Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Msi, '.wixpdb'))
+  & (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 }
-# Inspect the built MSI, not just the XML, before signing/publishing it. In a child process, so
-# its Windows Installer database handle is gone before signtool opens the MSI.
-Invoke-Native 'test-msi' { & (Get-Process -Id $PID).Path -NoProfile -File (Join-Path $PSScriptRoot 'test-msi.ps1') $Msi }
-# wix writes its debug symbols (.wixpdb) next to the MSI; keep them out of the release assets.
-Remove-Item -Force -ErrorAction SilentlyContinue ([IO.Path]::ChangeExtension($Msi, '.wixpdb'))
-& (Join-Path $PSScriptRoot 'sign.ps1') $Msi
 
 # ---- portable zip ------------------------------------------------------------------------------
-$Portable = Join-Path $TargetDir "windows-package\pdfcraft-$Version-windows-$Arch-portable"
+$Portable = Join-Path $TargetDir "windows-package\ASDReader-$Version-windows-$Arch-portable"
 Remove-Item -Recurse -Force $Portable -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $Portable | Out-Null
 Copy-Item (Join-Path $Stage '*.exe') $Portable
@@ -148,7 +152,7 @@ if ($env:CRAFT_FONTS_DIR) {
 # digital IDs go to PdfCraftData\ next to the exe instead of %APPDATA% (#157; see
 # crates/ui-egui/src/portable.rs).
 Copy-Item (Join-Path $PSScriptRoot 'portable.txt') $Portable
-$Zip = Join-Path $Dist "pdfcraft-$Version-windows-$Arch-portable.zip"
+$Zip = Join-Path $Dist "ASDReader-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip
 
@@ -160,4 +164,5 @@ if ($Arch -ne 'arm64' -or $HostArch -eq 'arm64') {
 } else {
   Write-Output "skipping pdfcraft-cli --version: an $Arch build doesn't run on this $HostArch machine"
 }
-Get-Item $Msi, $Zip | Format-Table Name, Length
+if ($PortableOnly) { Get-Item $Zip | Format-Table Name, Length }
+else { Get-Item $Msi, $Zip | Format-Table Name, Length }
