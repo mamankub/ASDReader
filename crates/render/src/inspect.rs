@@ -11,13 +11,13 @@ use std::sync::Arc;
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+use asdreader_cos::page_labels::{
+    MAX_LABEL_BYTES, MAX_LABEL_TOTAL_BYTES, MAX_LABEL_TREE_DEPTH, MAX_LABEL_TREE_WORK, MAX_PREFIX_BYTES, MAX_PREFIX_TOTAL_BYTES, alpha, roman,
+};
 use hayro::hayro_syntax::DecryptionError;
 use hayro::hayro_syntax::LoadPdfError;
 use hayro::hayro_syntax::Pdf;
 use lopdf::{Dictionary, Document, LoadOptions, Object, ObjectId};
-use pdfcraft_cos::page_labels::{
-    MAX_LABEL_BYTES, MAX_LABEL_TOTAL_BYTES, MAX_LABEL_TREE_DEPTH, MAX_LABEL_TREE_WORK, MAX_PREFIX_BYTES, MAX_PREFIX_TOTAL_BYTES, alpha, roman,
-};
 
 use crate::OpenError;
 use crate::structure::{LazyStructure, Structure};
@@ -67,7 +67,7 @@ fn retained(a: &Annotation) -> usize {
 const MAX_LAYER_GROUP_ENTRIES: usize = 4096;
 
 /// `DocInfo::outline` holds the first this many bookmarks in outline order. Opening a document
-/// reads only this window; the rest are listed by page through `pdfcraft_organize`.
+/// reads only this window; the rest are listed by page through `asdreader_organize`.
 const OUTLINE_WINDOW: usize = 10_000;
 
 /// Deepest level `DocInfo::outline` nests (the top level is 0); deeper bookmarks are left out.
@@ -326,7 +326,7 @@ pub enum LinkTarget {
     },
     /// A local-file remote Go-To action. The caller resolves `file` relative to the source path.
     /// `launch` marks a Launch action that names a PDF file (see `launch_pdf`), opened the same
-    /// way: as a document in PdfCraft, never by the operating system.
+    /// way: as a document in ASDReader, never by the operating system.
     RemoteGoTo {
         launch: bool,
         file: String,
@@ -434,7 +434,7 @@ pub struct Annotation {
     /// `/IT`, the intent: `FreeTextCallout`, `PolygonCloud`, `FreeTextTypeWriter`…
     pub intent: Option<String>,
     /// A Fill & Sign mark: typed text, a check, cross, dot or line, or a typed, drawn or picture
-    /// signature or initials (the rules of `pdfcraft_annot::is_fill_sign`).
+    /// signature or initials (the rules of `asdreader_annot::is_fill_sign`).
     pub fill_sign: bool,
     /// The points that shape a line (its two ends, `/L`) or connected lines, a polygon or a
     /// cloud (their corners, `/Vertices`), in user space; empty for other comments.
@@ -676,7 +676,7 @@ impl<'a> Inspector<'a> {
             info.producer = self.text(d, b"Producer");
             const STANDARD: [&[u8]; 9] =
                 [b"Title", b"Author", b"Subject", b"Keywords", b"Creator", b"Producer", b"CreationDate", b"ModDate", b"Trapped"];
-            // The same rule as the engine's list after an edit (`pdfcraft_organize::custom_info`,
+            // The same rule as the engine's list after an edit (`asdreader_organize::custom_info`,
             // trimmed and without empty values): text strings only, so a name value is not a
             // custom property, and the cap counts listed entries.
             info.custom = d
@@ -879,7 +879,7 @@ impl<'a> Inspector<'a> {
     }
 
     /// Whether an annotation is a Fill & Sign mark. Keep in step with
-    /// `pdfcraft_annot::is_fill_sign`, which the engine's comment list uses.
+    /// `asdreader_annot::is_fill_sign`, which the engine's comment list uses.
     fn is_fill_sign(&self, d: &Dictionary, subtype: &str) -> bool {
         let yes = |key: &[u8]| matches!(d.get(key).map(|o| self.resolve(o)), Ok(Object::Boolean(true)));
         if yes(b"PCFillSign") {
@@ -1291,7 +1291,7 @@ impl<'a> Inspector<'a> {
                 }
                 // Not comments: form widgets, pop-ups and non-markup annotations such as the
                 // Screen annotation that drives a LaTeX `animate` player (keep in step with
-                // `pdfcraft_annot::is_comment_subtype`).
+                // `asdreader_annot::is_comment_subtype`).
                 if matches!(subtype.as_str(), "Widget" | "Popup" | "Screen" | "Movie" | "RichMedia" | "3D" | "PrinterMark" | "TrapNet" | "Watermark")
                 {
                     continue;
@@ -1328,7 +1328,7 @@ impl<'a> Inspector<'a> {
                 };
                 let in_reply_to = d.get(b"IRT").ok().and_then(|o| self.dict(o)).and_then(|p| self.text(p, b"NM"));
                 let fill_sign = self.is_fill_sign(d, &subtype);
-                // Keep in step with `pdfcraft_annot::summaries`.
+                // Keep in step with `asdreader_annot::summaries`.
                 let key: &[u8] = if subtype == "Line" { b"L" } else { b"Vertices" };
                 let points = match d.get(key).map(|o| self.resolve(o)) {
                     Ok(Object::Array(v)) if matches!(subtype.as_str(), "Line" | "PolyLine" | "Polygon") => {
@@ -1343,7 +1343,7 @@ impl<'a> Inspector<'a> {
                     subtype,
                     author: self.text(d, b"T"),
                     // Acrobat ends lines with CR, which the interface would draw as nothing (keep
-                    // in step with `pdfcraft_annot::summaries`).
+                    // in step with `asdreader_annot::summaries`).
                     contents: self.text(d, b"Contents").map(|s| s.replace("\r\n", "\n").replace('\r', "\n")),
                     modified: self.text(d, b"M").map(|m| pretty_date(&m)),
                     name: self.text(d, b"NM"),
@@ -1720,7 +1720,7 @@ impl<'a> Inspector<'a> {
                     descendant.and_then(|d| d.get(b"CIDSystemInfo").ok()).and_then(|o| self.dict(o)).and_then(|c| self.text(c, b"Ordering"));
                 let subset = base.len() > 7 && base.as_bytes()[6] == b'+' && base[..6].bytes().all(|b| b.is_ascii_uppercase());
                 let name = if subset { base[7..].to_string() } else { base };
-                let chosen = pdfcraft_fonts::fallback::substitute(&pdfcraft_fonts::fallback::Request {
+                let chosen = asdreader_fonts::fallback::substitute(&asdreader_fonts::fallback::Request {
                     base_font: &name,
                     embedded,
                     flags,
@@ -1776,9 +1776,9 @@ impl<'a> Inspector<'a> {
 }
 
 /// A text string's value, decoded by the same rules as the engine's object model
-/// ([`pdfcraft_cos::PdfString::to_text`]) so the panels and outline editing agree.
+/// ([`asdreader_cos::PdfString::to_text`]) so the panels and outline editing agree.
 fn text_string(bytes: &[u8]) -> String {
-    pdfcraft_cos::PdfString::literal(bytes).to_text()
+    asdreader_cos::PdfString::literal(bytes).to_text()
 }
 
 /// What [`Inspector::name_tree_find`] has visited: node dictionaries, and the key and `/Names`
@@ -1924,7 +1924,7 @@ pub fn attachment_data(bytes: &[u8], password: Option<&str>, att: &Attachment) -
 }
 
 /// An XFA packet's bytes as text: UTF-16 (little- or big-endian, told by a byte order mark or by
-/// how `<` is written) or UTF-8, as `pdfcraft_xfa::packets::decode` reads them. Lossy: only one
+/// how `<` is written) or UTF-8, as `asdreader_xfa::packets::decode` reads them. Lossy: only one
 /// element is looked for.
 fn xfa_packet_text(bytes: &[u8]) -> String {
     let utf16 = |b: &[u8], from: fn([u8; 2]) -> u16| {
@@ -2662,7 +2662,7 @@ trailer << /Root 1 0 R >>
                 subset: true,
                 encoding: None,
                 substitute: Some("Helvetica".into()),
-                substitution: Some(pdfcraft_fonts::fallback::Why::NamedStandard14.note().into()),
+                substitution: Some(asdreader_fonts::fallback::Why::NamedStandard14.note().into()),
             }]
         );
     }
@@ -3129,8 +3129,8 @@ trailer << /Root 1 0 R >>
     fn lazy_structure_matches_the_compatibility_inspector() {
         // Each fixture as lopdf writes it, and with its objects in object streams.
         let packed = |bytes: &[u8]| {
-            let doc = pdfcraft_cos::Document::open(Arc::new(bytes.to_vec())).unwrap();
-            pdfcraft_cos::write_full(&doc, &pdfcraft_cos::SaveOptions { object_streams: true, ..Default::default() }).unwrap()
+            let doc = asdreader_cos::Document::open(Arc::new(bytes.to_vec())).unwrap();
+            asdreader_cos::write_full(&doc, &asdreader_cos::SaveOptions { object_streams: true, ..Default::default() }).unwrap()
         };
         let fixtures = [ATTACHMENTS, LAYERS, DESTS].into_iter().flat_map(|bytes| {
             let mut original = Document::load_mem(bytes).unwrap();

@@ -2,8 +2,8 @@
 
 use std::sync::Arc;
 
-use pdfcraft_automation::{Automation, Content};
-use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream, write_full};
+use asdreader_automation::{Automation, Content};
+use asdreader_cos::{Dict, Document, Object, SaveOptions, Stream, write_full};
 use serde_json::{Value, json};
 
 const COLORS: [[u8; 3]; 4] = [[220, 30, 40], [20, 190, 60], [30, 60, 220], [230, 190, 20]];

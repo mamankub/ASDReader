@@ -8,7 +8,7 @@ use super::*;
 /// One paragraph being edited: the document as it was opened, and the page's lines then.
 pub struct TextSession {
     base: Document,
-    base_state: pdfcraft_cos::ReadState,
+    base_state: asdreader_cos::ReadState,
     page: usize,
     block: usize,
     lines: Vec<TextLine>,

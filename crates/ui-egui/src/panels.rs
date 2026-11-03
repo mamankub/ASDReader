@@ -1,12 +1,12 @@
 //! Left tool panel (All tools + tool sub-panels, generated from the engine catalogue) and the
 //! right-hand panels (Comments, Bookmarks, Pages, Fields, Layers, Attachments).
 
+use asdreader_engine::catalog::{self, Availability, TOOL_GROUPS, ToolGroup, ToolItem};
+use asdreader_render::{DocInfo, FieldKind, OutlineItem};
 use egui::{Align, Align2, Color32, CornerRadius, Layout, Rect, Sense, Stroke, pos2, vec2};
-use pdfcraft_engine::catalog::{self, Availability, TOOL_GROUPS, ToolGroup, ToolItem};
-use pdfcraft_render::{DocInfo, FieldKind, OutlineItem};
 
 use crate::theme::{self, Tokens};
-use crate::{LeftPanel, PdfCraftApp, RightPanel, icons, widgets};
+use crate::{ASDReaderApp, LeftPanel, RightPanel, icons, widgets};
 
 const COLLAPSED_TOOLS: usize = 14;
 
@@ -14,7 +14,7 @@ fn hue(g: &ToolGroup) -> Color32 {
     Color32::from_rgb(g.hue[0], g.hue[1], g.hue[2])
 }
 
-pub fn left_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+pub fn left_panel(app: &mut ASDReaderApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     // Organize closed another way (the grid's Close, or a page opened from it) closes the tool too,
     // as its panel's Close does, back to the workspace's own panel.
@@ -62,7 +62,7 @@ pub(crate) fn panel_header(ui: &mut egui::Ui, t: &Tokens, title: &str, back: Opt
     (go_back, close)
 }
 
-fn all_tools(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
+fn all_tools(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens) {
     let (_, close) = panel_header(ui, t, "All tools", None);
     if close {
         app.left_open = false;
@@ -149,7 +149,7 @@ fn tool_row(ui: &mut egui::Ui, t: &Tokens, g: &ToolGroup) -> egui::Response {
     theme::hand(resp).on_hover_text(tip)
 }
 
-fn tool_detail(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static ToolGroup) {
+fn tool_detail(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens, g: &'static ToolGroup) {
     if g.id == "edit" {
         edit_panel(app, ui, t, g);
         return;
@@ -292,7 +292,7 @@ const EDIT_OTHER_TOOLS: [&str; 3] = ["combine", "redact", "form"];
 /// Add content with the rarer items under More; and Other options, the neighbouring tools.
 /// Edit text & images itself is on the floating toolbar, and on from the moment Edit opens.
 /// Every item comes from the catalogue, so its label, icon and availability have one source.
-fn edit_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static ToolGroup) {
+fn edit_panel(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens, g: &'static ToolGroup) {
     let items = || g.sections.iter().flat_map(|s| s.items.iter());
     let item = |command: &str| items().find(|i| i.command == command);
     let mut run = None;
@@ -334,7 +334,7 @@ fn edit_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static 
             ui.spacing_mut().item_spacing.x = 6.0;
             for i in EDIT_PAGE_BUTTONS.iter().filter_map(|c| item(c)) {
                 // Enabled as the command itself is: a document that forbids page assembly refuses these.
-                let enabled = pdfcraft_engine::commands::command(i.command).is_some_and(|spec| app.command_enabled(spec));
+                let enabled = asdreader_engine::commands::command(i.command).is_some_and(|spec| app.command_enabled(spec));
                 let resp = ui.add_enabled_ui(enabled, |ui| icons::button(ui, i.icon, 34.0, false, tl!(i.label))).inner;
                 if resp.clicked() {
                     run = Some(i.command);
@@ -403,7 +403,14 @@ fn edit_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens, g: &'static 
 
 /// A tool entry with further commands (Add / Update / Remove): a caret at `caret` says it opens a
 /// menu, and each command is enabled by its own needs. Returns the command chosen.
-fn actions_menu(app: &PdfCraftApp, ui: &egui::Ui, resp: &egui::Response, item: &ToolItem, caret: egui::Pos2, color: Color32) -> Option<&'static str> {
+fn actions_menu(
+    app: &ASDReaderApp,
+    ui: &egui::Ui,
+    resp: &egui::Response,
+    item: &ToolItem,
+    caret: egui::Pos2,
+    color: Color32,
+) -> Option<&'static str> {
     ui.painter().add(egui::Shape::convex_polygon(
         vec![caret + vec2(-3.5, -2.0), caret + vec2(3.5, -2.0), caret + vec2(0.0, 2.5)],
         color,
@@ -413,7 +420,7 @@ fn actions_menu(app: &PdfCraftApp, ui: &egui::Ui, resp: &egui::Response, item: &
     egui::Popup::menu(resp).show(|ui| {
         ui.set_min_width(180.0);
         for (n, id) in item.actions.iter().enumerate() {
-            let Some(spec) = pdfcraft_engine::commands::command(id) else { continue };
+            let Some(spec) = asdreader_engine::commands::command(id) else { continue };
             // Add stays usable with no document open: it asks for a file first.
             let enabled = (n == 0 && app.active.is_none()) || app.command_enabled(spec);
             let label = crate::i18n::menu_label(spec.id, spec.label);
@@ -448,8 +455,8 @@ fn edit_row(ui: &mut egui::Ui, t: &Tokens, icon: &str, label: &str, availability
 
 /// Add a stamp: Dynamic, Sign Here and Standard Business stamps; click one, then click on the
 /// page to place it.
-fn stamp_palette(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
-    use pdfcraft_engine::{StampGroup, StampKind};
+fn stamp_palette(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens) {
+    use asdreader_engine::{StampGroup, StampKind};
     ui.label(egui::RichText::new(tl!("Choose a stamp, then click on the page to place it.")).small().color(t.text_faint));
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
         for (group, title) in [
@@ -518,7 +525,7 @@ fn stamp_palette(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
 
 /// Edit a PDF ▸ Format text: for the selected added text (one undoable change), or the style
 /// new text gets.
-fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
+fn format_section(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens) {
     // Editing a paragraph of existing text: its formatting, applied as it changes.
     if let Some((i, _)) = app.active_ids()
         && let Some(ed) = app.views[i].line_editor.clone()
@@ -565,14 +572,14 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
         let (page, index) = app.views[i].content.selected?;
         let doc = app.session.get(id)?;
         match &doc.added().iter().filter(|a| a.page == page).nth(index)?.content {
-            pdfcraft_engine::AddedContent::Image(img) => Some((page, index, img.clone())),
+            asdreader_engine::AddedContent::Image(img) => Some((page, index, img.clone())),
             _ => None,
         }
     });
     if let Some((page, index, img)) = image {
         match crate::content_ui::image_panel(ui, t, &img) {
             Some(crate::content_ui::ImageAction::Update(content)) => {
-                app.apply_edit(pdfcraft_engine::Edit::UpdateContent { page, index, content });
+                app.apply_edit(asdreader_engine::Edit::UpdateContent { page, index, content });
             }
             Some(crate::content_ui::ImageAction::Replace) => app.replace_image_dialog(page, index),
             None => {}
@@ -586,7 +593,7 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
         let doc = app.session.get(id)?;
         let a = doc.added().iter().filter(|a| a.page == page).nth(index)?;
         match &a.content {
-            pdfcraft_engine::AddedContent::Text(text) => Some((page, index, text.clone())),
+            asdreader_engine::AddedContent::Text(text) => Some((page, index, text.clone())),
             _ => None,
         }
     });
@@ -596,8 +603,9 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
             added_text_format(ui, t, &mut style);
             if style != text {
                 // The reusable style follows the selection only when the edit took, so a refused one adds nothing odd later.
-                if app.apply_edit(pdfcraft_engine::Edit::UpdateContent { page, index, content: pdfcraft_engine::AddedContent::Text(style.clone()) }) {
-                    app.text_style = pdfcraft_engine::AddedText { text: String::new(), rect: [0.0; 4], ..style };
+                if app.apply_edit(asdreader_engine::Edit::UpdateContent { page, index, content: asdreader_engine::AddedContent::Text(style.clone()) })
+                {
+                    app.text_style = asdreader_engine::AddedText { text: String::new(), rect: [0.0; 4], ..style };
                 }
             }
         }
@@ -612,7 +620,7 @@ fn format_section(app: &mut PdfCraftApp, ui: &mut egui::Ui, t: &Tokens) {
 }
 
 /// Format text for added text: the standard families, size, colour, style and alignment.
-fn added_text_format(ui: &mut egui::Ui, t: &Tokens, style: &mut pdfcraft_engine::AddedText) {
+fn added_text_format(ui: &mut egui::Ui, t: &Tokens, style: &mut asdreader_engine::AddedText) {
     let shown = style.family.label().to_string();
     let out = crate::format_text_ui::panel(ui, t, style, None, crate::format_text_ui::Fonts { sources: None, shown });
     if let Some(crate::format_text_ui::FontChoice::Family(family)) = out.font {
@@ -620,10 +628,10 @@ fn added_text_format(ui: &mut egui::Ui, t: &Tokens, style: &mut pdfcraft_engine:
     }
 }
 
-impl PdfCraftApp {
+impl ASDReaderApp {
     /// Apply the open paragraph's formatting as one change; the paragraph stays open.
     pub(crate) fn apply_line_format(&mut self, index: usize, mut ed: crate::edit_text_ui::LineEditor, ctx: Option<&egui::Context>) {
-        let edit = pdfcraft_engine::Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() };
+        let edit = asdreader_engine::Edit::EditTextBlock { page: ed.page, block: ed.block, text: ed.text.clone(), style: ed.style() };
         if self.apply_edit(edit) {
             ed.applied();
             if let Some(doc) = self.session.get(self.views[index].id)
@@ -644,11 +652,11 @@ impl PdfCraftApp {
 pub(crate) enum Nav {
     Page(usize),
     /// A bookmark's destination: its page and where on it.
-    Dest(usize, pdfcraft_render::DestView),
+    Dest(usize, asdreader_render::DestView),
     Flash(usize, [f32; 4]),
 }
 
-pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
+pub fn right_panel(app: &mut ASDReaderApp, ui: &mut egui::Ui) {
     let t = Tokens::get(ui.ctx());
     let Some((index, id)) = app.active_ids() else { return };
     let Some(panel) = app.right else { return };
@@ -659,7 +667,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
     let mut attachment_action: Option<(usize, bool)> = None; // (index, open instead of save)
     let mut bm_action: Option<BmAction> = None;
     let mut bm_expand: Option<usize> = None;
-    let mut panel_edit: Option<pdfcraft_engine::Edit> = None;
+    let mut panel_edit: Option<asdreader_engine::Edit> = None;
     let mut field_properties = None;
     let mut panel_command: Option<&'static str> = None;
     let mut sig_action: Option<crate::sign_ui::PanelAction> = None;
@@ -788,7 +796,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                     ui.data_mut(|d| d.insert_temp(search_id, bookmark_query.clone()));
                     ui.add_space(6.0);
                 }
-                let bookmark_query = pdfcraft_render::text::fold_case(bookmark_query.trim());
+                let bookmark_query = asdreader_render::text::fold_case(bookmark_query.trim());
                 let mut bookmark_matches =
                     if panel == RightPanel::Bookmarks { outline_matches(&info.outline, &bookmark_query) } else { std::collections::HashSet::new() };
                 // A new bookmark must stay nameable even when its initial title doesn't match.
@@ -895,7 +903,7 @@ pub fn right_panel(app: &mut PdfCraftApp, ui: &mut egui::Ui) {
                                         ui.set_width(ui.available_width() - 70.0);
                                         ui.add(egui::Label::new(egui::RichText::new(&a.name).font(theme::medium(13.0))).truncate());
                                         let mut meta = a.size.map(human_size).unwrap_or_default();
-                                        if let pdfcraft_render::AttachmentSource::Annotation { page, .. } = a.source {
+                                        if let asdreader_render::AttachmentSource::Annotation { page, .. } = a.source {
                                             let on_page = crate::i18n::fmt(
                                                 tl!("on page {label}"),
                                                 &[("label", info.pages.get(page).map(|p| p.label.as_str()).unwrap_or("?"))],
@@ -1037,7 +1045,7 @@ pub enum BmAction {
 }
 
 /// Matching titles plus their ancestors, keeping document paths rather than filtered indexes.
-/// `query` is folded with [`pdfcraft_render::text::fold_case`], as titles are here.
+/// `query` is folded with [`asdreader_render::text::fold_case`], as titles are here.
 fn outline_matches(items: &[OutlineItem], query: &str) -> std::collections::HashSet<Vec<usize>> {
     let mut matches = std::collections::HashSet::new();
     if query.is_empty() {
@@ -1045,7 +1053,7 @@ fn outline_matches(items: &[OutlineItem], query: &str) -> std::collections::Hash
     }
     let mut pending: Vec<_> = items.iter().enumerate().map(|(i, item)| (vec![i], item)).collect();
     while let Some((path, item)) = pending.pop() {
-        if pdfcraft_render::text::fold_case(&item.title).contains(query) {
+        if asdreader_render::text::fold_case(&item.title).contains(query) {
             let mut ancestor = path.clone();
             while !ancestor.is_empty() {
                 matches.insert(ancestor.clone());
@@ -1478,7 +1486,7 @@ fn delete_pages(view: &mut crate::DocView, n: usize) {
     let before = pages.iter().filter(|p| **p < view.current).count();
     view.current = view.current.saturating_sub(before).min(n.saturating_sub(pages.len() + 1));
     view.clear_page_selection(None);
-    view.pending_edit = Some(pdfcraft_engine::Edit::DeletePages { pages });
+    view.pending_edit = Some(asdreader_engine::Edit::DeletePages { pages });
 }
 
 /// The gap (0 = before the first page, n = after the last) the pointer points at in the Pages
@@ -1543,7 +1551,7 @@ fn page_drag(ui: &mut egui::Ui, t: &Tokens, view: &mut crate::DocView, rows: &[R
     }
     view.current = moved_index(view.current, &moving, to);
     view.selected = (to..to + moving.len()).collect();
-    view.pending_edit = Some(pdfcraft_engine::Edit::MovePages { pages: moving, to });
+    view.pending_edit = Some(asdreader_engine::Edit::MovePages { pages: moving, to });
 }
 
 /// The Fields panel: fields by page, in tab order. While preparing a form, each field can move
@@ -1553,11 +1561,11 @@ fn fields(
     ui: &mut egui::Ui,
     t: &Tokens,
     info: &DocInfo,
-    form: &[pdfcraft_engine::FormField],
+    form: &[asdreader_engine::FormField],
     preparing: bool,
     selection: &mut crate::prepare::PrepareView,
     nav: &mut Option<Nav>,
-    edit: &mut Option<pdfcraft_engine::Edit>,
+    edit: &mut Option<asdreader_engine::Edit>,
 ) -> Option<(String, usize)> {
     let mut properties = None;
     if info.fields.is_empty() {
@@ -1634,7 +1642,7 @@ fn fields(
                         icons::paint(ui, r.shrink(3.0).translate(bpress.offset()), icon, 15.0, t.icon);
                     }
                     if theme::hand(b).on_hover_text(tip).clicked() {
-                        *edit = Some(pdfcraft_engine::Edit::MoveInTabOrder { name: f.name.clone(), earlier });
+                        *edit = Some(asdreader_engine::Edit::MoveInTabOrder { name: f.name.clone(), earlier });
                     }
                 }
             }
@@ -1665,7 +1673,7 @@ fn fields(
 }
 
 /// A Fields panel row's tooltip: the field's kind, its own tooltip and whether it has scripts.
-fn field_tip(f: &pdfcraft_render::Field) -> String {
+fn field_tip(f: &asdreader_render::Field) -> String {
     let kind = format!("{:?}", f.kind);
     let mut tip = crate::i18n::fmt(tl!("{kind} field"), &[("kind", tl!(&kind))]);
     if let Some(tt) = &f.tooltip {
@@ -1679,18 +1687,18 @@ fn field_tip(f: &pdfcraft_render::Field) -> String {
 
 /// One page's rows of the Fields panel: each field, with the form field and widget a click on
 /// it selects (`None` when the form has no widget of it on that page).
-type FieldRows<'a> = Vec<(&'a pdfcraft_render::Field, Option<(String, usize)>)>;
+type FieldRows<'a> = Vec<(&'a asdreader_render::Field, Option<(String, usize)>)>;
 
 /// The Fields panel's rows: by page ("Unplaced" first), each page's in tab order. A row is paired
 /// with the first form field of its name, as the engine pairs them: one map, built once a frame.
 /// Searching the form for each row, and again inside the sort, was O(fields²) every frame.
-fn field_rows<'a>(fields: &'a [pdfcraft_render::Field], form: &[pdfcraft_engine::FormField]) -> Vec<(Option<usize>, FieldRows<'a>)> {
-    let mut by_name: std::collections::HashMap<&str, &pdfcraft_engine::FormField> = std::collections::HashMap::with_capacity(form.len());
+fn field_rows<'a>(fields: &'a [asdreader_render::Field], form: &[asdreader_engine::FormField]) -> Vec<(Option<usize>, FieldRows<'a>)> {
+    let mut by_name: std::collections::HashMap<&str, &asdreader_engine::FormField> = std::collections::HashMap::with_capacity(form.len());
     for field in form {
         by_name.entry(field.name.as_str()).or_insert(field);
     }
     let rank = |name: &str| by_name.get(name).and_then(|f| f.widgets.iter().map(|w| w.tab).min()).unwrap_or(usize::MAX);
-    let mut ordered: Vec<&pdfcraft_render::Field> = fields.iter().collect();
+    let mut ordered: Vec<&asdreader_render::Field> = fields.iter().collect();
     ordered.sort_by_cached_key(|f| (f.page, rank(&f.name)));
     let mut rows: Vec<(Option<usize>, FieldRows<'a>)> = Vec::new();
     for f in ordered {
@@ -1769,8 +1777,8 @@ mod field_rows {
     }
 
     /// The fields the engine reads from `bytes`: the inspector's list and the form.
-    fn open(bytes: Vec<u8>) -> (Vec<pdfcraft_render::Field>, Arc<Vec<pdfcraft_engine::FormField>>) {
-        let mut session = pdfcraft_engine::Session::new();
+    fn open(bytes: Vec<u8>) -> (Vec<asdreader_render::Field>, Arc<Vec<asdreader_engine::FormField>>) {
+        let mut session = asdreader_engine::Session::new();
         let id = session.open("form.pdf", None, Arc::new(bytes), None).expect("opens");
         let doc = session.get(id).expect("open");
         (doc.info.fields.clone(), doc.form.clone())
@@ -1912,7 +1920,7 @@ mod label_column {
 mod bookmark_filter {
     use super::{outline_matches, title_format};
     use crate::theme::{self, Tokens};
-    use pdfcraft_render::OutlineItem;
+    use asdreader_render::OutlineItem;
 
     /// #3193: a bookmark's title is drawn in its own style and colour.
     #[test]
@@ -1936,7 +1944,7 @@ mod bookmark_filter {
         OutlineItem {
             title: title.into(),
             page: Some(0),
-            view: pdfcraft_render::DestView::Top,
+            view: asdreader_render::DestView::Top,
             children,
             open: true,
             color: None,
@@ -1949,7 +1957,7 @@ mod bookmark_filter {
     #[test]
     fn titles_match_in_any_case_with_turkish_i() {
         let outline = [item("İSTANBUL ŞUBESİ", vec![item("Kış dönemi", vec![])]), item("Ankara", vec![])];
-        let fold = pdfcraft_render::text::fold_case;
+        let fold = asdreader_render::text::fold_case;
         assert_eq!(outline_matches(&outline, &fold("istanbul")).len(), 1);
         assert_eq!(outline_matches(&outline, &fold("şubesi")).len(), 1);
         // A child match keeps its parent: [0] and [0, 0].

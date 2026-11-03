@@ -1,9 +1,9 @@
 //! Cached page and stamp layers: a stamp (an image signature, a Fill & Sign mark, any other stamp)
 //! follows each pointer frame, moved or resized, without editing the PDF.
 
+use asdreader_engine::{Document, Edit};
+use asdreader_render::{PageInfo, RenderPool, RenderRequest, Tile};
 use egui::{ColorImage, TextureHandle, TextureOptions, pos2, vec2};
-use pdfcraft_engine::{Document, Edit};
-use pdfcraft_render::{PageInfo, RenderPool, RenderRequest, Tile};
 
 use crate::QuickTool;
 use crate::comments::{CommentView, Gesture, PageCx};

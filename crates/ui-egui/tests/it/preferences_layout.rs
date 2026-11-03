@@ -1,14 +1,14 @@
 //! The Preferences dialog keeps OK in reach in a short window (#3557): the settings scroll, the
 //! OK row does not.
 
+use asdreader_ui_egui::ASDReaderApp;
 use egui::Rect;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use pdfcraft_ui_egui::PdfCraftApp;
 
-fn harness(height: f32) -> Harness<'static, PdfCraftApp> {
+fn harness(height: f32) -> Harness<'static, ASDReaderApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1000.0, height)).build_eframe(|_cc| {
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         app.set_option("dialog", "preferences").unwrap();
         app
@@ -72,12 +72,12 @@ fn the_dialog_opens_at_its_full_size_and_does_not_grow_afterwards() {
     // And it is in place within a few frames of opening, for the first click: a frame or two of
     // settling is fine, ten frames of stretching is not.
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         app
     });
     h.run_steps(4);
-    h.state_mut().dialog = Some(pdfcraft_ui_egui::Dialog::Preferences);
+    h.state_mut().dialog = Some(asdreader_ui_egui::Dialog::Preferences);
     h.run_steps(3);
     let early = h.get_by_label("Right").rect();
     h.run_steps(8);

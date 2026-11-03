@@ -6,7 +6,7 @@
 //! choice fields, a thin grey border and a white background, and appearance streams generated
 //! immediately so every viewer shows the empty field.
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
+use asdreader_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
 use crate::{Field, FieldKind, FormError, Widget, appearance, fields, flags, page_refs};
 
@@ -354,7 +354,7 @@ impl FieldFont {
 }
 
 /// The mark a check box or radio button shows when on (Field Properties ▸ Options ▸ style).
-/// Stored as `/MK /CA`, the ZapfDingbats character Acrobat uses for it; PdfCraft draws the
+/// Stored as `/MK /CA`, the ZapfDingbats character Acrobat uses for it; ASDReader draws the
 /// mark as paths, so no symbol font is needed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CheckStyle {
@@ -681,7 +681,7 @@ pub fn add_field(doc: &mut Document, page: usize, rect: [f64; 4], kind: &NewFiel
 
 /// Regenerate every widget appearance of a field from its current value and settings. A value or
 /// button caption its font can't hold is drawn with `?` for those characters, the widget is marked
-/// (`pdfcraft_fonts::UNDRAWN_MARK`) and other viewers are asked to redraw the form (see
+/// (`asdreader_fonts::UNDRAWN_MARK`) and other viewers are asked to redraw the form (see
 /// `ask_viewers_to_redraw`), as when a value is set.
 pub fn redraw_field(doc: &mut Document, name: &str) -> Result<(), FormError> {
     redraw_widgets(doc, name, None)
@@ -731,7 +731,7 @@ fn redraw_widgets(doc: &mut Document, name: &str, only: Option<usize>) -> Result
         let existing = crate::merged_appearance(doc, w.obj, &ap);
         doc.update_dict(w.obj, |d| {
             d.set(b"AP".to_vec(), Object::Dict(existing));
-            pdfcraft_fonts::set_undrawn_mark(d, missing);
+            asdreader_fonts::set_undrawn_mark(d, missing);
         })?;
     }
     if undrawn {

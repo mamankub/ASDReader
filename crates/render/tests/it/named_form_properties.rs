@@ -1,5 +1,5 @@
 //! Contributor-original synthetic forms for named marked-content properties.
-use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
+use asdreader_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
 use std::sync::Arc;
 
 fn fixture(own: bool) -> Vec<u8> {
@@ -25,7 +25,7 @@ fn fixture(own: bool) -> Vec<u8> {
     ])
 }
 
-fn text(renderer: &mut PageRenderer, page: usize) -> Arc<pdfcraft_render::PageText> {
+fn text(renderer: &mut PageRenderer, page: usize) -> Arc<asdreader_render::PageText> {
     let result = renderer.render(RenderRequest { page, kind: RequestKind::Text, ..Default::default() });
     assert!(result.error.is_none(), "{:?}", result.error);
     result.text.unwrap()

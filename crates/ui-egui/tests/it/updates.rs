@@ -2,19 +2,19 @@
 
 use std::sync::Arc;
 
+use asdreader_ui_egui::ASDReaderApp;
+use asdreader_ui_egui::updates::{Release, UpdateSource, is_newer};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use pdfcraft_ui_egui::PdfCraftApp;
-use pdfcraft_ui_egui::updates::{Release, UpdateSource, is_newer};
 
 fn source(answer: Result<&str, &str>) -> UpdateSource {
     let answer = answer.map(str::to_string).map_err(str::to_string);
     Arc::new(move || answer.clone().map(|v| Release { url: format!("https://github.com/mamankub/ASDReader/releases/tag/{v}"), version: v }))
 }
 
-fn harness(answer: Result<&str, &str>) -> Harness<'static, PdfCraftApp> {
+fn harness(answer: Result<&str, &str>) -> Harness<'static, ASDReaderApp> {
     Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         app.update_source = Some(source(answer));
         app
@@ -24,7 +24,7 @@ fn harness(answer: Result<&str, &str>) -> Harness<'static, PdfCraftApp> {
 /// Run frames until the background check has reported. By what the dialog shows, with the
 /// same 30-second deadline as `support::wait_until`, not for a fixed second: under load the
 /// check's thread can take longer (#1277).
-fn settle(h: &mut Harness<'static, PdfCraftApp>) {
+fn settle(h: &mut Harness<'static, ASDReaderApp>) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         h.run_steps(2);
@@ -82,7 +82,7 @@ fn nothing_is_asked_until_the_user_checks() {
     let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let counted = calls.clone();
     let mut h = Harness::builder().with_size(egui::vec2(1200.0, 800.0)).build_eframe(move |_cc| {
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         // Settings from a build that had the startup option are ignored.
         app.restore(r#"{"check_updates_at_start": true}"#);

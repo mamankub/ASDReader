@@ -18,9 +18,9 @@ pub fn target_dir() -> PathBuf {
     std::env::var_os("CARGO_TARGET_DIR").map_or_else(|| root().join("target"), |d| root().join(d))
 }
 
-/// The release `pdfcraft-cli` that `cargo build --release -p pdfcraft-cli` produced.
+/// The release `asdreader-cli` that `cargo build --release -p asdreader-cli` produced.
 pub fn release_cli() -> PathBuf {
-    target_dir().join("release").join(format!("pdfcraft-cli{}", std::env::consts::EXE_SUFFIX))
+    target_dir().join("release").join(format!("asdreader-cli{}", std::env::consts::EXE_SUFFIX))
 }
 
 fn cargo() -> Command {
@@ -111,7 +111,7 @@ pub fn ci(_: &[String]) -> anyhow::Result<()> {
     let steps: Vec<Step> = vec![
         ("fmt", Box::new(|| run_args(&["fmt", "--all", "--", "--check"]))),
         ("clippy", Box::new(|| run_args(&["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]))),
-        ("cli-no-default-features", Box::new(|| run_args(&["check", "-p", "pdfcraft-cli", "--no-default-features"]))),
+        ("cli-no-default-features", Box::new(|| run_args(&["check", "-p", "asdreader-cli", "--no-default-features"]))),
         ("test", Box::new(|| test(&[]))),
         ("i18n-report", Box::new(|| i18n_report(&["--workspace".to_string()]))),
         ("layers", Box::new(|| layers(&[]))),
@@ -139,7 +139,7 @@ pub fn i18n_report(args: &[String]) -> anyhow::Result<()> {
     const TEST: &str = "i18n::tests::translation_gaps_report";
     const START: &str = "=== translation gaps ===";
     const END: &str = "=== end of translation gaps ===";
-    let scope: &[&str] = if args.iter().any(|a| a == "--workspace") { &["--workspace"] } else { &["-p", "pdfcraft-ui-egui"] };
+    let scope: &[&str] = if args.iter().any(|a| a == "--workspace") { &["--workspace"] } else { &["-p", "asdreader-ui-egui"] };
     let mut c = cargo();
     c.arg("test").args(scope).args(["--lib", "--quiet", "--", TEST, "--exact", "--nocapture"]).stderr(std::process::Stdio::inherit());
     eprintln!("$ cargo test {} --lib --quiet -- {TEST} --exact --nocapture", scope.join(" "));
@@ -197,11 +197,11 @@ pub fn check(args: &[String]) -> anyhow::Result<()> {
         }
         crate::corpus::State::Verified { files } => println!("corpus verified: {files} files at {}", crate::corpus::PDFJS_COMMIT),
     }
-    run_args(&["build", "--release", "-p", "pdfcraft-cli"])?;
+    run_args(&["build", "--release", "-p", "asdreader-cli"])?;
     let report = target_dir().join("check-pdfjs.json");
     let mut c = Command::new(release_cli());
     c.args(["check"]).arg(&corpus).args(["--timeout", "20", "--dpi", "36", "--json"]).arg(&report);
-    run(c, "pdfcraft-cli check corpus/pdfjs")?;
+    run(c, "asdreader-cli check corpus/pdfjs")?;
     let results: Vec<serde_json::Value> = serde_json::from_str(&std::fs::read_to_string(&report)?)?;
     let name =
         |v: &serde_json::Value| Path::new(v["file"].as_str().unwrap_or("")).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
@@ -239,7 +239,7 @@ pub fn check(args: &[String]) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `cargo xtask text-oracle [--limit N]`: compare `pdfcraft-cli text` with poppler's `pdftotext`
+/// `cargo xtask text-oracle [--limit N]`: compare `asdreader-cli text` with poppler's `pdftotext`
 /// (external oracle process, never linked) over the corpus.
 ///
 /// Two scores per file, because one hides the other. **Word F1** ([`f1`]) is a bag of words: it
@@ -249,11 +249,11 @@ pub fn check(args: &[String]) -> anyhow::Result<()> {
 /// neither. Plan target (M2): median F1 ≥ 0.97.
 pub fn text_oracle(args: &[String]) -> anyhow::Result<()> {
     let limit: usize = args.iter().position(|a| a == "--limit").and_then(|i| args.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(usize::MAX);
-    let pdftotext = match pdfcraft_oracle::pdftotext() {
+    let pdftotext = match asdreader_oracle::pdftotext() {
         Ok(o) => o,
         Err(absent) => bail!("{absent}"),
     };
-    run_args(&["build", "--release", "-p", "pdfcraft-cli"])?;
+    run_args(&["build", "--release", "-p", "asdreader-cli"])?;
     let corpus = root().join("corpus/pdfjs/test/pdfs");
     let mut files: Vec<PathBuf> =
         std::fs::read_dir(&corpus)?.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "pdf")).collect();
@@ -266,7 +266,7 @@ pub fn text_oracle(args: &[String]) -> anyhow::Result<()> {
     let mut not_permitted = 0usize;
     let mut truncated = 0usize;
     for f in files.iter().take(limit) {
-        // A document may forbid copying its text, and we honour that: `pdfcraft-cli text` refuses
+        // A document may forbid copying its text, and we honour that: `asdreader-cli text` refuses
         // and says how to override it with the owner password. pdftotext ignores the flag and
         // extracts anyway, so scoring us against it there measures obedience, not quality --
         // bug1815476.pdf scored 0.000 for behaving correctly on a page we render perfectly.
@@ -331,7 +331,7 @@ pub fn text_oracle(args: &[String]) -> anyhow::Result<()> {
 /// improve on, not a bar to clear.
 ///
 /// The score is the share of pixels with no near match in the other renderer's 3x3 neighbourhood
-/// (`pdfcraft_oracle::pixels`), which forgives antialiasing and subpixel placement but not
+/// (`asdreader_oracle::pixels`), which forgives antialiasing and subpixel placement but not
 /// missing or wrong content. **Lower is better; it is a disagreement rate, not a quality score.**
 pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
     let limit: usize = flag_num(args, "--limit").unwrap_or(usize::MAX);
@@ -353,11 +353,11 @@ pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
     let dir =
         args.iter().position(|a| a == "--dir").and_then(|i| args.get(i + 1)).map_or_else(|| root().join("corpus/pdfjs/test/pdfs"), PathBuf::from);
 
-    let pdftoppm = match pdfcraft_oracle::pdftoppm() {
+    let pdftoppm = match asdreader_oracle::pdftoppm() {
         Ok(tool) => tool,
         Err(absent) => bail!("{absent}"),
     };
-    run_args(&["build", "--release", "-p", "pdfcraft-cli"])?;
+    run_args(&["build", "--release", "-p", "asdreader-cli"])?;
     let cli = release_cli();
 
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
@@ -368,7 +368,7 @@ pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
         .collect();
     files.sort();
 
-    let out_pam = std::env::temp_dir().join(format!("pdfcraft-render-oracle-{}.pam", std::process::id()));
+    let out_pam = std::env::temp_dir().join(format!("asdreader-render-oracle-{}.pam", std::process::id()));
     let (mut scores, mut sizes_differed, mut ours_failed, mut theirs_failed) = (Vec::new(), 0usize, 0usize, 0usize);
     let mut worst: Vec<(f64, String)> = Vec::new();
     for file in files.iter().take(limit) {
@@ -383,14 +383,14 @@ pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
             .ok()
             .filter(std::process::ExitStatus::success)
             .and_then(|_| std::fs::read(&out_pam).ok())
-            .and_then(|b| pdfcraft_oracle::pixels::decode_pam_gray(&b));
+            .and_then(|b| asdreader_oracle::pixels::decode_pam_gray(&b));
         let mut theirs_cmd = pdftoppm.command();
         theirs_cmd.args(["-singlefile", "-gray", "-f", "1", "-l", "1", "-r"]).arg(dpi.to_string());
         if hide_annotations {
             theirs_cmd.arg("-hide-annotations");
         }
         theirs_cmd.arg(file);
-        let theirs = run_capture_bytes(&mut theirs_cmd, 30).and_then(|b| pdfcraft_oracle::pixels::decode_pgm(&b));
+        let theirs = run_capture_bytes(&mut theirs_cmd, 30).and_then(|b| asdreader_oracle::pixels::decode_pgm(&b));
         // An oracle that cannot read a file says nothing about our fidelity, and a file we cannot
         // read is `xtask check`'s business, not this one's. Count each side and move on.
         if ours.is_none() {
@@ -401,7 +401,7 @@ pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
         }
         let (Some((aw, ah, a)), Some((bw, bh, b))) = (ours, theirs) else { continue };
         let (Some(a), Some(b)) = (pixels_of(aw, ah, &a), pixels_of(bw, bh, &b)) else { continue };
-        match pdfcraft_oracle::pixels::compare(a, b, tolerance) {
+        match asdreader_oracle::pixels::compare(a, b, tolerance) {
             Ok(diff) => {
                 scores.push(diff.percent());
                 worst.push((diff.percent(), name));
@@ -441,7 +441,7 @@ pub fn render_oracle(args: &[String]) -> anyhow::Result<()> {
 /// would hide it.
 fn copying_allowed(path: &Path) -> bool {
     let Ok(bytes) = std::fs::read(path) else { return true };
-    let Ok(doc) = pdfcraft_cos::Document::open(std::sync::Arc::new(bytes)) else { return true };
+    let Ok(doc) = asdreader_cos::Document::open(std::sync::Arc::new(bytes)) else { return true };
     doc.permissions().is_none_or(|p| p.copy())
 }
 
@@ -450,8 +450,8 @@ fn flag_num<T: std::str::FromStr>(args: &[String], name: &str) -> Option<T> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i.checked_add(1)?)).and_then(|v| v.parse().ok())
 }
 
-fn pixels_of(w: usize, h: usize, buf: &[u8]) -> Option<pdfcraft_oracle::pixels::Gray<'_>> {
-    pdfcraft_oracle::pixels::Gray::new(w, h, buf)
+fn pixels_of(w: usize, h: usize, buf: &[u8]) -> Option<asdreader_oracle::pixels::Gray<'_>> {
+    asdreader_oracle::pixels::Gray::new(w, h, buf)
 }
 
 fn run_capture(cmd: &mut Command, timeout_s: u64) -> Option<String> {
@@ -602,9 +602,9 @@ mod tests {
     // The bundle id must match the app id the binary uses; renames change both (#174).
     #[test]
     fn macos_bundle_id_matches_app_id() {
-        assert!(read("packaging/macos/Info.plist.in").contains("<string>ai.storyteller.pdfcraft</string>"), "bundle id");
-        let main = read("apps/pdfcraft/src/main.rs");
-        assert!(main.contains(r#"const APP_ID: &str = "ai.storyteller.pdfcraft""#), "APP_ID drifted from the bundle id");
+        assert!(read("packaging/macos/Info.plist.in").contains("<string>io.github.mamankub.asdreader</string>"), "bundle id");
+        let main = read("apps/asdreader/src/main.rs");
+        assert!(main.contains(r#"const APP_ID: &str = "io.github.mamankub.asdreader""#), "APP_ID drifted from the bundle id");
     }
 
     // Committed file with `<!-- -->` comments stripped, so a commented-out claim cannot pass.

@@ -1,4 +1,4 @@
-//! Property tests for `pdfcraft-cos` save fidelity — proptest coverage of two areas raised in
+//! Property tests for `asdreader-cos` save fidelity — proptest coverage of two areas raised in
 //! #1187. **This does not close #1187.** That issue asks for five Hegel properties; this adds
 //! save/reopen and edit-history coverage using `proptest`, which is already a dev-dependency of this
 //! crate (`Cargo.toml:20`), so no new dependency is needed to review it. Left for follow-ups:
@@ -39,7 +39,7 @@ use std::sync::Arc;
 use proptest::prelude::*;
 use proptest::test_runner::TestCaseError;
 
-use pdfcraft_cos::{Dict, Document, Object, PdfString, SaveOptions, write_full, write_incremental};
+use asdreader_cos::{Dict, Document, Object, PdfString, SaveOptions, write_full, write_incremental};
 
 /// The prefix every generated key carries. `Document::new_empty` puts `/Type` and `/Pages` in the
 /// catalog; property 1 asserts those two structurally rather than ignoring them.

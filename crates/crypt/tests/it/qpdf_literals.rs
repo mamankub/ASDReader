@@ -34,7 +34,7 @@
 //! filter set leaves all three tests green, so those are held to review rather than to a test. For how
 //! this repository treats qpdf as an oracle, see `crates/oracle/README.md`.
 
-use pdfcraft_crypt::{Auth, EncryptDict, Method, SecurityHandler, aes_cbc_decrypt};
+use asdreader_crypt::{Auth, EncryptDict, Method, SecurityHandler, aes_cbc_decrypt};
 
 const USER: &str = "open pw";
 const OWNER: &str = "owner pw";

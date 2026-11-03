@@ -1,9 +1,9 @@
 //! Contributor-original pages. Added marks must not inherit an unfinished hidden layer.
 use std::sync::Arc;
 
-use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream, write_incremental};
-use pdfcraft_engine::{AddedText, Edit, HeaderFooter, Session, Watermark};
-use pdfcraft_render::{PageRenderer, RenderRequest, RequestKind};
+use asdreader_cos::{Dict, Document, Object, SaveOptions, Stream, write_incremental};
+use asdreader_engine::{AddedText, Edit, HeaderFooter, Session, Watermark};
+use asdreader_render::{PageRenderer, RenderRequest, RequestKind};
 
 const VISIBLE: &str = "BT /F1 18 Tf 72 700 Td (Visible text) Tj ET\n";
 const HIDDEN: &str = "BT /F1 18 Tf 72 600 Td (Hidden note) Tj ET\n";
@@ -19,7 +19,7 @@ fn fixture(parts: &[String]) -> Arc<Vec<u8>> {
     fonts.set(b"F1".to_vec(), Object::Ref(doc.add(font)));
     let mut group = Dict::new();
     group.set(b"Type".to_vec(), Object::name("OCG"));
-    group.set(b"Name".to_vec(), Object::String(pdfcraft_cos::PdfString::text("Hidden layer")));
+    group.set(b"Name".to_vec(), Object::String(asdreader_cos::PdfString::text("Hidden layer")));
     let group = doc.add(group);
     let mut properties = Dict::new();
     properties.set(b"L1".to_vec(), Object::Ref(group));
@@ -125,7 +125,7 @@ fn all_four_mark_paths_remain_visible_after_saved_unfinished_marked_content() {
 }
 
 fn stream_list(doc: &Document) -> Vec<Object> {
-    let page = pdfcraft_model::pages(doc).remove(0);
+    let page = asdreader_model::pages(doc).remove(0);
     let contents = doc.resolve(page.dict.get(b"Contents").unwrap());
     match &*contents {
         Object::Array(items) => items.clone(),
@@ -195,7 +195,7 @@ fn replacing_and_removing_marks_restores_the_original_stream_list() {
             session = Session::new();
             id = session.open("saved.pdf", None, saved, None).unwrap();
         }
-        let mark_kind = if kind == "WATERMARK" { pdfcraft_edit::MarkKind::Watermark } else { pdfcraft_edit::MarkKind::HeaderFooter };
+        let mark_kind = if kind == "WATERMARK" { asdreader_edit::MarkKind::Watermark } else { asdreader_edit::MarkKind::HeaderFooter };
         session.apply(id, Edit::RemoveMarks { kind: mark_kind }).unwrap();
         let saved = session.save_bytes(id).unwrap();
         let page = Document::open(saved.clone()).unwrap();
@@ -218,7 +218,7 @@ fn added_update_delete_and_readd_preserve_existing_wrapper_behavior() {
         session.apply(id, edit("ADDED")).unwrap();
         assert_eq!(session.get(id).unwrap().added().len(), 1);
         let text = AddedText { text: "UPDATED".into(), rect: [72.0, 300.0, 250.0, 330.0], ..Default::default() };
-        session.apply(id, Edit::UpdateContent { page: 0, index: 0, content: pdfcraft_edit::Content::Text(text) }).unwrap();
+        session.apply(id, Edit::UpdateContent { page: 0, index: 0, content: asdreader_edit::Content::Text(text) }).unwrap();
         let saved = session.save_bytes(id).unwrap();
         assert_eq!(lines(&render(saved.clone()).1), lines("Visible text\nUPDATED"));
         assert_eq!(stream_list(&Document::open(saved.clone()).unwrap()).len(), 4);
@@ -259,7 +259,7 @@ fn an_existing_behind_watermark_does_not_inherit_or_reveal_hidden_content() {
 
 #[test]
 fn new_mark_closes_hidden_content_appended_after_an_old_wrapper() {
-    let bytes = fixture(&["q %PdfCraft\n".into(), VISIBLE.into(), "Q %PdfCraft\n".into(), format!("/OC /L1 BDC {HIDDEN}")]);
+    let bytes = fixture(&["q %ASDReader\n".into(), VISIBLE.into(), "Q %ASDReader\n".into(), format!("/OC /L1 BDC {HIDDEN}")]);
     let mut doc = Document::open(bytes).unwrap();
     let list = stream_list(&doc);
     for index in [0, 2] {

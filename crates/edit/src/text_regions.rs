@@ -326,8 +326,8 @@ fn shape_source(
     fonts: &Dict,
     name: &str,
     text: &str,
-) -> Result<Option<(Vec<u8>, pdfcraft_fonts::source_shaping::ShapedRun, String)>, EditError> {
-    if !pdfcraft_fonts::source_shaping::required(text) {
+) -> Result<Option<(Vec<u8>, asdreader_fonts::source_shaping::ShapedRun, String)>, EditError> {
+    if !asdreader_fonts::source_shaping::required(text) {
         return Ok(None);
     }
     let source =
@@ -338,12 +338,12 @@ fn shape_source(
         fonts
             .iter()
             .filter_map(|(_, f)| doc.dict(f))
-            .filter(|f| pdfcraft_fonts::embedding::face_key(&Metrics::from_dict(doc, f).base_font) == pdfcraft_fonts::embedding::face_key(&family)),
+            .filter(|f| asdreader_fonts::embedding::face_key(&Metrics::from_dict(doc, f).base_font) == asdreader_fonts::embedding::face_key(&family)),
     );
     for font in candidates {
-        if let Some(bytes) = pdfcraft_fonts::pdf::embedded_sfnt(doc, &font)
-            && pdfcraft_fonts::embedding::covers(&bytes, text)
-            && let Ok(shaped) = pdfcraft_fonts::source_shaping::shape(&bytes, text)
+        if let Some(bytes) = asdreader_fonts::pdf::embedded_sfnt(doc, &font)
+            && asdreader_fonts::embedding::covers(&bytes, text)
+            && let Ok(shaped) = asdreader_fonts::source_shaping::shape(&bytes, text)
         {
             return Ok(Some((bytes, shaped, family)));
         }
@@ -561,17 +561,17 @@ pub(super) fn rewrite_styled_block(
             } else if metrics.get(&source.font).is_some_and(|m| source_encodes(m, &s)) {
                 source.font.clone()
             } else if let Some((name, _)) = metrics.iter().find(|(_, m)| {
-                pdfcraft_fonts::embedding::face_key(&m.base_font) == pdfcraft_fonts::embedding::face_key(&source.base_font) && source_encodes(m, &s)
+                asdreader_fonts::embedding::face_key(&m.base_font) == asdreader_fonts::embedding::face_key(&source.base_font) && source_encodes(m, &s)
             }) {
                 name.clone()
             } else if let Some(face) =
-                pdfcraft_fonts::embedding::matching_faces(&source.base_font).into_iter().find(|f| pdfcraft_fonts::embedding::covers(f.bytes, &s))
+                asdreader_fonts::embedding::matching_faces(&source.base_font).into_iter().find(|f| asdreader_fonts::embedding::covers(f.bytes, &s))
             {
                 let key = face.name();
                 if let Some(name) = full_faces.get(&key) {
                     name.clone()
                 } else {
-                    let name = pdfcraft_fonts::embedding::embed(doc, &mut fonts, face.bytes, face.family).map_err(EditError::Invalid)?;
+                    let name = asdreader_fonts::embedding::embed(doc, &mut fonts, face.bytes, face.family).map_err(EditError::Invalid)?;
                     let font = fonts
                         .get(name.as_bytes())
                         .and_then(|f| doc.dict(f))
@@ -584,7 +584,7 @@ pub(super) fn rewrite_styled_block(
                 .entry(source.font.clone())
                 .or_insert_with(|| source_program(doc, &fonts, &source.font).map(std::sync::Arc::new))
                 .clone()
-                .filter(|bytes| pdfcraft_fonts::embedding::covers(bytes, &s))
+                .filter(|bytes| asdreader_fonts::embedding::covers(bytes, &s))
             {
                 // The document's own complete program of this font has the glyph: draw it with
                 // that face rather than another family's fallback.
@@ -592,8 +592,8 @@ pub(super) fn rewrite_styled_block(
                 if let Some(name) = full_faces.get(&key) {
                     name.clone()
                 } else {
-                    let family = pdfcraft_fonts::embedding::names(&bytes).map_or_else(|_| source.base_font.clone(), |(family, _)| family);
-                    let name = pdfcraft_fonts::embedding::embed(doc, &mut fonts, &bytes, &family).map_err(EditError::Invalid)?;
+                    let family = asdreader_fonts::embedding::names(&bytes).map_or_else(|_| source.base_font.clone(), |(family, _)| family);
+                    let name = asdreader_fonts::embedding::embed(doc, &mut fonts, &bytes, &family).map_err(EditError::Invalid)?;
                     let font = fonts
                         .get(name.as_bytes())
                         .and_then(|f| doc.dict(f))
@@ -802,7 +802,7 @@ pub(super) fn rewrite_styled_block(
     let o = &lead.origin;
     for (row, _) in rows.iter().zip(&kept).filter(|(_, k)| !**k) {
         let text: String = row.iter().map(|v| v.0).collect();
-        if pdfcraft_fonts::source_shaping::required(&text) && row.first().is_some_and(|first| row.iter().any(|v| v.1 != first.1 || v.2 != first.2)) {
+        if asdreader_fonts::source_shaping::required(&text) && row.first().is_some_and(|first| row.iter().any(|v| v.1 != first.1 || v.2 != first.2)) {
             return Err(EditError::Invalid(
                 "contextual/bidi text across font or style boundaries needs a uniform full-face row; mixed contextual runs are not yet supported"
                     .into(),
@@ -830,10 +830,10 @@ pub(super) fn rewrite_styled_block(
     let mut glyph_resources = HashMap::new();
     for (key, (bytes, shaped, family)) in &shaped_runs {
         let mappings: Vec<_> = shaped.glyphs.iter().map(|g| (g.text.clone(), g.id)).collect();
-        let resource = pdfcraft_fonts::embedding::embed_mapping(doc, &mut fonts, bytes, family, &mappings).map_err(EditError::Invalid)?;
+        let resource = asdreader_fonts::embedding::embed_mapping(doc, &mut fonts, bytes, family, &mappings).map_err(EditError::Invalid)?;
         glyph_resources.insert(*key, resource);
     }
-    let n = pdfcraft_content::num;
+    let n = asdreader_content::num;
     let mut block_ops = vec![Op::new("q", vec![])];
     block_ops.extend(reveal_ops(block, lines, style, o.ctm)?);
     let back = Matrix([o.ctm[0], o.ctm[1], o.ctm[2], o.ctm[3], 0.0, 0.0])

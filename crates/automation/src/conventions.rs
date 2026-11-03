@@ -2,8 +2,8 @@
 use serde_json::{Value, json};
 
 use crate::{Args, Automation, Content, Result, ToolError, encode_png, failed, info, tools};
-use pdfcraft_engine::commands;
-use pdfcraft_render::{RenderRequest, RequestKind};
+use asdreader_engine::commands;
+use asdreader_render::{RenderRequest, RequestKind};
 
 /// The most steps one `command_batch` runs.
 pub(crate) const MAX_BATCH_STEPS: usize = 1000;

@@ -1,6 +1,6 @@
-use pdfcraft_a11y::{Options, Rule, Status, autotag_text, check, figures, mark_decorative, mark_tag_artifact, tag_content, tags};
-use pdfcraft_content::{Op, Pieces};
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental};
+use asdreader_a11y::{Options, Rule, Status, autotag_text, check, figures, mark_decorative, mark_tag_artifact, tag_content, tags};
+use asdreader_content::{Op, Pieces};
+use asdreader_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental};
 
 const FONT: &str = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
 const HIDDEN_AND_AFTER: &str = "BT /F1 12 Tf 72 520 Td (Hidden) Tj ET\nBT /F1 12 Tf 72 500 Td (After) Tj ET";
@@ -75,7 +75,7 @@ fn tagged_figure_two_streams(after_figure: &str, second: &str) -> Document {
 }
 
 fn joined_ops(doc: &Document) -> (Vec<Op>, usize) {
-    let page = &pdfcraft_model::pages(doc)[0];
+    let page = &asdreader_model::pages(doc)[0];
     let contents = page.dict.get(b"Contents").expect("page contents");
     let pieces: Vec<Vec<u8>> = match &*doc.resolve(contents) {
         Object::Stream(s) => vec![s.decoded().expect("decoded stream")],
@@ -174,7 +174,7 @@ fn mark_decorative_leaves_another_page_using_the_stream_untouched() {
     mark_decorative(&mut doc, ObjRef::new(8, 0)).unwrap();
     for bytes in [write_full(&doc, &SaveOptions::default()).unwrap(), write_incremental(&doc, &SaveOptions::default()).unwrap()] {
         let reopened = Document::open(std::sync::Arc::new(bytes)).unwrap();
-        let pages = pdfcraft_model::pages(&reopened);
+        let pages = asdreader_model::pages(&reopened);
         assert_eq!(pages.len(), 2);
         let contents = pages[1].dict.get(b"Contents").unwrap().as_array().unwrap();
         assert_eq!(*reopened.resolve(&contents[0]), *before, "the other page's shared figure stream must stay intact");

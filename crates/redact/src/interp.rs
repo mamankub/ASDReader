@@ -20,11 +20,11 @@
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
-use pdfcraft_content::{Matrix, Op, Pieces, contains, num, overlaps, serialize_ops, string};
-use pdfcraft_cos::{CosError, DecodeBudget, Dict, Document, MAX_PAGE_FORMS, ObjRef, Object, Stream};
+use asdreader_content::{Matrix, Op, Pieces, contains, num, overlaps, serialize_ops, string};
+use asdreader_cos::{CosError, DecodeBudget, Dict, Document, MAX_PAGE_FORMS, ObjRef, Object, Stream};
 
 use crate::{RedactError, Report, image, page_streams, tags};
-use pdfcraft_fonts::pdf::Metrics;
+use asdreader_fonts::pdf::Metrics;
 
 const MAX_DEPTH: usize = 12;
 
@@ -75,7 +75,7 @@ pub(crate) struct Output {
     /// in force: the operation must fail closed rather than leave that text under the mark.
     pub vertical: bool,
     /// The content holds an inline image the renderer reads no image for
-    /// ([`pdfcraft_content::Parsed::ambiguous_images`]): what this scope placed after it may not
+    /// ([`asdreader_content::Parsed::ambiguous_images`]): what this scope placed after it may not
     /// be what the page shows, so a redaction must not trust it.
     pub ambiguous: bool,
     pub tag_changes: Vec<(ObjRef, ObjRef, HashSet<i64>, HashSet<i64>)>,
@@ -472,7 +472,7 @@ pub(crate) fn unlink_doomed(doc: &mut Document, doomed: &[ObjRef], retired_prope
     let Some(top) = doc.root().and_then(|root| doc.get(root).as_dict().and_then(|d| d.reference(b"Pages"))) else { return Ok(()) };
     // Every page-tree node with a /Resources of its own, and the pages that draw through it
     // (the nearest such node above a page, or the page itself). Cycles are cut as in
-    // `pdfcraft_model::pages`.
+    // `asdreader_model::pages`.
     let mut holders: Vec<(ObjRef, Vec<ObjRef>)> = Vec::new();
     let mut seen = HashSet::new();
     let mut stack: Vec<(ObjRef, Option<usize>)> = vec![(top, None)];
@@ -494,7 +494,7 @@ pub(crate) fn unlink_doomed(doc: &mut Document, doomed: &[ObjRef], retired_prope
             h.1.push(node);
         }
     }
-    let index: HashMap<ObjRef, usize> = pdfcraft_model::pages(doc).iter().enumerate().map(|(i, p)| (p.obj, i)).collect();
+    let index: HashMap<ObjRef, usize> = asdreader_model::pages(doc).iter().enumerate().map(|(i, p)| (p.obj, i)).collect();
     let holder_nodes: Vec<ObjRef> = holders.iter().map(|(node, _)| *node).collect();
     for (node, users) in holders {
         let Some(mut res) = doc.get(node).as_dict().and_then(|d| d.get(b"Resources")).and_then(|r| doc.resolve(r).as_dict().cloned()) else {
@@ -678,7 +678,7 @@ fn resource_ops(doc: &Document, res: &Dict, content: &[Vec<u8>]) -> Result<Vec<O
             && s.dict.name(b"Subtype") == Some(b"Form")
             && s.dict.get(b"Resources").is_none_or(|r| doc.resolve(r).as_dict().is_none())
         {
-            let parsed = pdfcraft_content::parse(&s.decoded()?);
+            let parsed = asdreader_content::parse(&s.decoded()?);
             if seen.len() > 2_000_000 || ops.len().saturating_add(parsed.ops.len()) > 2_000_000 || parsed.skipped > 0 {
                 return Err(CosError::Syntax { offset: 0, detail: "redaction could not fully inspect inherited form resources".into() });
             }

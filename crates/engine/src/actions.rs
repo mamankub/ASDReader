@@ -117,7 +117,7 @@ pub struct Action {
     pub name: String,
     pub description: String,
     pub steps: Vec<Step>,
-    /// One of PdfCraft's own actions (can't be edited or deleted).
+    /// One of ASDReader's own actions (can't be edited or deleted).
     pub builtin: bool,
 }
 
@@ -196,7 +196,7 @@ fn apply_step(s: &mut Session, id: DocId, step: &Step, log: &mut Vec<String>) ->
     let removes = matches!(step, Step::RemoveHiddenInformation | Step::Sanitize);
     match s.apply(id, edit) {
         Ok(()) => log.push(step.label().to_string()),
-        Err(EditError::Redact(pdfcraft_redact::RedactError::NothingToApply)) if removes => log.push(format!("{}: nothing to remove", step.label())),
+        Err(EditError::Redact(asdreader_redact::RedactError::NothingToApply)) if removes => log.push(format!("{}: nothing to remove", step.label())),
         Err(e) if removes => return Err(e),
         Err(e) => log.push(format!("{}: {e}", step.label())),
     }

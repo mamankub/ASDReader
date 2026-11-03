@@ -17,9 +17,11 @@ multi-row paragraphs retain their existing wrap width. Retyping uses a preview w
 that added item's old drawing removed, so deleted draft characters do not show underneath.
 
 A subset font contains only some of the original face's glyphs. A new character cannot be
-reconstructed from a glyph the PDF does not contain. **Load font…** imports an openly licensed,
-embeddable standalone `.ttf` or `.otf` face. **Installed fonts…** discovers eligible user-installed
-faces on request, off the UI thread; the document-font menu selects resources already on the
+reconstructed from a glyph the PDF does not contain. **Load font…** imports an embeddable
+standalone `.ttf` or `.otf` face. **Installed fonts…** lists every such face installed on this
+computer (Windows `Fonts`, macOS `/System/Library/Fonts` and `/Library/Fonts`, Linux `/usr/share/fonts`
+and the user's font folders), with a search box, found on request off the UI thread; choosing one loads
+it into the page and applies it to the paragraph. The document-font menu selects resources already on the
 page. Select **Keep source fonts** to preserve each run's original face. A matching full face
 completes its subsets automatically, including new Chinese characters. When the PDF itself embeds
 the complete program of a paragraph's font (not a subset) and its licence allows editable
@@ -29,8 +31,11 @@ without a craft-fonts build says so. Replacement text takes the craft-fonts Japa
 they can draw all of it, and the bundled Inter face (`assets/fonts`) for the Latin, Greek and
 Cyrillic letters they lack (Uzbek `қизил`, Kazakh `әже`): that face needs no build input, so
 these work in every build, the web one included. Choosing another face
-is explicit. Fonts with restricted embedding, unsupported collections, excluded families or
-no open-licence declaration are refused. Interface fallback fonts are never exported.
+is explicit. A font does not need to declare an open licence: its own embedding permissions
+decide, and fonts with restricted embedding, unsupported collections (`.ttc`), variable fonts
+and the excluded families (Adobe-authored, Source Han / Noto CJK) are refused or not listed.
+The whole font program is embedded, so a large font makes the PDF larger. Interface fallback fonts
+are never exported.
 
 The full selected program, glyph mappings, widths and Unicode text are embedded in the PDF.
 Saving and reopening therefore needs no locally installed font. Editing the same text again
@@ -82,7 +87,7 @@ scanned line kept apart. Applying an edit draws the new text visibly in the scan
 the one chosen) and first covers the old words with the paper colour sampled around them. Each
 word keeps its position and width, and a longer phrase grows rightwards rather than wrapping. The
 cover is one flat colour, and the text uses the layer's Helvetica, not the scanned typeface.
-This applies to any invisible text (rendering mode 3), not just a PdfCraft OCR layer: editing
+This applies to any invisible text (rendering mode 3), not just an ASDReader OCR layer: editing
 invisible text, such as another OCR tool's layer, makes the rewritten paragraph visible over a
 painted cover in the sampled paper colour. Edit text also groups invisible text differently: its lines never
 merge into multi-line paragraphs, and words split at gaps of 0.6 em or more.

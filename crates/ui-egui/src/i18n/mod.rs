@@ -618,7 +618,7 @@ pub fn action_label(text: &str) -> String {
 /// looked up whole and the document's own word goes into its `{}` afterwards, so a file or field
 /// name is never read as part of the wording. This is exact where [`action_label`] has to guess
 /// from the English text, and is what the engine's own labels go through.
-pub fn edit_label(label: &pdfcraft_engine::Label) -> String {
+pub fn edit_label(label: &asdreader_engine::Label) -> String {
     // A batch's wording is only the hole: it carries its name as text, which from below L7 is one
     // of `BATCH_LABELS` and so is looked up too.
     if let Some(name) = label.value.as_deref().filter(|_| label.wording == "{batch}") {
@@ -989,7 +989,7 @@ mod tests {
     /// at its end.
     #[test]
     fn signature_appearance_labels_keep_their_separator() {
-        let english = pdfcraft_engine::sign::AppearanceLabels::default();
+        let english = asdreader_engine::sign::AppearanceLabels::default();
         for language in LANGUAGES.iter().filter(|language| !language.source.is_empty()) {
             let lang = Lang::from_code(language.code).expect("registered language");
             for (field, label) in english.fields() {
@@ -1005,7 +1005,7 @@ mod tests {
     /// and with BIZ UDPGothic Regular alone (the web build's only Japanese face).
     #[test]
     fn japanese_labels_have_glyphs() {
-        let craft = pdfcraft_fonts::ui_japanese_fonts();
+        let craft = asdreader_fonts::ui_japanese_fonts();
         let Some(web) = craft.iter().find(|f| f.family == "BIZ UDPGothic" && f.style == "Regular") else {
             eprintln!("skipping Japanese glyph checks: build with CRAFT_FONTS_DIR to run them");
             return;
@@ -1015,7 +1015,7 @@ mod tests {
         let web_name = web.name();
         let mut web_only = crate::theme::font_definitions();
         for family in web_only.families.values_mut() {
-            family.retain(|name| !pdfcraft_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || *name == web_name);
+            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || *name == web_name);
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("desktop", crate::theme::font_definitions()), ("web", web_only)] {
@@ -1060,13 +1060,13 @@ mod tests {
 
     #[test]
     fn language_persists_and_invalid_input_keeps_current_language() {
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         assert_eq!(app.language, AUTO);
         app.set_option("language", "JA").unwrap();
         assert_eq!(app.language, "ja");
         assert!(app.set_option("language", "xx").is_err());
         assert_eq!(app.language, "ja");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "ja");
         restored.restore(r#"{"language":"xx"}"#);
@@ -1074,7 +1074,7 @@ mod tests {
         app.set_option("language", AUTO).unwrap();
         assert_eq!(app.language, AUTO);
         // Settings written before the system-locale default (no key) follow the system.
-        let mut legacy = crate::PdfCraftApp::default();
+        let mut legacy = crate::ASDReaderApp::default();
         legacy.restore("{}");
         assert_eq!(legacy.language, AUTO);
     }
@@ -1090,10 +1090,10 @@ mod tests {
         assert_eq!(lang_from_tag("pt_PT"), Some(pt));
         assert_eq!(tr(pt, "Arquivo do usuário.pdf"), "Arquivo do usuário.pdf");
         assert_eq!((0..=3).map(|n| (pt.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "pt-br").unwrap();
         assert_eq!(app.language, "pt-br");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "pt-br");
     }
@@ -1107,10 +1107,10 @@ mod tests {
         assert_eq!(lang_from_tag("es-MX"), Some(es));
         assert_eq!(first_supported("es-ES\r\nen-US"), Some(es));
         assert_eq!(tr(es, "Informe del usuario.pdf"), "Informe del usuario.pdf");
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "es").unwrap();
         assert_eq!(app.language, "es");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "es");
     }
@@ -1122,11 +1122,11 @@ mod tests {
     fn spanish_keeps_the_holes_in_what_the_engine_says() {
         let es = Lang::from_code("es").expect("es registered");
         let lists: [&[&str]; 5] = [
-            pdfcraft_engine::a11y::WORDINGS,
-            pdfcraft_engine::pdfa::WORDINGS,
-            pdfcraft_engine::sign::pdf::WORDINGS,
-            pdfcraft_engine::print::WORDINGS,
-            pdfcraft_engine::field_table::WORDINGS,
+            asdreader_engine::a11y::WORDINGS,
+            asdreader_engine::pdfa::WORDINGS,
+            asdreader_engine::sign::pdf::WORDINGS,
+            asdreader_engine::print::WORDINGS,
+            asdreader_engine::field_table::WORDINGS,
         ];
         for wording in lists.into_iter().flatten() {
             let said = tr(es, wording);
@@ -1146,10 +1146,10 @@ mod tests {
         assert_eq!(lang_from_tag("te_IN.UTF-8"), Some(te));
         assert_eq!(first_supported("te-IN\r\nen-US"), Some(te));
         assert_eq!(tr(te, "నివేదిక.pdf"), "నివేదిక.pdf");
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "te").unwrap();
         assert_eq!(app.language, "te");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "te");
     }
@@ -1187,7 +1187,7 @@ mod tests {
     /// it; Telugu labels must not need a Japanese or Arabic face).
     #[test]
     fn telugu_labels_have_glyphs() {
-        let telugu: Vec<String> = pdfcraft_fonts::ui_telugu_fonts().iter().map(|f| f.name()).collect();
+        let telugu: Vec<String> = asdreader_fonts::ui_telugu_fonts().iter().map(|f| f.name()).collect();
         if telugu.is_empty() {
             eprintln!("skipping Telugu glyph checks: build with CRAFT_FONTS_DIR and a Telugu face to run them");
             return;
@@ -1197,7 +1197,7 @@ mod tests {
         let labels: String = entries.iter().flat_map(|e| e.translation.chars()).chain(te.name().chars()).filter(|c| !c.is_control()).collect();
         let mut telugu_only = crate::theme::font_definitions();
         for family in telugu_only.families.values_mut() {
-            family.retain(|name| !pdfcraft_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || telugu.contains(name));
+            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || telugu.contains(name));
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("all faces", crate::theme::font_definitions()), ("Telugu face only", telugu_only)] {
@@ -1214,11 +1214,11 @@ mod tests {
         assert_eq!(cs.name(), "Čeština");
         assert_eq!(tr(cs, "Žluťoučký kůň.pdf"), "Žluťoučký kůň.pdf");
         assert_eq!((0..=6).map(|n| (cs.0.plural)(n)).collect::<Vec<_>>(), [2, 0, 1, 1, 1, 2, 2]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "cs").unwrap();
         assert!(app.set_option("language", "cz").is_err());
         assert_eq!(app.language, "cs");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "cs");
     }
@@ -1229,11 +1229,11 @@ mod tests {
         assert_eq!(tr_lang.name(), "Türkçe");
         assert_eq!(tr(tr_lang, "Türkçe Belge.pdf"), "Türkçe Belge.pdf");
         assert_eq!((0..=6).map(|n| (tr_lang.0.plural)(n)).collect::<Vec<_>>(), [0; 7]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "tr").unwrap();
         assert!(app.set_option("language", "tu").is_err());
         assert_eq!(app.language, "tr");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "tr");
     }
@@ -1281,10 +1281,10 @@ mod tests {
         assert_eq!(first_supported("fr-FR\r\nen-US"), Some(fr));
         assert_eq!(tr(fr, "Rapport de l'utilisateur.pdf"), "Rapport de l'utilisateur.pdf");
         assert_eq!((0..=3).map(|n| (fr.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "fr").unwrap();
         assert_eq!(app.language, "fr");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "fr");
     }
@@ -1300,10 +1300,10 @@ mod tests {
         assert_eq!(first_supported("de-DE\r\nen-US"), Some(de));
         assert_eq!(tr(de, "Bericht des Nutzers.pdf"), "Bericht des Nutzers.pdf");
         assert_eq!((0..=3).map(|n| (de.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "de").unwrap();
         assert_eq!(app.language, "de");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "de");
     }
@@ -1342,10 +1342,10 @@ mod tests {
         assert_eq!(tr(ru, "Rapport de l'utilisateur.pdf"), "Rapport de l'utilisateur.pdf");
         // one (1), few (2-4), many (0, 5+), with 11-14 exception
         assert_eq!((0..=3).map(|n| (ru.0.plural)(n)).collect::<Vec<_>>(), [2, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "ru").unwrap();
         assert_eq!(app.language, "ru");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "ru");
     }
@@ -1361,10 +1361,10 @@ mod tests {
         // Filipino (`fil`) and Swedish in Finland (`sv-FI`) don't pick Finnish.
         assert_ne!(lang_from_tag("fil"), Some(fi));
         assert_ne!(lang_from_tag("sv-FI"), Some(fi));
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "FI").unwrap();
         assert_eq!(app.language, "fi");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "fi");
     }
@@ -1377,10 +1377,10 @@ mod tests {
         for tag in ["lt", "lt-LT", "lt_LT.UTF-8", "LT-lt"] {
             assert_eq!(lang_from_tag(tag), Some(lt), "{tag}");
         }
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "LT").unwrap();
         assert_eq!(app.language, "lt");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "lt");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1399,10 +1399,10 @@ mod tests {
         assert_eq!(first_supported("(\n    \"nb-NO\",\n    \"en-US\"\n)\n"), Some(nb));
         assert_eq!(first_supported("nn-NO\r\nen-US\r\n"), Some(nb));
         assert_eq!((0..=3).map(|n| (nb.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "NB").unwrap();
         assert_eq!(app.language, "nb");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "nb");
     }
@@ -1417,10 +1417,10 @@ mod tests {
         }
         assert_eq!(first_supported("vi-VN\r\nen-US"), Some(vi));
         assert_eq!((0..=3).map(|n| (vi.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 0, 0]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "vi").unwrap();
         assert_eq!(app.language, "vi");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "vi");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1453,10 +1453,10 @@ mod tests {
         assert_eq!(first_supported("ca-ES\r\nen-US"), Some(ca));
         // one (1), other (0, 2+), as in English
         assert_eq!((0..=3).map(|n| (ca.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "CA").unwrap();
         assert_eq!(app.language, "ca");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "ca");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1475,10 +1475,10 @@ mod tests {
         assert_eq!(tr(sl, "Poročilo {n}.pdf"), "Poročilo {n}.pdf");
         // one (1), two (2), few (3, 4), other (0, 5+)
         assert_eq!((0..=5).map(|n| (sl.0.plural)(n)).collect::<Vec<_>>(), [3, 0, 1, 2, 2, 3]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "SL").unwrap();
         assert_eq!(app.language, "sl");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "sl");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1496,10 +1496,10 @@ mod tests {
         assert_eq!(first_supported("sq-AL\r\nen-US"), Some(sq));
         // one (1), other (0, 2+)
         assert_eq!((0..=3).map(|n| (sq.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "SQ").unwrap();
         assert_eq!(app.language, "sq");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "sq");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1541,16 +1541,16 @@ mod tests {
         // One CLDR plural form (CLDR `id`, `vi`): the message reads the same for every count.
         assert_eq!((0..=3).map(|n| (id.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 0, 0]);
         assert_eq!((0..=3).map(|n| (vi.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 0, 0]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "ID").unwrap();
         assert_eq!(app.language, "id");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "id");
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "vi").unwrap();
         assert_eq!(app.language, "vi");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "vi");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1577,10 +1577,10 @@ mod tests {
         assert_eq!((0..=3).map(|n| (hi.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 0, 0]);
         assert_eq!((0..=3).map(|n| (ko.0.plural)(n)).collect::<Vec<_>>(), [0, 0, 0, 0]);
         for code in ["hi", "ko"] {
-            let mut app = crate::PdfCraftApp::default();
+            let mut app = crate::ASDReaderApp::default();
             app.set_option("language", &code.to_uppercase()).unwrap();
             assert_eq!(app.language, code);
-            let mut restored = crate::PdfCraftApp::default();
+            let mut restored = crate::ASDReaderApp::default();
             restored.restore(&app.persist());
             assert_eq!(restored.language, code);
             assert!(restored.set_option("language", "xx").is_err());
@@ -1599,10 +1599,10 @@ mod tests {
         assert_eq!(tr(bg, "Rapport de l'utilisateur.pdf"), "Rapport de l'utilisateur.pdf");
         // one (1), other (0, 2+)
         assert_eq!((0..=3).map(|n| (bg.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "bg").unwrap();
         assert_eq!(app.language, "bg");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "bg");
     }
@@ -1618,10 +1618,10 @@ mod tests {
         assert_eq!(tr(hu, "Rapport de l'utilisateur.pdf"), "Rapport de l'utilisateur.pdf");
         // one (1), other (0, 2+)
         assert_eq!((0..=3).map(|n| (hu.0.plural)(n)).collect::<Vec<_>>(), [1, 0, 1, 1]);
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "hu").unwrap();
         assert_eq!(app.language, "hu");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "hu");
     }
@@ -1637,10 +1637,10 @@ mod tests {
         assert_eq!(first_supported("uk-UA\r\nen-US"), Some(uk));
         assert_eq!(first_supported("(\n    \"uk-UA\",\n    \"en-US\"\n)\n"), Some(uk));
         assert_eq!(tr(uk, "Звіт {n}.pdf"), "Звіт {n}.pdf");
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "UK").unwrap();
         assert_eq!(app.language, "uk");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "uk");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1680,10 +1680,10 @@ mod tests {
         assert_eq!(first_supported("ar-MA\r\nen-US"), Some(ar));
         // Unknown strings and user text are never reordered by a lookup.
         assert_eq!(tr(ar, "تقرير نهائي {n}.pdf"), "تقرير نهائي {n}.pdf");
-        let mut app = crate::PdfCraftApp::default();
+        let mut app = crate::ASDReaderApp::default();
         app.set_option("language", "AR").unwrap();
         assert_eq!(app.language, "ar");
-        let mut restored = crate::PdfCraftApp::default();
+        let mut restored = crate::ASDReaderApp::default();
         restored.restore(&app.persist());
         assert_eq!(restored.language, "ar");
         assert!(restored.set_option("language", "xx").is_err());
@@ -1698,7 +1698,7 @@ mod tests {
         // "حفظ باسم…" as typed; the ellipsis ends the phrase on the left.
         assert_eq!(tr(ar, "Save as…"), "…باسم حفظ");
         // Latin names keep their own direction inside the phrase.
-        assert_eq!(tr(ar, "About PdfCraft"), "PdfCraft حول");
+        assert_eq!(tr(ar, "About ASDReader"), "ASDReader حول");
         // A caption's colon stays beside the widget on its right.
         assert_eq!(tr(ar, "Name:"), "الاسم:");
         assert_eq!(tr(ar, "Issued by: "), "عن صادرة: ");
@@ -1728,7 +1728,7 @@ mod tests {
     /// it; Arabic labels must not need a Japanese face).
     #[test]
     fn arabic_labels_have_glyphs() {
-        let faces: Vec<String> = pdfcraft_fonts::ui_arabic_fonts().iter().map(|f| f.name()).collect();
+        let faces: Vec<String> = asdreader_fonts::ui_arabic_fonts().iter().map(|f| f.name()).collect();
         if faces.is_empty() {
             eprintln!("skipping Arabic glyph checks: build with CRAFT_FONTS_DIR and an Arabic face to run them");
             return;
@@ -1738,7 +1738,7 @@ mod tests {
         let labels: String = entries.iter().flat_map(|e| e.translation.chars()).chain(ar.name().chars()).filter(|c| !c.is_control()).collect();
         let mut arabic_only = crate::theme::font_definitions();
         for family in arabic_only.families.values_mut() {
-            family.retain(|name| !pdfcraft_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || faces.contains(name));
+            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || faces.contains(name));
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("all faces", crate::theme::font_definitions()), ("Arabic face only", arabic_only)] {
@@ -1760,7 +1760,7 @@ mod tests {
             let (entries, errors) = parse_entries(l.source, l.plural_forms());
             assert!(errors.is_empty(), "{}: {errors:?}", l.code);
             for e in entries.iter().filter(|e| e.context == "@id") {
-                let command = pdfcraft_engine::commands::command(&e.source);
+                let command = asdreader_engine::commands::command(&e.source);
                 let Some(command) = command else { panic!("{}: unknown command id {:?}", l.code, e.source) };
                 assert_eq!(placeholders(&e.translation), placeholders(command.label), "{}: {}", l.code, e.source);
                 assert_eq!(e.translation.ends_with('…'), command.label.ends_with('…'), "{}: ellipsis mismatch: {}", l.code, e.source);
@@ -1783,11 +1783,11 @@ mod tests {
         let mut add = |s: &str| {
             plain.insert(s.to_string());
         };
-        for command in pdfcraft_engine::commands::COMMANDS {
+        for command in asdreader_engine::commands::COMMANDS {
             add(command.label);
             command.menu.into_iter().for_each(&mut add);
         }
-        for group in pdfcraft_engine::catalog::TOOL_GROUPS {
+        for group in asdreader_engine::catalog::TOOL_GROUPS {
             add(group.label);
             for section in group.sections {
                 add(section.title);
@@ -1795,18 +1795,18 @@ mod tests {
             }
         }
         let engine: [&[&str]; 9] = [
-            pdfcraft_engine::a11y::WORDINGS,
-            pdfcraft_engine::a11y::REPORT_WORDS,
-            pdfcraft_engine::pdfa::WORDINGS,
-            pdfcraft_engine::sign::pdf::WORDINGS,
-            pdfcraft_engine::sign::pdf::kind::ALL,
-            pdfcraft_engine::print::WORDINGS,
-            pdfcraft_engine::EDIT_LABELS,
-            pdfcraft_engine::BATCH_LABELS,
-            pdfcraft_engine::field_table::WORDINGS,
+            asdreader_engine::a11y::WORDINGS,
+            asdreader_engine::a11y::REPORT_WORDS,
+            asdreader_engine::pdfa::WORDINGS,
+            asdreader_engine::sign::pdf::WORDINGS,
+            asdreader_engine::sign::pdf::kind::ALL,
+            asdreader_engine::print::WORDINGS,
+            asdreader_engine::EDIT_LABELS,
+            asdreader_engine::BATCH_LABELS,
+            asdreader_engine::field_table::WORDINGS,
         ];
         engine.into_iter().flatten().for_each(|s| add(s));
-        pdfcraft_engine::sign::AppearanceLabels::default().fields().into_iter().for_each(|(_, label)| add(label));
+        asdreader_engine::sign::AppearanceLabels::default().fields().into_iter().for_each(|(_, label)| add(label));
         crate::credits::NameMode::ALL.iter().for_each(|mode| add(mode.label()));
         for key in crate::credits::SortKey::ALL {
             let (label, header) = key.label();
@@ -1859,7 +1859,7 @@ mod tests {
     #[test]
     fn date_languages_are_the_interface_languages() {
         let interface: Vec<(&str, &str)> = Lang::all().map(|l| (l.code(), l.name())).collect();
-        let dates: Vec<(&str, &str)> = pdfcraft_engine::dates::DATE_LANGUAGES.iter().map(|l| (l.code, l.name)).collect();
+        let dates: Vec<(&str, &str)> = asdreader_engine::dates::DATE_LANGUAGES.iter().map(|l| (l.code, l.name)).collect();
         assert_eq!(dates, interface);
     }
 }

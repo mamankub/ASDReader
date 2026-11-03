@@ -42,10 +42,10 @@ pub(crate) struct Type0Font {
     /// Whether the `to_unicode` map is a UCS2 `CMap` (CID-indexed) rather than
     /// a `ToUnicode` `CMap` (code-indexed).
     to_unicode_is_cid_indexed: bool,
-    /// PdfCraft patch: whether the CIDs belong to an Adobe character collection (Japan1, GB1,
+    /// ASDReader patch: whether the CIDs belong to an Adobe character collection (Japan1, GB1,
     /// CNS1, Korea1), whose glyph numbering no substitute other than a CID-keyed CFF font shares.
     adobe_collection: bool,
-    /// PdfCraft patch: `/ToUnicode /Identity-H` (a name, not a CMap stream), which CAD exporters
+    /// ASDReader patch: `/ToUnicode /Identity-H` (a name, not a CMap stream), which CAD exporters
     /// such as WSCAD write for fonts whose two-byte codes are UTF-16 code units. Acrobat shows
     /// such text as the code's Unicode value; the identity CMap the name resolves to maps codes
     /// to CIDs only and gave no text at all.
@@ -196,7 +196,7 @@ impl Type0Font {
             return glyph;
         }
 
-        // PdfCraft patch: a substitute that isn't CID-keyed numbers its glyphs its own way, so
+        // ASDReader patch: a substitute that isn't CID-keyed numbers its glyphs its own way, so
         // the CID of an Adobe character collection taken as its glyph index draws an unrelated
         // glyph. Draw .notdef, as for a CID the font has no glyph for.
         if self.fallback
@@ -252,7 +252,7 @@ impl Type0Font {
             })
             .and_then(|bf| match bf {
                 BfString::Char(c) => Some((c, None)),
-                // PdfCraft patch: a character and a variation selector is that character in a
+                // ASDReader patch: a character and a variation selector is that character in a
                 // given form, as Adobe-Japan1 maps the JIS X 0208 forms of the kanji that
                 // JIS X 0213:2004 redrew (噂 is U+5642 U+E0100). Other strings (ligatures) still
                 // have no glyph.
@@ -267,7 +267,7 @@ impl Type0Font {
         match &self.font_type {
             FontType::OpenType(t) => {
                 let charmap = t.font_ref().charmap();
-                // PdfCraft patch: the face's glyph for that form when its `cmap` has one, else its
+                // ASDReader patch: the face's glyph for that form when its `cmap` has one, else its
                 // glyph for the character, as when a form isn't supported (Unicode FAQ on
                 // variation sequences).
                 if let Some(selector) = selector
@@ -275,7 +275,7 @@ impl Type0Font {
                 {
                     return Some(glyph);
                 }
-                // PdfCraft patch: a substitute may lack a spacing character (#3601; e.g.
+                // ASDReader patch: a substitute may lack a spacing character (#3601; e.g.
                 // Adobe-Japan1's U+2002). Draw its ordinary space instead of .notdef;
                 // the PDF's widths and Unicode mapping still determine advance and text.
                 charmap.map(character).or_else(|| match character {
@@ -574,12 +574,12 @@ impl CidToGIdMap {
     }
 }
 
-/// PdfCraft patch: Variation Selectors (U+FE00–U+FE0F) and their supplement (U+E0100–U+E01EF).
+/// ASDReader patch: Variation Selectors (U+FE00–U+FE0F) and their supplement (U+E0100–U+E01EF).
 fn is_variation_selector(c: char) -> bool {
     matches!(c, '\u{FE00}'..='\u{FE0F}' | '\u{E0100}'..='\u{E01EF}')
 }
 
-/// PdfCraft patch: the largest CID (ISO 32000-2 §9.7.2; CIDs are at most two bytes).
+/// ASDReader patch: the largest CID (ISO 32000-2 §9.7.2; CIDs are at most two bytes).
 const MAX_CID: u32 = 65_535;
 
 fn read_widths(arr: &Array<'_>) -> Option<HashMap<u32, f32>> {
@@ -596,7 +596,7 @@ fn read_widths(arr: &Array<'_>) -> Option<HashMap<u32, f32>> {
                 first = first.checked_add(1)?;
             }
         } else if let Some((first, second, width)) = iter.next::<(u32, u32, f32)>() {
-            // PdfCraft patch: CIDs stop at 65535. A corrupt range such as
+            // ASDReader patch: CIDs stop at 65535. A corrupt range such as
             // `0 4294967295 500` inserted billions of entries (found by fuzzing).
             for i in first..=second.min(MAX_CID) {
                 map.insert(i, width);
@@ -624,7 +624,7 @@ fn read_widths2(arr: &Array<'_>) -> Option<HashMap<u32, [f32; 3]>> {
                 first = first.checked_add(1)?;
             }
         } else if let Some((first, second, w, v1, v2)) = iter.next::<(u32, u32, f32, f32, f32)>() {
-            // PdfCraft patch: as in `read_widths`.
+            // ASDReader patch: as in `read_widths`.
             for i in first..=second.min(MAX_CID) {
                 map.insert(i, [w, v1, v2]);
             }

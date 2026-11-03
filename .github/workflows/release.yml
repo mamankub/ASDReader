@@ -27,15 +27,15 @@ jobs:
       matrix:
         include:
           - { name: Linux x86_64, os: ubuntu-22.04, artifact: linux-x86_64 }
-          - { name: Windows x64 portable, os: windows-latest, artifact: windows-x64 }
+          - { name: Windows x64 installer and portable, os: windows-latest, artifact: windows-x64 }
     env:
       CARGO_BUILD_JOBS: "2"
       CARGO_INCREMENTAL: "0"
       CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
       CRAFT_FONTS_REQUIRED: "1"
       ASDREADER_REQUIRE_THAI: "1"
-      PDFCRAFT_SYSTEM_FONTS: "0"
-      PDFCRAFT_BUILD_SHA: ${{ github.sha }}
+      ASDREADER_SYSTEM_FONTS: "0"
+      ASDREADER_BUILD_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -91,18 +91,22 @@ jobs:
       - name: Build Linux archive
         if: runner.os == 'Linux'
         run: bash packaging/linux/package.sh --formats tar
-      - name: Build Windows portable archive (unsigned)
+      - name: Install WiX
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./packaging/windows/package.ps1 -Arch x64 -PortableOnly
+        run: dotnet tool install --global wix --version 5.0.2
+      - name: Build Windows installer wizard (MSI) and portable archive (unsigned)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/windows/package.ps1 -Arch x64
       - name: Thai regression and asset checks
         if: runner.os == 'Linux'
         env:
-          PDFCRAFT_MODELS: ${{ github.workspace }}/assets/models
+          ASDREADER_MODELS: ${{ github.workspace }}/assets/models
         run: |
-          cargo test --release --locked -p pdfcraft-fonts -p pdfcraft-edit --lib
-          cargo test --release --locked -p pdfcraft-engine --test it thai
-          cargo test --release --locked -p pdfcraft-ocr --lib
+          cargo test --release --locked -p asdreader-fonts -p asdreader-edit --lib
+          cargo test --release --locked -p asdreader-engine --test it thai
+          cargo test --release --locked -p asdreader-ocr --lib
           cargo xtask assets
           cargo xtask layers
       - name: Record candidate checksums and source commit
@@ -110,9 +114,9 @@ jobs:
         run: |
           set -euo pipefail
           cd dist/release
-          find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' \) -exec sha256sum {} + > SHA256SUMS.txt
+          find . -maxdepth 1 -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.msi' \) -exec sha256sum {} + > SHA256SUMS.txt
           test -s SHA256SUMS.txt
-          printf '%s\n' "$PDFCRAFT_BUILD_SHA" > SOURCE_COMMIT.txt
+          printf '%s\n' "$ASDREADER_BUILD_SHA" > SOURCE_COMMIT.txt
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: asdreader-${{ matrix.artifact }}

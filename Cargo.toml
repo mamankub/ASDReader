@@ -2,10 +2,10 @@
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
 exclude = ["vendor"]
-default-members = ["crates/*", "apps/pdfcraft", "apps/pdfcraft-cli", "xtask"]
+default-members = ["crates/*", "apps/asdreader", "apps/asdreader-cli", "xtask"]
 
 [workspace.package]
-version = "0.13.1"
+version = "0.13.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -16,44 +16,44 @@ repository = "https://github.com/mamankub/ASDReader"
 craft-ui = { git = "https://github.com/storytold/craft-libs", version = "0.1.0", rev = "5c874d51eeb3de70e735c8ce87a59a7dedd47675", features = ["serde"] }
 # Quit the macOS way (#1136): ⌘Q asks about unsaved changes, and closing quits through `terminate:`.
 craft-quit = { git = "https://github.com/storytold/craft-libs", version = "0.1.0", rev = "f58bc1a3df490992d633393d0898af0588ce882c" }
-# Shared system spooler; document composition remains in pdfcraft-print.
+# Shared system spooler; document composition remains in asdreader-print.
 craft-print = { git = "https://github.com/storytold/craft-libs", version = "0.1.0", rev = "666c358065261a2816b376fa3bb10538dbf53040" }
 # Whether a path stored in a document may be opened (GoToR link targets).
 craft-docpath = { version = "0.1.0", git = "https://github.com/storytold/craft-libs", rev = "82a24b006eefa036b43c09a67fb9a3fbd17ffe63" }
 # internal
-pdfcraft-geom = { path = "crates/geom", version = "0.13.1" }
-pdfcraft-filters = { path = "crates/filters", version = "0.13.1" }
-pdfcraft-cos = { path = "crates/cos", version = "0.13.1" }
-pdfcraft-crypt = { path = "crates/crypt", version = "0.13.1" }
-pdfcraft-organize = { path = "crates/organize", version = "0.13.1" }
-pdfcraft-measure = { path = "crates/measure", version = "0.13.1" }
-pdfcraft-annot = { path = "crates/annot", version = "0.13.1" }
-pdfcraft-audit = { path = "crates/audit", version = "0.13.1" }
-pdfcraft-fonts = { path = "crates/fonts", version = "0.13.1" }
-pdfcraft-model = { path = "crates/model", version = "0.13.1" }
-pdfcraft-content = { path = "crates/content", version = "0.13.1" }
-pdfcraft-redact = { path = "crates/redact", version = "0.13.1" }
-pdfcraft-print = { path = "crates/print", version = "0.13.1" }
-pdfcraft-xfdf = { path = "crates/xfdf", version = "0.13.1" }
-pdfcraft-sign = { path = "crates/sign", version = "0.13.1" }
-pdfcraft-optimize = { path = "crates/optimize", version = "0.13.1" }
-pdfcraft-a11y = { path = "crates/a11y", version = "0.13.1" }
-pdfcraft-oracle = { path = "crates/oracle", version = "0.13.1" }
-pdfcraft-testkit = { path = "crates/testkit", version = "0.13.1" }
-pdfcraft-ocr = { path = "crates/ocr", version = "0.13.1" }
-pdfcraft-js = { path = "crates/js", version = "0.13.1" }
-pdfcraft-compare = { path = "crates/compare", version = "0.13.1" }
-pdfcraft-preflight = { path = "crates/preflight", version = "0.13.1" }
-pdfcraft-export = { path = "crates/export", version = "0.13.1" }
-pdfcraft-edit = { path = "crates/edit", version = "0.13.1" }
-pdfcraft-create = { path = "crates/create", version = "0.13.1" }
-pdfcraft-forms = { path = "crates/forms", version = "0.13.1" }
-pdfcraft-xfa = { path = "crates/xfa", version = "0.13.1" }
-pdfcraft-render = { path = "crates/render", version = "0.13.1" }
-pdfcraft-engine = { path = "crates/engine", version = "0.13.1" }
-pdfcraft-platform = { path = "crates/platform", version = "0.13.1" }
-pdfcraft-ui-egui = { path = "crates/ui-egui", version = "0.13.1" }
-pdfcraft-automation = { path = "crates/automation", version = "0.13.1", default-features = false }
+asdreader-geom = { path = "crates/geom", version = "0.13.2" }
+asdreader-filters = { path = "crates/filters", version = "0.13.2" }
+asdreader-cos = { path = "crates/cos", version = "0.13.2" }
+asdreader-crypt = { path = "crates/crypt", version = "0.13.2" }
+asdreader-organize = { path = "crates/organize", version = "0.13.2" }
+asdreader-measure = { path = "crates/measure", version = "0.13.2" }
+asdreader-annot = { path = "crates/annot", version = "0.13.2" }
+asdreader-audit = { path = "crates/audit", version = "0.13.2" }
+asdreader-fonts = { path = "crates/fonts", version = "0.13.2" }
+asdreader-model = { path = "crates/model", version = "0.13.2" }
+asdreader-content = { path = "crates/content", version = "0.13.2" }
+asdreader-redact = { path = "crates/redact", version = "0.13.2" }
+asdreader-print = { path = "crates/print", version = "0.13.2" }
+asdreader-xfdf = { path = "crates/xfdf", version = "0.13.2" }
+asdreader-sign = { path = "crates/sign", version = "0.13.2" }
+asdreader-optimize = { path = "crates/optimize", version = "0.13.2" }
+asdreader-a11y = { path = "crates/a11y", version = "0.13.2" }
+asdreader-oracle = { path = "crates/oracle", version = "0.13.2" }
+asdreader-testkit = { path = "crates/testkit", version = "0.13.2" }
+asdreader-ocr = { path = "crates/ocr", version = "0.13.2" }
+asdreader-js = { path = "crates/js", version = "0.13.2" }
+asdreader-compare = { path = "crates/compare", version = "0.13.2" }
+asdreader-preflight = { path = "crates/preflight", version = "0.13.2" }
+asdreader-export = { path = "crates/export", version = "0.13.2" }
+asdreader-edit = { path = "crates/edit", version = "0.13.2" }
+asdreader-create = { path = "crates/create", version = "0.13.2" }
+asdreader-forms = { path = "crates/forms", version = "0.13.2" }
+asdreader-xfa = { path = "crates/xfa", version = "0.13.2" }
+asdreader-render = { path = "crates/render", version = "0.13.2" }
+asdreader-engine = { path = "crates/engine", version = "0.13.2" }
+asdreader-platform = { path = "crates/platform", version = "0.13.2" }
+asdreader-ui-egui = { path = "crates/ui-egui", version = "0.13.2" }
+asdreader-automation = { path = "crates/automation", version = "0.13.2", default-features = false }
 
 # pdf
 hayro = "0.7.1"
@@ -110,6 +110,11 @@ lto = "thin"
 codegen-units = 1
 
 # Vendored, patched third-party crates (see vendor/README.md). Each patch is meant to go upstream.
+# The Windows print path's PrintTicket builder starts from the user's printer settings
+# (vendor/winprint; vendor/README.md), so a job prints at the resolution Printing Preferences set.
+[patch."https://github.com/storytold/winprint.rs"]
+winprint = { path = "vendor/winprint" }
+
 [patch.crates-io]
 hayro-interpret = { path = "vendor/hayro-interpret" }
 hayro = { path = "vendor/hayro" }

@@ -554,7 +554,7 @@ impl PartitionedRanges {
         }
     }
 
-    // PdfCraft patch: needed by the truncated-stream guard in parse.rs.
+    // ASDReader patch: needed by the truncated-stream guard in parse.rs.
     pub(crate) fn is_empty(&self) -> bool {
         self.buckets.iter().all(|b| b.is_empty())
     }
@@ -1096,7 +1096,7 @@ endbfchar
         );
     }
 
-    // PdfCraft patch: malformed pieces of a CMap are skipped, not fatal - the reading
+    // ASDReader patch: malformed pieces of a CMap are skipped, not fatal - the reading
     // path used to discard the whole CMap and fall back to the font encoding for every
     // code, so search and search-redaction missed text the edit layer could see (#3177).
 

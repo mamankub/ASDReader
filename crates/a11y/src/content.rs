@@ -6,8 +6,8 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-use pdfcraft_cos::{DecodeBudget, Dict, Document, ObjRef, Object};
-use pdfcraft_model::Page;
+use asdreader_cos::{DecodeBudget, Dict, Document, ObjRef, Object};
+use asdreader_model::Page;
 
 use crate::{Finding, Rule};
 
@@ -64,7 +64,7 @@ impl Walk<'_> {
         // Marked-content stack: whether each level is tagged or an artifact.
         let mut stack: Vec<bool> = Vec::new();
         let mut untagged = 0;
-        for op in pdfcraft_content::parse(data).ops {
+        for op in asdreader_content::parse(data).ops {
             let inside = covered || stack.last().copied().unwrap_or(false);
             match op.op.as_slice() {
                 b"BMC" => stack.push(inside || op.name(0) == Some(b"Artifact")),

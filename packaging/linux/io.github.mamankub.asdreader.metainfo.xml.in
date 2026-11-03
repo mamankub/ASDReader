@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- AppStream metadata (software centres, Flathub). Template: package.sh and the Flatpak
+     manifest substitute @VERSION@ and @DATE@ from Cargo.toml and the build date. -->
+<component type="desktop-application">
+  <id>io.github.mamankub.asdreader</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT OR Apache-2.0</project_license>
+  <name>ASDReader</name>
+  <summary>Read, organize, combine, split and secure PDFs</summary>
+  <developer id="io.github.mamankub">
+    <name>ASDReader contributors</name>
+  </developer>
+  <description>
+    <p>
+      ASDReader is an open-source PDF workbench. Read, comment on, fill in and sign PDFs;
+      organize, combine and split pages; edit, redact, protect and export documents.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.mamankub.asdreader.desktop</launchable>
+  <icon type="stock">io.github.mamankub.asdreader</icon>
+  <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
+  <url type="homepage">https://github.com/mamankub/ASDReader</url>
+  <url type="bugtracker">https://github.com/mamankub/ASDReader/issues</url>
+  <url type="help">https://github.com/mamankub/ASDReader</url>
+  <url type="contact">https://github.com/mamankub/ASDReader/issues</url>
+  <categories>
+    <category>Office</category>
+    <category>Viewer</category>
+  </categories>
+  <keywords>
+    <keyword>pdf</keyword>
+    <keyword>viewer</keyword>
+    <keyword>annotate</keyword>
+    <keyword>forms</keyword>
+  </keywords>
+  <screenshots>
+    <screenshot type="default">
+      <caption>ASDReader displaying a Thai PDF</caption>
+      <image>https://raw.githubusercontent.com/mamankub/ASDReader/v0.13.1/docs/images/asdreader-thai.png</image>
+    </screenshot>
+  </screenshots>
+  <branding>
+    <color type="primary" scheme_preference="light">#FF1744</color>
+    <color type="primary" scheme_preference="dark">#FF1744</color>
+  </branding>
+  <requires>
+    <display_length compare="ge">760</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+    <control>tablet</control>
+  </supports>
+  <provides>
+    <binary>asdreader</binary>
+    <mediatype>application/pdf</mediatype>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@"/>
+  </releases>
+</component>

@@ -1,7 +1,7 @@
-# pdfcraft-forms
+# asdreader-forms
 
-Interactive forms (AcroForm, ISO 32000-2 §12.7). Layer L3; depends on `pdfcraft-cos` and
-`pdfcraft-fonts`.
+Interactive forms (AcroForm, ISO 32000-2 §12.7). Layer L3; depends on `asdreader-cos` and
+`asdreader-fonts`.
 
 ## API
 
@@ -45,7 +45,7 @@ let cells: Vec<table::Cell> = grid.cells_for(names)?;      // "Table1_1", "Table
   Unicode CMap; otherwise Helvetica (WinAnsi). A value or button caption the font can't hold
   (Chinese in a Helvetica field, a character beyond U+FFFF in a UCS-2 CMap) is kept, as Acrobat
   keeps it: `/V` is stored as typed, the appearance draws `?` for those characters, the widget is
-  marked with the first one (`pdfcraft_fonts::UNDRAWN_MARK`, cleared once all of it can be drawn)
+  marked with the first one (`asdreader_fonts::UNDRAWN_MARK`, cleared once all of it can be drawn)
   and the form sets `/NeedAppearances`, so other viewers draw the field from its value with fonts
   that have them. Not in a document that declares PDF/A, which forbids that flag (`declares_pdfa`).
   `undrawn_fields` lists the marked fields; the engine reports each edit that draws one, and
@@ -57,7 +57,7 @@ let cells: Vec<table::Cell> = grid.cells_for(names)?;      // "Table1_1", "Table
   drawing while the objects it was drawn from are the same (`FieldAppearanceCache`), so typing in
   one field redraws that field, not the form.
 - Check boxes and radio buttons switch `/V` and each widget's `/AS`. Widgets with no appearances
-  get PdfCraft's own (a drawn check mark or dot; no symbol font needed).
+  get ASDReader's own (a drawn check mark or dot; no symbol font needed).
 - Imported `/MaxLen 0` is treated as unlimited (also clearing an inherited limit), while the
   original entry is preserved. Positive limits still apply.
 - Values are validated (options, `MaxLen`, single vs multi-select, NoToggleToOff, read-only) and a

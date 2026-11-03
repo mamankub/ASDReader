@@ -14,7 +14,7 @@
 use std::borrow::Cow;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use pdfcraft_cos::{DecodeBudget, Dict, Document, Object};
+use asdreader_cos::{DecodeBudget, Dict, Document, Object};
 
 /// How the bytes of a string map to codes.
 #[derive(Clone, Debug, PartialEq)]
@@ -1331,7 +1331,7 @@ fn identity_to_unicode() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use pdfcraft_cos::{Dict, Document, Object, Stream};
+    use asdreader_cos::{Dict, Document, Object, Stream};
 
     use super::*;
 
@@ -1444,7 +1444,7 @@ mod tests {
 
     #[test]
     fn embedded_editor_fonts_are_validated_without_installing_or_exporting() {
-        use pdfcraft_cos::Stream;
+        use asdreader_cos::Stream;
         let mut doc = Document::new_empty();
         let bytes = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
         let program = doc.add(Object::Stream(Stream::flate(Dict::new(), bytes)));
@@ -1465,7 +1465,7 @@ mod tests {
     /// ("Mono" would mean Courier, 600 units for every glyph).
     #[test]
     fn a_font_without_widths_measures_with_its_embedded_program() {
-        use pdfcraft_cos::Stream;
+        use asdreader_cos::Stream;
         use skrifa::MetadataProvider as _;
         let mut doc = Document::new_empty();
         let bytes = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
@@ -2145,7 +2145,7 @@ mod tests {
 
 #[cfg(test)]
 mod encoding_tests {
-    use pdfcraft_cos::{Dict, Document, Object};
+    use asdreader_cos::{Dict, Document, Object};
 
     use super::*;
 
@@ -2307,7 +2307,7 @@ mod encoding_tests {
         // 128 resources naming one 1 MiB program that isn't a font: each decode is charged,
         // so an enumeration stops decoding once the shared budget is spent.
         let mut doc = Document::new_empty();
-        let program = doc.add(pdfcraft_cos::Stream::flate(Dict::new(), &vec![0; 1 << 20]));
+        let program = doc.add(asdreader_cos::Stream::flate(Dict::new(), &vec![0; 1 << 20]));
         let descriptor: Dict = [(b"FontFile2".to_vec(), Object::Ref(program))].into_iter().collect();
         let descriptor = doc.add(descriptor);
         let font: Dict = [(b"FontDescriptor".to_vec(), Object::Ref(descriptor))].into_iter().collect();

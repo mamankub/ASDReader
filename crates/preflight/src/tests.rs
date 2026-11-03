@@ -110,7 +110,7 @@ fn convert_fixes_all_but_fonts() {
     assert_eq!(xmp::value(&x, "dc:title").as_deref(), Some("Report"));
     assert_eq!(xmp::value(&x, "xmp:CreateDate").as_deref(), Some("2024-01-05T09:30:00Z"));
     // It survives a save.
-    let bytes = pdfcraft_cos::write_full(&doc, &Default::default()).unwrap();
+    let bytes = asdreader_cos::write_full(&doc, &Default::default()).unwrap();
     let back = Document::open(std::sync::Arc::new(bytes)).unwrap();
     assert_eq!(verify(&back, Level::A2b).len(), 1);
 }
@@ -452,8 +452,8 @@ fn forbidden_actions_chained_behind_allowed_ones_are_found_and_removed() {
         assert!(found, "case {i}: {:#?}", verify(&doc, Level::A2b));
         let r = convert(&mut doc, Level::A2b).unwrap();
         assert!(!r.remaining.iter().any(|x| x.clause == "6.5.1"), "case {i}: {:#?}", r.remaining);
-        let plain = pdfcraft_cos::SaveOptions { object_streams: false, ..Default::default() };
-        let bytes = pdfcraft_cos::write_full(&doc, &plain).unwrap();
+        let plain = asdreader_cos::SaveOptions { object_streams: false, ..Default::default() };
+        let bytes = asdreader_cos::write_full(&doc, &plain).unwrap();
         assert!(!bytes.windows(11).any(|w| w == b"/JavaScript"), "case {i}: {}", String::from_utf8_lossy(&bytes));
     }
 }
@@ -484,7 +484,7 @@ fn an_output_intent_profile_header_is_read_within_a_size_cap() {
         let mut doc = build(&[&format!("<< /Type /Catalog {intent} >>"), "null"], "");
         let mut profile = vec![0; size];
         profile[16..20].copy_from_slice(b"CMYK");
-        doc.set(pdfcraft_cos::ObjRef::new(2, 0), Object::Stream(pdfcraft_cos::Stream::flate(Dict::new(), &profile)));
+        doc.set(asdreader_cos::ObjRef::new(2, 0), Object::Stream(asdreader_cos::Stream::flate(Dict::new(), &profile)));
         assert_eq!(pdfa_intent_profile(&doc), Some(n), "a {size}-byte profile");
     }
 }

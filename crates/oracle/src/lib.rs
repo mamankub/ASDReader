@@ -1,4 +1,4 @@
-//! External oracle processes: independent implementations PdfCraft checks its own output against.
+//! External oracle processes: independent implementations ASDReader checks its own output against.
 //!
 //! An oracle is only worth having when it runs. Before this crate every test that wanted one
 //! probed for it by hand and decided on its own what to do when it was missing, and the common
@@ -14,7 +14,7 @@
 //!
 //! ```no_run
 //! # fn main() {
-//! let qpdf = pdfcraft_oracle::or_skip!(pdfcraft_oracle::qpdf());
+//! let qpdf = asdreader_oracle::or_skip!(asdreader_oracle::qpdf());
 //! let out = qpdf.command().arg("--check").arg("f.pdf").output();
 //! # let _ = out;
 //! # }
@@ -36,7 +36,7 @@ use std::process::Command;
 /// Any value counts, including `0` — the same convention as `CRAFT_FONTS_REQUIRED`, which this
 /// deliberately mirrors. The surprising half of that convention errs toward *requiring* an oracle,
 /// which is the safe direction for a gate whose whole purpose is to stop absence passing quietly.
-pub const REQUIRED_VAR: &str = "PDFCRAFT_ORACLES_REQUIRED";
+pub const REQUIRED_VAR: &str = "ASDREADER_ORACLES_REQUIRED";
 
 /// An external program found on `PATH`, ready to run.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -204,12 +204,12 @@ mod tests {
     /// reason names the program.
     #[test]
     fn a_program_that_does_not_exist_is_absent_with_a_reason() {
-        let Err(absent) = find("pdfcraft-no-such-oracle-binary", "--version") else {
+        let Err(absent) = find("asdreader-no-such-oracle-binary", "--version") else {
             panic!("a nonexistent program must not be reported as present");
         };
-        assert_eq!(absent.program(), "pdfcraft-no-such-oracle-binary");
+        assert_eq!(absent.program(), "asdreader-no-such-oracle-binary");
         let text = absent.to_string();
-        assert!(text.contains("pdfcraft-no-such-oracle-binary"), "{text}");
+        assert!(text.contains("asdreader-no-such-oracle-binary"), "{text}");
         assert!(text.contains("not on PATH"), "{text}");
     }
 

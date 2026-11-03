@@ -3,9 +3,9 @@
 //! `q … cm … Q` with the extra transform), replace (it draws another XObject in the same place),
 //! or delete. Only the stream that draws it is rewritten, as a new object.
 
+use asdreader_content::{Matrix, Op, Pieces, parse};
+use asdreader_cos::{Dict, Document, ObjRef, Object};
 use kurbo::{BezPath, Point, Shape};
-use pdfcraft_content::{Matrix, Op, Pieces, parse};
-use pdfcraft_cos::{Dict, Document, ObjRef, Object};
 use std::sync::Arc;
 
 use crate::EditError;
@@ -87,8 +87,8 @@ fn joined(streams: &[(Object, Vec<u8>)]) -> Pieces {
     Pieces::join(&streams.iter().map(|(_, data)| data.as_slice()).collect::<Vec<_>>())
 }
 
-fn page_of(doc: &Document, page: usize) -> Result<pdfcraft_model::Page, EditError> {
-    pdfcraft_model::pages(doc).into_iter().nth(page).ok_or(EditError::NoSuchPage(page))
+fn page_of(doc: &Document, page: usize) -> Result<asdreader_model::Page, EditError> {
+    asdreader_model::pages(doc).into_iter().nth(page).ok_or(EditError::NoSuchPage(page))
 }
 
 fn xobjects(doc: &Document, page: &Dict) -> Dict {
@@ -375,7 +375,7 @@ pub fn reading_images(doc: &Document, page: usize) -> Result<Vec<PageImage>, Edi
     let res = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut out = Vec::new();
     let mut st = ImageState::new(Matrix::IDENTITY, p.crop(doc), Vec::new());
-    let mut decode = pdfcraft_cos::DecodeBudget::page();
+    let mut decode = asdreader_cos::DecodeBudget::page();
     let pieces = joined(&crate::text::content_streams_within(doc, &p.dict, &mut decode)?);
     let mut forms = Forms { path: Vec::new(), budget: crate::text::FormBudget::new(decode) };
     walk(doc, &pieces.parse().ops, &res, &mut st, &|op| pieces.piece_of(op.span.start), &mut forms, &mut out)?;
@@ -614,7 +614,7 @@ fn image_transform_scope(ops: &[Op], target: usize) -> Result<Option<(usize, usi
 
 fn transform_image(
     doc: &mut Document,
-    page: &pdfcraft_model::Page,
+    page: &asdreader_model::Page,
     streams: &[(Object, Vec<u8>)],
     image: &PageImage,
     transform: [f64; 6],
@@ -678,7 +678,7 @@ fn transform_image(
 /// box too and a later transform of the scope moves the crop with the pixels.
 fn crop_image(
     doc: &mut Document,
-    page: &pdfcraft_model::Page,
+    page: &asdreader_model::Page,
     streams: &[(Object, Vec<u8>)],
     image: &PageImage,
     keep: [f64; 4],

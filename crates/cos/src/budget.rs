@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 
-use pdfcraft_filters::FilterError;
+use asdreader_filters::FilterError;
 
 use crate::{CosError, Document, ObjRef, Object, Stream};
 

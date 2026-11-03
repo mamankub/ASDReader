@@ -6,9 +6,9 @@
 
 use std::collections::HashMap;
 
+use asdreader_engine::{Edit, NoteIcon, ReviewState, Shape};
+use asdreader_render::{Annotation, DocInfo};
 use egui::{Align, Color32, CornerRadius, Layout, Sense, Stroke, vec2};
-use pdfcraft_engine::{Edit, NoteIcon, ReviewState, Shape};
-use pdfcraft_render::{Annotation, DocInfo};
 
 use crate::canvas::DocView;
 use crate::comments::{CommentPrefs, CommentTool, SortBy, color32, status_badge};
@@ -98,8 +98,8 @@ fn matches(a: &Annotation, q: &str) -> bool {
 
 /// Whether one of `fields` contains `q` in any case, Turkish dotted and dotless i included.
 fn any_contains<'a>(fields: impl IntoIterator<Item = &'a str>, q: &str) -> bool {
-    let q = pdfcraft_render::text::fold_case(q);
-    fields.into_iter().any(|s| pdfcraft_render::text::fold_case(s).contains(&q))
+    let q = asdreader_render::text::fold_case(q);
+    fields.into_iter().any(|s| asdreader_render::text::fold_case(s).contains(&q))
 }
 
 /// Draw the panel body. Returns an edit to apply (posting, replying, deleting…).
@@ -133,7 +133,7 @@ pub(crate) fn show(
             if let Some(p) = info.pages.get(page) {
                 let at = p.view_to_user(p.width - 44.0, 24.0);
                 let text = std::mem::take(&mut view.comments.add_box);
-                edit = Some(Edit::AddAnnotation(pdfcraft_engine::NewAnnotation {
+                edit = Some(Edit::AddAnnotation(asdreader_engine::NewAnnotation {
                     page,
                     shape: Shape::Note { at: [at[0] as f64, at[1] as f64], icon: NoteIcon::Comment },
                     style: prefs.style(CommentTool::Note),

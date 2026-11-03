@@ -17,8 +17,8 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-use pdfcraft_content::Matrix;
-use pdfcraft_cos::{DecodeBudget, Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full};
+use asdreader_content::Matrix;
+use asdreader_cos::{DecodeBudget, Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full};
 
 pub mod range;
 pub mod spool;
@@ -48,7 +48,7 @@ pub enum PrintError {
     #[error("{0}")]
     Spool(String),
     #[error(transparent)]
-    Cos(#[from] pdfcraft_cos::CosError),
+    Cos(#[from] asdreader_cos::CosError),
 }
 
 /// How an interface says one of our wordings in its own language, holes and all: given the English
@@ -327,7 +327,7 @@ pub fn cups_media(index: usize) -> Option<&'static str> {
 /// sideways on a letter or A4 sheet), counting each text-showing operator once; form XObjects
 /// are followed a few levels deep.
 pub fn text_reads_up(doc: &Document, index: usize) -> bool {
-    let Some(page) = pdfcraft_model::pages(doc).into_iter().nth(index) else { return false };
+    let Some(page) = asdreader_model::pages(doc).into_iter().nth(index) else { return false };
     let to_display = Matrix(page.view_matrix(doc)).invert().unwrap_or_default();
     let res = page.dict.get(b"Resources").and_then(|r| doc.resolve(r).as_dict().cloned()).unwrap_or_default();
     let mut score = 0i64;
@@ -340,7 +340,7 @@ pub fn text_reads_up(doc: &Document, index: usize) -> bool {
 
 fn text_direction(doc: &Document, data: &[u8], res: &Dict, base: Matrix, depth: usize, score: &mut i64, budget: &mut DecodeBudget) {
     let (mut ctm, mut tm, mut stack) = (base, Matrix::IDENTITY, Vec::new());
-    for op in pdfcraft_content::parse(data).ops {
+    for op in asdreader_content::parse(data).ops {
         match op.op.as_slice() {
             // Bounded like the renderer's graphics-state stack: deeper saves are ignored.
             b"q" if stack.len() < 256 => stack.push(ctm),
@@ -672,7 +672,7 @@ pub fn layout(sizes: &[(f64, f64)], settings: &Settings) -> Result<Vec<Sheet>, P
 // Model-derived transforms and clipping bounds need their full PDF decimal precision.
 fn geometry_number(value: f64) -> String {
     let mut bytes = Vec::new();
-    pdfcraft_cos::serialize(&Object::Real(value), &mut bytes);
+    asdreader_cos::serialize(&Object::Real(value), &mut bytes);
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -704,7 +704,7 @@ fn decoded_contents(doc: &Document, page: &Dict, budget: &mut DecodeBudget) -> O
 /// don't print are dropped, and with [`Content::FormFieldsOnly`] the page content too. For
 /// printing pages as pictures, where a renderer draws each page as it stands.
 pub fn keep_printed(doc: &mut Document, content: Content) {
-    for page in pdfcraft_model::pages(doc) {
+    for page in asdreader_model::pages(doc) {
         let annots = page.dict.get(b"Annots").and_then(|a| doc.resolve(a).as_array().cloned()).unwrap_or_default();
         let kept: Vec<Object> = annots.into_iter().filter(|a| doc.resolve(a).as_dict().is_some_and(|d| prints(doc, d, content))).collect();
         // Fails only when the page object isn't a dictionary, and such a page draws nothing.
@@ -778,7 +778,7 @@ fn appearance_matrix(doc: &Document, form: &Dict, rect: [f64; 4]) -> Option<Matr
 /// printed would make printing quadratic in the page count.
 fn page_form(
     doc: &mut Document,
-    pages: &[pdfcraft_model::Page],
+    pages: &[asdreader_model::Page],
     index: usize,
     content: Content,
     promoted: &mut std::collections::HashMap<ObjRef, ObjRef>,
@@ -860,8 +860,8 @@ thread_local! {
 }
 
 /// The source document's pages, for printing.
-fn source_pages(doc: &Document) -> Vec<pdfcraft_model::Page> {
-    let pages = pdfcraft_model::pages(doc);
+fn source_pages(doc: &Document) -> Vec<asdreader_model::Page> {
+    let pages = asdreader_model::pages(doc);
     #[cfg(test)]
     PAGES_LISTED.with(|c| c.set(c.get() + pages.len()));
     pages

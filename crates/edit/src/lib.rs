@@ -1,4 +1,4 @@
-//! pdfcraft-edit — page content editing (L4). Today: page marks, Acrobat's Header & footer,
+//! asdreader-edit — page content editing (L4). Today: page marks, Acrobat's Header & footer,
 //! Watermark, Background and Bates numbering (execution plan M7.6).
 //!
 //! **How marks are stored.** Each mark is one content stream appended to (or, for content behind
@@ -17,8 +17,8 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, Stream};
-use pdfcraft_fonts::{helvetica_width, literal, win_ansi};
+use asdreader_cos::{Dict, Document, ObjRef, Object, Stream};
+use asdreader_fonts::{helvetica_width, literal, win_ansi};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum EditError {
@@ -28,7 +28,7 @@ pub enum EditError {
     #[error("{0}")]
     Invalid(String),
     #[error("{0}")]
-    Cos(#[from] pdfcraft_cos::CosError),
+    Cos(#[from] asdreader_cos::CosError),
 }
 
 /// The kinds of page marks.
@@ -98,7 +98,7 @@ impl HeaderFooter {
     /// (and a `\r` that would be drawn is refused too). The dialog asks this too, so its preview
     /// never offers text that applying refuses (#2013).
     pub fn first_undrawable(&self) -> Option<char> {
-        self.text.iter().flat_map(|t| t.lines()).find_map(pdfcraft_fonts::first_non_win_ansi)
+        self.text.iter().flat_map(|t| t.lines()).find_map(asdreader_fonts::first_non_win_ansi)
     }
 
     /// The room the header and the footer take at the top and the bottom of a page, in points:
@@ -142,7 +142,7 @@ fn shrink_matrix(hf: &HeaderFooter, size: (f64, f64), view: [f64; 6]) -> Result<
 /// the document, an image (drawn into a unit square) or a form (a page of a PDF).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct MarkSource {
-    pub xobject: pdfcraft_cos::ObjRef,
+    pub xobject: asdreader_cos::ObjRef,
     /// Its natural size in points.
     pub size: (f64, f64),
     /// An image XObject (unit square); otherwise a form whose `/Matrix` maps it to `size`.
@@ -175,7 +175,7 @@ impl Watermark {
     pub fn first_undrawable(&self) -> Option<char> {
         match self.source {
             Some(_) => None,
-            None => self.text.trim().lines().find_map(pdfcraft_fonts::first_non_win_ansi),
+            None => self.text.trim().lines().find_map(asdreader_fonts::first_non_win_ansi),
         }
     }
 }
@@ -231,7 +231,7 @@ fn picture(src: &MarkSource, page: (f64, f64), scale: f64, rotation: f64, offset
 }
 
 /// Register a mark picture in the page's own resources (`/PCPic<num>`).
-fn add_picture_resource(doc: &mut Document, page: &pdfcraft_model::Page, src: &MarkSource) -> Result<(), EditError> {
+fn add_picture_resource(doc: &mut Document, page: &asdreader_model::Page, src: &MarkSource) -> Result<(), EditError> {
     let p = doc.get(page.obj).as_dict().cloned().unwrap_or_default();
     let mut res = p.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut xo = res.get(b"XObject").map(|x| doc.resolve(x)).and_then(|x| x.as_dict().cloned()).unwrap_or_default();
@@ -251,7 +251,7 @@ pub struct Context {
 // Model-derived transforms can contain tiny scale factors; retain their PDF decimal precision.
 fn matrix_number(value: f64) -> String {
     let mut bytes = Vec::new();
-    pdfcraft_cos::serialize(&Object::Real(value), &mut bytes);
+    asdreader_cos::serialize(&Object::Real(value), &mut bytes);
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -324,8 +324,8 @@ fn bates_start(template: &str) -> Option<u64> {
     t.split('#').nth(2).and_then(|s| s.parse().ok()).or(Some(1))
 }
 
-fn page_list(doc: &Document) -> Vec<pdfcraft_model::Page> {
-    pdfcraft_model::pages(doc)
+fn page_list(doc: &Document) -> Vec<asdreader_model::Page> {
+    asdreader_model::pages(doc)
 }
 
 fn check(pages: &[usize], count: usize) -> Result<(), EditError> {
@@ -336,7 +336,7 @@ fn check(pages: &[usize], count: usize) -> Result<(), EditError> {
 }
 
 /// The page's `/Contents` as a list of stream references (inline content is promoted).
-fn contents(doc: &mut Document, page: &pdfcraft_model::Page) -> Result<Vec<Object>, EditError> {
+fn contents(doc: &mut Document, page: &asdreader_model::Page) -> Result<Vec<Object>, EditError> {
     let obj = doc.get(page.obj);
     let d = obj.as_dict().cloned().unwrap_or_default();
     Ok(match d.get(b"Contents").cloned() {
@@ -351,7 +351,7 @@ fn contents(doc: &mut Document, page: &pdfcraft_model::Page) -> Result<Vec<Objec
 }
 
 /// Add the font (and an opacity state) to the page's own resources.
-fn add_resources(doc: &mut Document, page: &pdfcraft_model::Page, opacity: Option<f64>, content: Option<&[u8]>) -> Result<(), EditError> {
+fn add_resources(doc: &mut Document, page: &asdreader_model::Page, opacity: Option<f64>, content: Option<&[u8]>) -> Result<(), EditError> {
     let mut faces: Vec<(Vec<u8>, &str)> = Vec::new();
     for (name, base) in [(&b"PCHelv"[..], "Helvetica"), (b"PCTimes", "Times-Roman"), (b"PCCour", "Courier")] {
         // Helvetica always (marks use it); the others only when the content names them.
@@ -364,7 +364,7 @@ fn add_resources(doc: &mut Document, page: &pdfcraft_model::Page, opacity: Optio
 }
 
 /// The fonts a page draws with: its own resources' or the ones it inherits.
-fn page_fonts(doc: &Document, page: &pdfcraft_model::Page) -> Dict {
+fn page_fonts(doc: &Document, page: &asdreader_model::Page) -> Dict {
     let res = page.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default()
 }
@@ -393,7 +393,7 @@ fn free_font_name(doc: &Document, fonts: &Dict, preferred: &str, base: &str) -> 
 
 /// Add the standard `faces` (resource name, base font) and an opacity state to the page's own
 /// resources.
-fn add_page_resources(doc: &mut Document, page: &pdfcraft_model::Page, opacity: Option<f64>, faces: &[(Vec<u8>, &str)]) -> Result<(), EditError> {
+fn add_page_resources(doc: &mut Document, page: &asdreader_model::Page, opacity: Option<f64>, faces: &[(Vec<u8>, &str)]) -> Result<(), EditError> {
     let mut res = page.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
     let mut fonts = res.get(b"Font").map(|f| doc.resolve(f)).and_then(|f| f.as_dict().cloned()).unwrap_or_default();
     for (name, base) in faces {
@@ -420,11 +420,11 @@ fn add_page_resources(doc: &mut Document, page: &pdfcraft_model::Page, opacity: 
     Ok(())
 }
 
-const WRAP_OPEN: &[u8] = b"q %PdfCraft\n";
+const WRAP_OPEN: &[u8] = b"q %ASDReader\n";
 /// Starts with an end of line, so a comment left open at the end of the content before it
 /// can't swallow the `Q`. Older files have the close without it.
-const WRAP_CLOSE: &[u8] = b"\nQ %PdfCraft\n";
-const OLD_WRAP_CLOSE: &[u8] = b"Q %PdfCraft\n";
+const WRAP_CLOSE: &[u8] = b"\nQ %ASDReader\n";
+const OLD_WRAP_CLOSE: &[u8] = b"Q %ASDReader\n";
 
 /// Whether `bytes` are a wrapper's close: canonical `EMC` closures, then the existing
 /// graphics closures. Legacy closes without the leading newline remain valid on their own.
@@ -452,7 +452,7 @@ fn wrapper_role(doc: &Document, o: &Object) -> Option<bool> {
         return None;
     }
     let Object::Stream(stream) = &*doc.resolve(o) else { return None };
-    // Wrappers are a few bytes; one that decodes to more isn't PdfCraft's.
+    // Wrappers are a few bytes; one that decodes to more isn't ASDReader's.
     let bytes = stream.decoded_within(64 * 1024).ok()?;
     if bytes == WRAP_OPEN { Some(true) } else { is_wrap_close(&bytes).then_some(false) }
 }
@@ -484,7 +484,7 @@ enum Isolation {
     /// The content parses cleanly with balanced `q`/`Q` and closed text objects and paths.
     /// `suffix`: the stream from which the content leaves graphics state set (or a comment open)
     /// that a mark on top must not inherit, so it needs a wrapper from there to the end.
-    /// `wrappers`: PdfCraft wrapper pairs (open, close) as stream indexes.
+    /// `wrappers`: ASDReader wrapper pairs (open, close) as stream indexes.
     /// `marked`: unfinished marked-content sequences to close before a new mark.
     Clean { suffix: Option<usize>, wrappers: Vec<(usize, usize)>, marked: usize },
     /// The content could not be read that precisely (it doesn't decode, is too large, or has
@@ -517,7 +517,7 @@ fn isolation(doc: &Document, list: &[Object]) -> Isolation {
         remaining = left;
         data.push(bytes);
     }
-    let pieces = pdfcraft_content::Pieces::join(&data);
+    let pieces = asdreader_content::Pieces::join(&data);
     let parsed = pieces.parse();
     if parsed.skipped != 0 || parsed.ops.len() > ISOLATION_MAX_OPS {
         return unknown;
@@ -577,7 +577,7 @@ fn isolation(doc: &Document, list: &[Object]) -> Isolation {
             b"q" if op.operands.is_empty() && stack.len() < ISOLATION_MAX_DEPTH => stack.push(first),
             b"Q" if op.operands.is_empty() => match stack.pop() {
                 Some(open) => {
-                    // Only a standalone PdfCraft wrapper pair may later be removed again.
+                    // Only a standalone ASDReader wrapper pair may later be removed again.
                     let wrap = |i: usize| list.get(i).is_some_and(|o| stream_tag(doc, o).as_deref() == Some("Wrap"));
                     if wrap(open)
                         && wrap(first)
@@ -606,17 +606,17 @@ fn isolation(doc: &Document, list: &[Object]) -> Isolation {
 
 /// Put a mark's content on a page: behind (with the behind-marks at the start) or on top
 /// (appended, after wrapping the original content in q/Q).
-fn place(doc: &mut Document, page: &pdfcraft_model::Page, kind: MarkKind, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
+fn place(doc: &mut Document, page: &asdreader_model::Page, kind: MarkKind, content: Vec<u8>, behind: bool) -> Result<(), EditError> {
     place_tagged(doc, page, kind.tag(), content, behind).map(drop)
 }
 
 /// Put content on a page, tagged `tag` (see [`place`]). On top, whatever graphics state the
 /// content before leaves set (a `cm`, a clip, text state…) must not reach the mark, including
-/// content appended after an earlier PdfCraft wrapper by another tool (#3084): the stretch of
+/// content appended after an earlier ASDReader wrapper by another tool (#3084): the stretch of
 /// content that leaves state set is wrapped in q/Q, once. Any known unfinished marked-content
 /// sequences are closed at the end too, so hidden optional content cannot hide the new mark; when
 /// their number is unknown, nothing is placed on top. Returns the new content stream.
-fn place_tagged(doc: &mut Document, page: &pdfcraft_model::Page, tag: &str, content: Vec<u8>, behind: bool) -> Result<ObjRef, EditError> {
+fn place_tagged(doc: &mut Document, page: &asdreader_model::Page, tag: &str, content: Vec<u8>, behind: bool) -> Result<ObjRef, EditError> {
     let mut list = contents(doc, page)?;
     // The behind-marks at the start: backgrounds in the order added, then watermarks.
     let behind_kinds = [MarkKind::Background.tag(), MarkKind::Watermark.tag()];
@@ -665,7 +665,7 @@ fn too_deep_on_top() -> EditError {
 
 /// The refusal [`place_tagged`] gives for a mark on top of `page`, checked before an edit changes
 /// anything (removing old marks, adding resources) so a refused edit leaves the document as it was.
-fn check_on_top(doc: &Document, page: &pdfcraft_model::Page) -> Result<(), EditError> {
+fn check_on_top(doc: &Document, page: &asdreader_model::Page) -> Result<(), EditError> {
     let obj = doc.get(page.obj);
     let list = match obj.as_dict().and_then(|d| d.get(b"Contents")) {
         None => return Ok(()),
@@ -682,7 +682,7 @@ fn check_on_top(doc: &Document, page: &pdfcraft_model::Page) -> Result<(), EditE
 /// Put content tagged `tag` first inside the q/Q wrapper, so it applies to the page's original
 /// content and nothing else (a header's shrink). A page without a wrapper has no original content
 /// on it and is left alone.
-fn place_inside_wrapper(doc: &mut Document, page: &pdfcraft_model::Page, tag: &str, content: Vec<u8>) -> Result<(), EditError> {
+fn place_inside_wrapper(doc: &mut Document, page: &asdreader_model::Page, tag: &str, content: Vec<u8>) -> Result<(), EditError> {
     let mut list = contents(doc, page)?;
     let Some(open) = list.iter().position(|o| stream_tag(doc, o).as_deref() == Some("Wrap")) else { return Ok(()) };
     let stream = Object::Ref(doc.add(Object::Stream(Stream::flate(tagged(tag), &content))));

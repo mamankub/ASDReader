@@ -1,8 +1,8 @@
 //! State-based waits for native preparation, which completes between UI frames.
+use asdreader_ui_egui::ASDReaderApp;
 use egui_kittest::Harness;
-use pdfcraft_ui_egui::PdfCraftApp;
 
-pub fn wait_until(h: &mut Harness<'static, PdfCraftApp>, what: &str, ready: impl Fn(&PdfCraftApp) -> bool) {
+pub fn wait_until(h: &mut Harness<'static, ASDReaderApp>, what: &str, ready: impl Fn(&ASDReaderApp) -> bool) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     loop {
         h.step();

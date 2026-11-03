@@ -2,7 +2,7 @@
 
 > **Last reviewed:** 2026-10-21 · **Last updated:** 2026-10-21 · **Change:** minor (Brazilian Portuguese now covers the 2,674-key catalog union; twelve-language mean still rounds to ≈68%; Spanish 100% of the current key union) · **Target:** Adobe Acrobat Pro (Acrobat DC, continuous track 26.002.21931, macOS)
 
-Per-language status of PdfCraft's interface against Acrobat Pro's. How translations work and how to
+Per-language status of ASDReader's interface against Acrobat Pro's. How translations work and how to
 add a language: [localization.md](localization.md). Summary in [ROADMAP.md](../ROADMAP.md).
 
 ## How this was measured
@@ -73,16 +73,16 @@ help/docs polish (catalog and script work are already done), not missing UI stri
 | Slovenian | `sl` | 2,324 entries | partial | no |
 | Greek | `el` | 2,341 entries | partial | no |
 | Turkish | `tr` | 2,313 entries | partial | yes |
-| Lithuanian | `lt` | 2,674 (100% of current key union) | partial; community native-speaker review ([#1401](https://github.com/storytold/pdfcraft/pull/1401)) | no |
+| Lithuanian | `lt` | 2,674 (100% of current key union) | partial; community native-speaker review ([#1401](https://github.com/mamankub/ASDReader/pull/1401)) | no |
 | Finnish | `fi` | 2,674 entries | partial; AI-assisted, native proofreading pending | yes |
 | Albanian | `sq` | 2,344 entries | partial; not yet reviewed by a native speaker | no |
 | Catalan | `ca` | 2,592 entries | partial: no translated help, engine error details in English; native-speaker review by the contributor | no |
 | Romanian | `ro` | 2,673 entries (every bundled key) | partial; AI-assisted, not yet reviewed line by line by a native speaker | no |
-| Norwegian Bokmål | `nb` | 2,674 entries | partial; native-speaker terminology review by the contributor ([#1836](https://github.com/storytold/pdfcraft/pull/1836)), not yet line by line | yes |
+| Norwegian Bokmål | `nb` | 2,674 entries | partial; native-speaker terminology review by the contributor ([#1836](https://github.com/mamankub/ASDReader/pull/1836)), not yet line by line | yes |
 
 **19 other languages** ship (33 catalogs plus English = **34** interface languages in Preferences).
 The entry counts without percentages were measured on 2026-10-12–14 (Norwegian Bokmål on 2026-10-18); they are not percentages of the older 2,143-key snapshot above. Their presence does not imply a detailed linguistic or runtime review.
-Acrobat languages PdfCraft lacks: Danish, Dutch, Swedish, Hebrew. Vietnamese is shipped here but not by Acrobat.
+Acrobat languages ASDReader lacks: Danish, Dutch, Swedish, Hebrew. Vietnamese is shipped here but not by Acrobat.
 
 ## Revision history
 

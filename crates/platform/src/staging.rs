@@ -10,9 +10,9 @@ pub const STAGING_ATTEMPTS: usize = 16;
 /// Where the suffix goes in a staging name. Each caller keeps the form it has always used.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StagingName {
-    /// `.{name}.{suffix}.pdfcraft-tmp`, used by the automation tools.
+    /// `.{name}.{suffix}.asdreader-tmp`, used by the automation tools.
     SuffixThenTag,
-    /// `.{name}.pdfcraft-{suffix}.tmp`, used by the desktop app's save.
+    /// `.{name}.asdreader-{suffix}.tmp`, used by the desktop app's save.
     TagThenSuffix,
 }
 
@@ -53,8 +53,8 @@ fn create_staging_as(
     }
     for suffix in suffixes.into_iter().take(STAGING_ATTEMPTS) {
         let tmp = dir.join(match form {
-            StagingName::SuffixThenTag => format!(".{stem}.{suffix:016x}.pdfcraft-tmp"),
-            StagingName::TagThenSuffix => format!(".{stem}.pdfcraft-{suffix:016x}.tmp"),
+            StagingName::SuffixThenTag => format!(".{stem}.{suffix:016x}.asdreader-tmp"),
+            StagingName::TagThenSuffix => format!(".{stem}.asdreader-{suffix:016x}.tmp"),
         });
         let mut options = std::fs::OpenOptions::new();
         options.write(true).create_new(true);
@@ -280,7 +280,7 @@ mod tests {
 
     /// A fresh, empty folder for one test.
     fn test_dir(test: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("pdfcraft-platform-staging-{}-{test}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("asdreader-platform-staging-{}-{test}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
@@ -296,9 +296,9 @@ mod tests {
     fn each_form_keeps_its_exact_name() {
         let dir = test_dir("forms");
         let (tools, _) = create_staging(&dir, "out.pdf", StagingName::SuffixThenTag, [0xab]).unwrap();
-        assert_eq!(file_name(&tools), ".out.pdf.00000000000000ab.pdfcraft-tmp");
+        assert_eq!(file_name(&tools), ".out.pdf.00000000000000ab.asdreader-tmp");
         let (desktop, _) = create_staging(&dir, "out.pdf", StagingName::TagThenSuffix, [0xab]).unwrap();
-        assert_eq!(file_name(&desktop), ".out.pdf.pdfcraft-00000000000000ab.tmp");
+        assert_eq!(file_name(&desktop), ".out.pdf.asdreader-00000000000000ab.tmp");
         assert_eq!(std::fs::read(&tools).unwrap(), b"", "a new, empty file");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -309,10 +309,10 @@ mod tests {
         // One byte, then four-byte characters: the 128-byte limit falls inside the 32nd one.
         let name = format!("a{}.pdf", "\u{1F600}".repeat(40));
         let (tmp, _) = create_staging(&dir, &name, StagingName::SuffixThenTag, [1]).unwrap();
-        assert_eq!(file_name(&tmp), format!(".a{}.0000000000000001.pdfcraft-tmp", "\u{1F600}".repeat(31)));
+        assert_eq!(file_name(&tmp), format!(".a{}.0000000000000001.asdreader-tmp", "\u{1F600}".repeat(31)));
         // One-byte characters: exactly 128 of them are kept.
         let (tmp, _) = create_staging(&dir, &"x".repeat(200), StagingName::SuffixThenTag, [2]).unwrap();
-        assert_eq!(file_name(&tmp), format!(".{}.0000000000000002.pdfcraft-tmp", "x".repeat(128)));
+        assert_eq!(file_name(&tmp), format!(".{}.0000000000000002.asdreader-tmp", "x".repeat(128)));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn only_the_first_sixteen_names_are_tried() {
         let dir = test_dir("cap");
-        let name = |s: u64| dir.join(format!(".out.pdf.{s:016x}.pdfcraft-tmp"));
+        let name = |s: u64| dir.join(format!(".out.pdf.{s:016x}.asdreader-tmp"));
         for s in 1..=STAGING_ATTEMPTS as u64 {
             std::fs::write(name(s), "PLANTED").unwrap();
         }
@@ -405,9 +405,9 @@ mod tests {
         let dir = test_dir("xattrs");
         let target = dir.join("out.pdf");
         let attributes: &[(&str, &[u8])] = &[
-            ("com.apple.metadata:_kMDItemUserTags", b"<plist version=\"1.0\"><array><string>PdfCraft\n6</string></array></plist>"),
-            ("com.pdfcraft.test.binary", b"\0\xff\x80original\0"),
-            ("com.pdfcraft.test.empty", b""),
+            ("com.apple.metadata:_kMDItemUserTags", b"<plist version=\"1.0\"><array><string>ASDReader\n6</string></array></plist>"),
+            ("com.asdreader.test.binary", b"\0\xff\x80original\0"),
+            ("com.asdreader.test.empty", b""),
         ];
         std::fs::write(&target, b"OLD").unwrap();
         for (name, value) in attributes {
@@ -450,12 +450,12 @@ mod tests {
         let dir = test_dir("xattrs-flush");
         let target = dir.join("out.pdf");
         std::fs::write(&target, b"OLD").unwrap();
-        setxattr(&target, "com.pdfcraft.test", b"original", XattrFlags::empty()).unwrap();
+        setxattr(&target, "com.asdreader.test", b"original", XattrFlags::empty()).unwrap();
         let e = write_atomically_with(&target, b"NEW", StagingName::TagThenSuffix, [9], |_| Err(std::io::Error::other("flush refused"))).unwrap_err();
         assert!(e.to_string().contains("flush refused"));
         assert_eq!(std::fs::read(&target).unwrap(), b"OLD");
         let mut value = [0u8; 64];
-        let len = getxattr(&target, "com.pdfcraft.test", &mut value[..]).unwrap();
+        let len = getxattr(&target, "com.asdreader.test", &mut value[..]).unwrap();
         assert_eq!(&value[..len], b"original");
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         std::fs::remove_dir_all(dir).unwrap();
@@ -558,7 +558,7 @@ mod tests {
         let dir = test_dir("xattrs-symlink");
         let outside = test_dir("xattrs-outside").join("private.pdf");
         std::fs::write(&outside, b"PRIVATE").unwrap();
-        setxattr(&outside, "com.pdfcraft.test", b"private metadata", XattrFlags::empty()).unwrap();
+        setxattr(&outside, "com.asdreader.test", b"private metadata", XattrFlags::empty()).unwrap();
         let target = dir.join("out.pdf");
         std::os::unix::fs::symlink(&outside, &target).unwrap();
         write_atomically(&target, b"NEW", StagingName::TagThenSuffix).unwrap();
@@ -566,8 +566,8 @@ mod tests {
         assert_eq!(std::fs::read(&target).unwrap(), b"NEW");
         assert!(!target.symlink_metadata().unwrap().file_type().is_symlink());
         let mut bytes = [0u8; 64];
-        assert_eq!(getxattr(&target, "com.pdfcraft.test", &mut bytes[..]).unwrap_err(), rustix::io::Errno::NOATTR);
-        let len = getxattr(&outside, "com.pdfcraft.test", &mut bytes[..]).unwrap();
+        assert_eq!(getxattr(&target, "com.asdreader.test", &mut bytes[..]).unwrap_err(), rustix::io::Errno::NOATTR);
+        let len = getxattr(&outside, "com.asdreader.test", &mut bytes[..]).unwrap();
         assert_eq!(&bytes[..len], b"private metadata");
         std::fs::remove_dir_all(dir).unwrap();
         std::fs::remove_dir_all(outside.parent().unwrap()).unwrap();

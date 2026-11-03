@@ -2,11 +2,11 @@ ASDReader replacement artwork (2026): original document/A geometry by ASDReader 
 
 Historical artwork notices, retained verbatim:
 
-PdfCraft app icon (pdfcraft.svg, pdfcraft-small.svg and every file derived from them in this
-directory: pdfcraft-1024.png, pdfcraft.icns, pdfcraft.ico, hicolor/).
+ASDReader app icon (asdreader.svg, asdreader-small.svg and every file derived from them in this
+directory: asdreader-1024.png, asdreader.icns, asdreader.ico, hicolor/).
 
 Original artwork made for this project by the project owner, drawn in ArtCraft and vectorised for
-PdfCraft (no third-party material). Licensed like the rest of PdfCraft, under either of
+ASDReader (no third-party material). Licensed like the rest of ASDReader, under either of
 
   * Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0)
   * MIT license (https://opensource.org/licenses/MIT)

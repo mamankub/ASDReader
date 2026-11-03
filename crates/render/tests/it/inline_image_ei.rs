@@ -3,7 +3,7 @@
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
+use asdreader_render::{PageRenderer, RenderConfig, RenderRequest, RequestKind};
 
 fn build_pdf(pages: &[Vec<u8>], extra_objects: &[(usize, Vec<u8>)], page_xobjects: &str) -> Vec<u8> {
     let n = pages.len();

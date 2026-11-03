@@ -15,9 +15,9 @@ pub fn run(args: &[String]) -> Result<()> {
     command.current_dir(root).env("CRAFT_FONTS_DIR", dir).env("CRAFT_FONTS_REQUIRED", "1").env("ASDREADER_REQUIRE_THAI", "1");
     command.args([action, "--locked", "-j", "2"]);
     if action == "test" {
-        command.args(["-p", "pdfcraft-fonts", "-p", "pdfcraft-edit"]);
+        command.args(["-p", "asdreader-fonts", "-p", "asdreader-edit"]);
     } else {
-        command.args(["-p", "pdfcraft"]);
+        command.args(["-p", "asdreader"]);
     }
     command.args(args.get(1..).unwrap_or_default());
     let status = command.status().context("starting Cargo")?;

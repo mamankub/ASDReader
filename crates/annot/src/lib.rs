@@ -1,4 +1,4 @@
-//! pdfcraft-annot — comments (annotations), ISO 32000-2 §12.5, execution plan M5.1–M5.3.
+//! asdreader-annot — comments (annotations), ISO 32000-2 §12.5, execution plan M5.1–M5.3.
 //!
 //! Builders for the comment types Acrobat's commenting tools create (sticky note, highlight,
 //! underline, strikethrough, squiggly, rectangle, oval, line/arrow, freehand ink, text box),
@@ -6,15 +6,15 @@
 //! change its text, recolour, move, resize and delete.
 //!
 //! Addressing: a comment is `(page, index)`, its position in the page's `/Annots` array, which
-//! is what `pdfcraft_render::Annotation::index` reports. Inline annotation dictionaries are
+//! is what `asdreader_render::Annotation::index` reports. Inline annotation dictionaries are
 //! promoted to indirect objects when they are edited (replies need a reference to point at).
 //!
-//! Every edit mutates a `pdfcraft_cos::Document` (copy-on-write); callers snapshot it first
+//! Every edit mutates a `asdreader_cos::Document` (copy-on-write); callers snapshot it first
 //! for undo. Keys we do not understand are left alone.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
+use asdreader_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 
 pub mod appearance;
 pub mod links;
@@ -41,7 +41,7 @@ pub enum AnnotError {
     #[error("{0}")]
     Undrawable(String),
     #[error("{0}")]
-    Cos(#[from] pdfcraft_cos::CosError),
+    Cos(#[from] asdreader_cos::CosError),
 }
 
 pub type Rgb = [f64; 3];
@@ -141,7 +141,7 @@ pub enum FillMark {
 }
 
 impl FillMark {
-    /// The `/Name` of the stamp PdfCraft draws for it.
+    /// The `/Name` of the stamp ASDReader draws for it.
     pub fn name(self) -> &'static str {
         match self {
             FillMark::Check => "PCCheck",
@@ -169,7 +169,7 @@ impl FillMark {
     }
 }
 
-/// The stamps of Acrobat's stamp palette (drawn in PdfCraft's own style).
+/// The stamps of Acrobat's stamp palette (drawn in ASDReader's own style).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum StampKind {
     // Standard business.
@@ -698,7 +698,7 @@ pub fn page_refs(doc: &Document) -> Result<Vec<ObjRef>, AnnotError> {
 
 /// Depth-first walk over the leaf pages under `top`. It keeps one cursor per open `/Kids` array,
 /// never one entry per child, so a child listed many times or shared between nodes is skipped by
-/// the seen check without being queued first (`pdfcraft_model::pages` walks the same way).
+/// the seen check without being queued first (`asdreader_model::pages` walks the same way).
 /// Cycles end at the seen check, a `/Kids` array object shared by several nodes is read once,
 /// and at most a million nodes and four million `/Kids` entries are read.
 struct PageWalk<'a> {
@@ -814,7 +814,7 @@ fn annot_dict(doc: &Document, r: ObjRef) -> Dict {
 
 /// A Fill & Sign item: typed text, a check/cross/dot/line, or a typed, drawn or image signature.
 ///
-/// New items carry `/PCFillSign`. Older files are recognised from the dictionaries PdfCraft
+/// New items carry `/PCFillSign`. Older files are recognised from the dictionaries ASDReader
 /// already writes (`/IT /FreeTextTypeWriter`, stamp `/Name`, drawn ink whose subject is
 /// "Signature").
 pub fn is_fill_sign(doc: &Document, d: &Dict) -> bool {
@@ -1194,7 +1194,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             d.set(b"Name".to_vec(), Object::name(mark.name()));
             border(&mut d);
             // Drawn upright for the page as displayed, as a stamp is (#2392).
-            let turn = pdfcraft_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
+            let turn = asdreader_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
             if matches!(turn, 90 | 180 | 270) {
                 d.set(b"PCStampRotate".to_vec(), Object::Int(turn));
             }
@@ -1202,14 +1202,14 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
         Shape::Stamp { stamp, by, .. } => {
             d.set(b"C".to_vec(), rgb(style.color));
             d.set(b"Name".to_vec(), Object::name(stamp.name()));
-            // Marks the stamp as drawn by PdfCraft: other stamps with standard names keep
+            // Marks the stamp as drawn by ASDReader: other stamps with standard names keep
             // their own artwork.
             d.set(b"PCStamp".to_vec(), Object::Bool(true));
             if let Some(b) = by {
                 d.set(b"PCByLine".to_vec(), PdfString::text(b));
             }
             // The label is drawn for the page as displayed. A later page rotation is a new edit.
-            let turn = pdfcraft_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
+            let turn = asdreader_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
             if matches!(turn, 90 | 180 | 270) {
                 d.set(b"PCStampRotate".to_vec(), Object::Int(turn));
             }
@@ -1229,7 +1229,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             // An image signature's rectangle is in user space; on a turned page its appearance is
             // turned back (see `appearance::build`), so it reads upright as displayed.
             if *image && matches!(clean.as_str(), "Signature" | "Initials") {
-                let turn = pdfcraft_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
+                let turn = asdreader_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
                 if turn != 0 {
                     d.set(b"PCPictureRotate".to_vec(), Object::Int(turn));
                 }
@@ -1284,7 +1284,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             let mut ef = Dict::new();
             ef.set(b"Type".to_vec(), Object::name("EmbeddedFile"));
             ef.set(b"Params".to_vec(), Object::Dict(params));
-            let ef = doc.add(Object::Stream(pdfcraft_cos::Stream::flate(ef, data)));
+            let ef = doc.add(Object::Stream(asdreader_cos::Stream::flate(ef, data)));
             let mut efd = Dict::new();
             efd.set(b"F".to_vec(), Object::Ref(ef));
             efd.set(b"UF".to_vec(), Object::Ref(ef));
@@ -1325,7 +1325,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
             rich_text(&mut d);
             // The text is laid out for the page as displayed, like a stamp's label.
             if !matches!(new.shape, Shape::Callout { .. }) {
-                let turn = pdfcraft_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
+                let turn = asdreader_model::pages(doc).get(new.page).map_or(0, |p| p.rotation(doc));
                 if matches!(turn, 90 | 180 | 270) {
                     d.set(b"PCTextRotate".to_vec(), Object::Int(turn));
                 }
@@ -1343,7 +1343,7 @@ pub fn add_annotation(doc: &mut Document, new: &NewAnnotation, meta: &Meta) -> R
     if d.name(b"Subtype") == Some(b"Redact")
         && let Some((what, c)) = appearance::undrawable_text(&d)
     {
-        return Err(AnnotError::Undrawable(pdfcraft_fonts::undrawable_message(what, c)));
+        return Err(AnnotError::Undrawable(asdreader_fonts::undrawable_message(what, c)));
     }
     let r = doc.add(Object::Dict(d.clone()));
     draw_appearance(doc, r)?;
@@ -1398,10 +1398,10 @@ pub fn orient_image_stamp(doc: &mut Document, page: usize, index: usize, rotatio
 /// replace those characters with `?`, so the edit is refused before the dictionary changes.
 fn refuse_foreign_text(doc: &Document, d: &Dict) -> Result<(), AnnotError> {
     let drawn_elsewhere =
-        d.get(b"AP").is_some_and(|ap| doc.resolve(ap).as_dict().is_some_and(|ap| ap.contains(b"N"))) && pdfcraft_fonts::undrawn_mark(d).is_none();
+        d.get(b"AP").is_some_and(|ap| doc.resolve(ap).as_dict().is_some_and(|ap| ap.contains(b"N"))) && asdreader_fonts::undrawn_mark(d).is_none();
     if drawn_elsewhere && let Some((what, c)) = appearance::undrawable_text(d) {
         return Err(AnnotError::Undrawable(format!(
-            "PdfCraft can't redraw this comment: the standard fonts can't draw \"{}\" (U+{:04X}) in {what}, which would then show as ? (the comment was left as it is)",
+            "ASDReader can't redraw this comment: the standard fonts can't draw \"{}\" (U+{:04X}) in {what}, which would then show as ? (the comment was left as it is)",
             c.escape_debug(),
             u32::from(c)
         )));
@@ -1414,8 +1414,8 @@ fn refuse_foreign_text(doc: &Document, d: &Dict) -> Result<(), AnnotError> {
 ///
 /// A comment whose text the standard fonts can't draw, with an appearance another program drew
 /// (with a font that has those characters), keeps that appearance: redrawing it would put `?` in
-/// their place, so the edit is refused (`AnnotError::Undrawable`). One PdfCraft drew with `?`
-/// (marked `pdfcraft_fonts::UNDRAWN_MARK`) is redrawn.
+/// their place, so the edit is refused (`AnnotError::Undrawable`). One ASDReader drew with `?`
+/// (marked `asdreader_fonts::UNDRAWN_MARK`) is redrawn.
 pub fn set_appearance(doc: &mut Document, r: ObjRef) -> Result<(), AnnotError> {
     refuse_foreign_text(doc, &annot_dict(doc, r))?;
     draw_appearance(doc, r)
@@ -1431,7 +1431,7 @@ fn redraw_or_restore(doc: &mut Document, r: ObjRef, before: Dict) -> Result<(), 
 }
 
 /// Draw `r`'s normal appearance from its dictionary, whatever its text: characters the standard
-/// fonts can't draw come out as `?`, and the annotation is marked (`pdfcraft_fonts::UNDRAWN_MARK`,
+/// fonts can't draw come out as `?`, and the annotation is marked (`asdreader_fonts::UNDRAWN_MARK`,
 /// cleared when all of it can be drawn) so the edit is reported and flattening won't make that
 /// `?` permanent. For new text (a new comment, changed contents), as Acrobat keeps text its font
 /// can't show, and for display-only copies.
@@ -1489,7 +1489,7 @@ fn apply_appearance(doc: &mut Document, r: ObjRef, d: &Dict, stream: Stream) -> 
             d.set(b"Rect".to_vec(), num_array(&rect));
         }
         d.remove(b"AS");
-        pdfcraft_fonts::set_undrawn_mark(d, missing);
+        asdreader_fonts::set_undrawn_mark(d, missing);
     })?;
     Ok(())
 }
@@ -1786,7 +1786,7 @@ fn reply(
     fd.set(b"Type".to_vec(), Object::name("XObject"));
     fd.set(b"Subtype".to_vec(), Object::name("Form"));
     fd.set(b"BBox".to_vec(), num_array(&[0.0, 0.0, 0.0, 0.0]));
-    let ap = doc.add(Object::Stream(pdfcraft_cos::Stream::from_raw(fd, Vec::new())));
+    let ap = doc.add(Object::Stream(asdreader_cos::Stream::from_raw(fd, Vec::new())));
     let mut apd = Dict::new();
     apd.set(b"N".to_vec(), Object::Ref(ap));
     d.set(b"AP".to_vec(), Object::Dict(apd));
@@ -2241,7 +2241,7 @@ fn pair_points(d: &Dict, key: &[u8]) -> Option<Vec<[f64; 2]>> {
 // ── reading ─────────────────────────────────────────────────────────────────────────────────
 
 /// One comment as the viewer lists it (the same fields and rules as
-/// `pdfcraft_render::Annotation`), read straight from the object graph. The engine uses it to
+/// `asdreader_render::Annotation`), read straight from the object graph. The engine uses it to
 /// refresh the comment list after a comment edit without re-inspecting the whole document.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Summary {
@@ -2319,7 +2319,7 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
                 }
             }
             let quads = nums(b"QuadPoints").as_chunks::<8>().0.to_vec();
-            // Keep in step with `pdfcraft_render::inspect`.
+            // Keep in step with `asdreader_render::inspect`.
             let points = match subtype.as_str() {
                 "Line" => Some(nums(b"L")).filter(|l| l.len() == 4).map(|l| l.as_chunks::<2>().0.to_vec()).unwrap_or_default(),
                 "PolyLine" | "Polygon" => nums(b"Vertices").as_chunks::<2>().0.to_vec(),
@@ -2332,7 +2332,7 @@ pub fn summaries(doc: &Document) -> Vec<Summary> {
                 subtype,
                 author: text_value(doc, d, b"T"),
                 // Acrobat ends lines with CR, which the interface would draw as nothing (keep in
-                // step with `pdfcraft_render::inspect`).
+                // step with `asdreader_render::inspect`).
                 contents: text_value(doc, d, b"Contents").map(|s| s.replace("\r\n", "\n").replace('\r', "\n")),
                 modified: text_value(doc, d, b"M"),
                 name: text_value(doc, d, b"NM"),

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use pdfcraft_cos::{Document, Object, SaveOptions, write_incremental};
+use asdreader_cos::{Document, Object, SaveOptions, write_incremental};
 
 use super::*;
 use crate::data::{
@@ -44,7 +44,7 @@ fn measurements_convert_to_points() {
 /// text is at full width, and a rich-text draw condensed to half by its span style.
 fn scaled_text_template() -> (String, &'static str) {
     const TEXT: &str = "Approving authority name and title";
-    let w = pdfcraft_fonts::helvetica_width(TEXT, 10.0) * 0.9;
+    let w = asdreader_fonts::helvetica_width(TEXT, 10.0) * 0.9;
     let xdp = format!(
         r##"<xdp:xdp xmlns:xdp="http://ns.adobe.com/xdp/"><template xmlns="http://www.xfa.org/schema/xfa-template/3.3/">
 <subform name="form" layout="tb">
@@ -419,9 +419,9 @@ fn empty_repeating_subforms_spend_the_layout_budget() {
 #[test]
 fn a_packet_stream_listed_many_times_is_read_once() {
     let mut doc = Document::open(Arc::new(shell("<template><subform/></template>"))).unwrap();
-    let packet = pdfcraft_cos::ObjRef::new(5, 0);
+    let packet = asdreader_cos::ObjRef::new(5, 0);
     let items: Vec<Object> =
-        (0..1000).flat_map(|_| [Object::String(pdfcraft_cos::PdfString::literal(b"template".to_vec())), Object::Ref(packet)]).collect();
+        (0..1000).flat_map(|_| [Object::String(asdreader_cos::PdfString::literal(b"template".to_vec())), Object::Ref(packet)]).collect();
     let root = doc.root().unwrap();
     doc.update_dict(root, |c| {
         let mut acro = c.get(b"AcroForm").and_then(Object::as_dict).cloned().unwrap();
@@ -813,8 +813,8 @@ fn static_forms_read_their_values_from_the_datasets() {
     let doc = Document::open(Arc::new(static_shell("<form1><page1><name>Ada</name><agree>1</agree></page1></form1>"))).unwrap();
     assert!(!is_dynamic(&doc));
     let fields = vec![
-        FieldDatum { obj: pdfcraft_cos::ObjRef::new(8, 0), name: "form1[0].page1[0].name[0]".into(), data: FieldData::Text(String::new()) },
-        FieldDatum { obj: pdfcraft_cos::ObjRef::new(9, 0), name: "form1[0].page1[0].agree[0]".into(), data: FieldData::Check(false) },
+        FieldDatum { obj: asdreader_cos::ObjRef::new(8, 0), name: "form1[0].page1[0].name[0]".into(), data: FieldData::Text(String::new()) },
+        FieldDatum { obj: asdreader_cos::ObjRef::new(9, 0), name: "form1[0].page1[0].agree[0]".into(), data: FieldData::Check(false) },
     ];
     let values = read_values(&doc, &fields);
     assert_eq!(
@@ -850,8 +850,8 @@ fn nested_width_less_subforms_lay_out_in_polynomial_time() {
 /// The static fixture's two fields, holding `name` and `agree`.
 fn static_fields(name: &str, agree: bool) -> Vec<FieldDatum> {
     vec![
-        FieldDatum { obj: pdfcraft_cos::ObjRef::new(8, 0), name: "form1[0].page1[0].name[0]".into(), data: FieldData::Text(name.into()) },
-        FieldDatum { obj: pdfcraft_cos::ObjRef::new(9, 0), name: "form1[0].page1[0].agree[0]".into(), data: FieldData::Check(agree) },
+        FieldDatum { obj: asdreader_cos::ObjRef::new(8, 0), name: "form1[0].page1[0].name[0]".into(), data: FieldData::Text(name.into()) },
+        FieldDatum { obj: asdreader_cos::ObjRef::new(9, 0), name: "form1[0].page1[0].agree[0]".into(), data: FieldData::Check(agree) },
     ]
 }
 
@@ -934,8 +934,8 @@ fn utf16_packets_are_read_and_written_back_as_utf16() {
     for (encoding, bom) in [(Encoding::Utf16Le { bom: true }, &[0xFF, 0xFE][..]), (Encoding::Utf16Be { bom: true }, &[0xFE, 0xFF][..])] {
         let mut doc16 = doc.clone();
         doc16.set(
-            pdfcraft_cos::ObjRef::new(5, 0),
-            Object::Stream(pdfcraft_cos::Stream::flate(pdfcraft_cos::Dict::new(), &encode_packet(&text, encoding))),
+            asdreader_cos::ObjRef::new(5, 0),
+            Object::Stream(asdreader_cos::Stream::flate(asdreader_cos::Dict::new(), &encode_packet(&text, encoding))),
         );
         // Read exactly, not as mojibake.
         let values = read_values(&doc16, &static_fields("", false));
@@ -950,7 +950,7 @@ fn utf16_packets_are_read_and_written_back_as_utf16() {
     }
     // A packet in neither UTF-8 nor UTF-16 (Latin-1 here) is left alone, and that is reported.
     let latin1: Vec<u8> = text.replace("Zoë 日本", "Zo\u{eb}").chars().map(|c| c as u32 as u8).collect();
-    doc.set(pdfcraft_cos::ObjRef::new(5, 0), Object::Stream(pdfcraft_cos::Stream::flate(pdfcraft_cos::Dict::new(), &latin1)));
+    doc.set(asdreader_cos::ObjRef::new(5, 0), Object::Stream(asdreader_cos::Stream::flate(asdreader_cos::Dict::new(), &latin1)));
     let w = write_datasets(&mut doc, &static_fields("x", true)).unwrap();
     assert!(!w.written && !w.warnings.is_empty(), "{w:?}");
     assert_eq!(xfa_bytes(&doc), latin1);
@@ -968,7 +968,7 @@ fn huge_som_indices_are_capped_not_built() {
     let start = std::time::Instant::now();
     let fields: Vec<FieldDatum> = (0..300)
         .map(|i| FieldDatum {
-            obj: pdfcraft_cos::ObjRef::new(1000 + i, 0),
+            obj: asdreader_cos::ObjRef::new(1000 + i, 0),
             name: format!("form1[0].a[{}].b[99999].c[99999].d[{i}]", 9_000 + i),
             data: FieldData::Text("v".into()),
         })
@@ -986,7 +986,7 @@ fn huge_som_indices_are_capped_not_built() {
     // And a moderate index still works.
     let mut doc = Document::open(Arc::new(static_shell("<form1><row><v>1</v></row></form1>"))).unwrap();
     let row = |i: usize| FieldDatum {
-        obj: pdfcraft_cos::ObjRef::new(500, 0),
+        obj: asdreader_cos::ObjRef::new(500, 0),
         name: format!("form1[0].row[{i}].v[0]"),
         data: FieldData::Text(i.to_string()),
     };
@@ -1229,7 +1229,7 @@ fn script_buttons_carry_no_javascript_action_for_other_viewers() {
 }
 
 /// The generated fields' dictionaries by name (top-level fields only).
-fn top_fields(doc: &Document) -> Vec<(String, pdfcraft_cos::Dict)> {
+fn top_fields(doc: &Document) -> Vec<(String, asdreader_cos::Dict)> {
     let root = doc.root().unwrap();
     let catalog = doc.get(root);
     let acro = doc.resolve(catalog.as_dict().unwrap().get(b"AcroForm").unwrap());
@@ -1290,7 +1290,7 @@ fn choice_lists_signatures_passwords_and_pictures_become_fields_and_images() {
     assert_eq!(report.fields, 7, "country, langs, other, pin, sign, photo, summary");
     let bytes = write_incremental(&doc, &SaveOptions::default()).unwrap();
     let doc = Document::open(Arc::new(bytes)).unwrap();
-    let fields = pdfcraft_forms_free_fields(&doc);
+    let fields = asdreader_forms_free_fields(&doc);
     let field = |n: &str| fields.iter().find(|(name, _)| name == n).map(|(_, d)| d.clone()).unwrap_or_else(|| panic!("no field {n}"));
     let country = field("country");
     assert_eq!(country.name(b"FT"), Some(b"Ch".as_slice()));
@@ -1309,10 +1309,10 @@ fn choice_lists_signatures_passwords_and_pictures_become_fields_and_images() {
     assert_eq!(field("other").int(b"Ff"), Some((1 << 17) | (1 << 18)), "an editable combo box");
     assert_eq!(field("pin").int(b"Ff"), Some(1 << 13), "a password field");
     assert_eq!(field("sign").name(b"FT"), Some(b"Sig".as_slice()));
-    let streams: Vec<pdfcraft_cos::Stream> = doc
+    let streams: Vec<asdreader_cos::Stream> = doc
         .object_numbers()
         .into_iter()
-        .filter_map(|n| if let Object::Stream(st) = &*doc.get(pdfcraft_cos::ObjRef { num: n, generation: 0 }) { Some(st.clone()) } else { None })
+        .filter_map(|n| if let Object::Stream(st) = &*doc.get(asdreader_cos::ObjRef { num: n, generation: 0 }) { Some(st.clone()) } else { None })
         .filter(|s| s.dict.name(b"Subtype") == Some(b"Image"))
         .collect();
     assert_eq!(streams.len(), 3, "the PNG, its soft mask, the GIF");
@@ -1326,7 +1326,7 @@ fn choice_lists_signatures_passwords_and_pictures_become_fields_and_images() {
 }
 
 /// The terminal field dictionaries by name (one level: this fixture has no hierarchy).
-fn pdfcraft_forms_free_fields(doc: &Document) -> Vec<(String, pdfcraft_cos::Dict)> {
+fn asdreader_forms_free_fields(doc: &Document) -> Vec<(String, asdreader_cos::Dict)> {
     let root = doc.get(doc.root().unwrap());
     let acro = doc.resolve(root.as_dict().unwrap().get(b"AcroForm").unwrap());
     let fields = doc.resolve(acro.as_dict().unwrap().get(b"Fields").unwrap()).as_array().unwrap().clone();
@@ -1353,7 +1353,7 @@ fn choice_values_come_from_the_data_as_saved_values_and_several_for_lists() {
     render_into(&mut doc).unwrap();
     let bytes = write_incremental(&doc, &SaveOptions::default()).unwrap();
     let doc = Document::open(Arc::new(bytes)).unwrap();
-    let fields = pdfcraft_forms_free_fields(&doc);
+    let fields = asdreader_forms_free_fields(&doc);
     let langs = &fields.iter().find(|(n, _)| n == "langs").unwrap().1;
     let v = doc.resolve(langs.get(b"V").unwrap()).as_array().unwrap().clone();
     assert_eq!(v.iter().map(|s| s.as_string().unwrap().to_text()).collect::<Vec<_>>(), vec!["English", "Spanish"]);
@@ -1433,7 +1433,7 @@ fn choice_values_are_saved_values_first_deduplicated_and_defaults_are_saved_valu
     let mut doc = Document::open(Arc::new(shell(&tpl))).unwrap();
     render_into(&mut doc).unwrap();
     let doc = Document::open(Arc::new(write_incremental(&doc, &SaveOptions::default()).unwrap())).unwrap();
-    let fields = pdfcraft_forms_free_fields(&doc);
+    let fields = asdreader_forms_free_fields(&doc);
     let langs = &fields.iter().find(|(n, _)| n == "langs").unwrap().1;
     let i = doc.resolve(langs.get(b"I").unwrap()).as_array().unwrap().clone();
     assert_eq!(i.iter().map(|o| o.as_int().unwrap()).collect::<Vec<_>>(), vec![0, 2]);
@@ -1470,7 +1470,7 @@ fn pictures_are_embedded_once_across_relayouts_and_bad_data_pictures_are_reporte
         .object_numbers()
         .into_iter()
         .filter(
-            |n| matches!(&*doc.get(pdfcraft_cos::ObjRef { num: *n, generation: 0 }), Object::Stream(s) if s.dict.name(b"Subtype") == Some(b"Image")),
+            |n| matches!(&*doc.get(asdreader_cos::ObjRef { num: *n, generation: 0 }), Object::Stream(s) if s.dict.name(b"Subtype") == Some(b"Image")),
         )
         .count();
     assert_eq!(images, 3, "the PNG, its soft mask and the GIF, however many times the form was laid out");
@@ -1567,7 +1567,7 @@ fn bmp_and_tiff_pictures_are_decoded_and_drawn() {
         assert!(!report.warnings.iter().any(|w| w.contains("left out")), "{declared}: {:?}", report.warnings);
         let samples: Vec<u8> = if declared.contains("bmp") { vec![255, 0, 0, 0, 0, 255] } else { vec![0x12, 0x34, 0x56] };
         let drawn = doc.object_numbers().into_iter().any(|n| {
-            matches!(&*doc.get(pdfcraft_cos::ObjRef { num: n, generation: 0 }), Object::Stream(st)
+            matches!(&*doc.get(asdreader_cos::ObjRef { num: n, generation: 0 }), Object::Stream(st)
                 if st.dict.name(b"Subtype") == Some(b"Image") && st.decoded().ok().as_ref() == Some(&samples))
         });
         assert!(drawn, "{declared}: its pixels are an image XObject");
@@ -1642,7 +1642,7 @@ fn positioned(body: &str) -> Vec<Item> {
 #[test]
 fn a_label_without_a_width_is_as_wide_as_its_text() {
     const TEXT: &str = "PERSONNEL ONLY: from date (YYYYMMDD):";
-    let natural = pdfcraft_fonts::helvetica_width(TEXT, 8.0);
+    let natural = asdreader_fonts::helvetica_width(TEXT, 8.0);
     // Right-aligned, with a minimum narrower than the text: the box is as wide as the text and
     // starts where it is placed, so the text does too (not at the far right of the subform).
     let items = positioned(&format!(
@@ -1691,7 +1691,7 @@ fn a_button_without_a_width_is_as_wide_as_its_caption() {
         r#"<field name="help" x="1in" y="0" minW="40pt" minH="12pt"><ui><button/></ui><caption><value><text>{caption}</text></value><font typeface="Arial" size="8pt"/></caption></field>"#
     ));
     let button = items.iter().find_map(|i| if let Item::Widget(w) = i { Some(w) } else { None }).expect("the button");
-    let natural = pdfcraft_fonts::helvetica_width(caption, 8.0);
+    let natural = asdreader_fonts::helvetica_width(caption, 8.0);
     assert!(button.rect.w >= natural && button.rect.w < natural + 10.0, "{} for a caption of {natural}", button.rect.w);
     // A minimum wider than the caption wins.
     let items = positioned(
@@ -2292,7 +2292,7 @@ fn data_exports_as_datasets_xml_or_an_xdp_and_imports_from_any_of_them() {
         // Laid out again, the form shows the imported value.
         let (t, _) = parse(&with_desc).unwrap();
         rerender(&mut doc, &t).unwrap();
-        let fields = pdfcraft_forms_free_fields(&doc);
+        let fields = asdreader_forms_free_fields(&doc);
         let c = &fields.iter().find(|(n, _)| n == "country").unwrap().1;
         assert_eq!(c.get(b"V").and_then(|v| v.as_string()).map(|s| s.to_text()).as_deref(), Some("CA"), "{file}");
     }
@@ -2357,7 +2357,7 @@ fn a_picture_chosen_for_an_image_field_is_kept_in_the_data_with_its_content_type
     // The image field is a push button marked as one, with no action and nothing drawn.
     let bytes = write_incremental(&doc, &SaveOptions::default()).unwrap();
     let doc = Document::open(Arc::new(bytes)).unwrap();
-    let fields = pdfcraft_forms_free_fields(&doc);
+    let fields = asdreader_forms_free_fields(&doc);
     let photo = &fields.iter().find(|(n, _)| n == "photo").unwrap().1;
     assert_eq!(photo.name(b"FT"), Some(b"Btn".as_slice()));
     assert_eq!(photo.int(b"Ff"), Some(1 << 16));
@@ -2508,8 +2508,8 @@ fn stripping_takes_the_xfa_out_and_leaves_an_ordinary_document() {
     assert!(crate::read_packets(&doc).unwrap().is_some());
     // Reader usage rights on the catalog go too (changing the form voids them).
     let root = doc.root().unwrap();
-    let mut ur = pdfcraft_cos::Dict::new();
-    ur.set(b"UR3".to_vec(), Object::Dict(pdfcraft_cos::Dict::new()));
+    let mut ur = asdreader_cos::Dict::new();
+    ur.set(b"UR3".to_vec(), Object::Dict(asdreader_cos::Dict::new()));
     doc.update_dict(root, |d| d.set(b"Perms".to_vec(), Object::Dict(ur))).unwrap();
     let r = strip(&mut doc).unwrap();
     assert_eq!(r.packets, vec!["template".to_string(), "datasets".to_string()]);
@@ -2534,7 +2534,7 @@ fn stripping_takes_the_xfa_out_and_leaves_an_ordinary_document() {
     let acro = acro.as_dict().unwrap();
     assert!(!acro.contains(b"XFA") && !acro.contains(b"PCXfaLayout") && !acro.contains(b"PCXfaOverrides"));
     // The fields stay, with their values, and without the private keys.
-    let fields = pdfcraft_forms_free_fields(&doc);
+    let fields = asdreader_forms_free_fields(&doc);
     assert_eq!(fields.len(), 7);
     let country = &fields.iter().find(|(n, _)| n == "country").unwrap().1;
     assert_eq!(country.get(b"V").and_then(|v| v.as_string()).map(|s| s.to_text()).as_deref(), Some("JP"));
@@ -2569,18 +2569,18 @@ fn stripping_takes_the_xfa_out_and_leaves_an_ordinary_document() {
     render_into(&mut doc).unwrap();
     let root = doc.root().unwrap();
     let acro_ref = doc.get(root).as_dict().unwrap().get(b"AcroForm").and_then(Object::as_ref);
-    let fields: Vec<Object> = (0..2000).map(|_| Object::Ref(doc.add(Object::Dict(pdfcraft_cos::Dict::new())))).collect();
+    let fields: Vec<Object> = (0..2000).map(|_| Object::Ref(doc.add(Object::Dict(asdreader_cos::Dict::new())))).collect();
     let kids = doc.add(Object::Array(fields.clone()));
     for f in &fields {
         if let Some(r) = f.as_ref() {
             doc.update_dict(r, |d| {
                 d.set(b"Kids".to_vec(), Object::Ref(kids));
-                d.set(b"PCSom".to_vec(), Object::String(pdfcraft_cos::PdfString::text("x")));
+                d.set(b"PCSom".to_vec(), Object::String(asdreader_cos::PdfString::text("x")));
             })
             .unwrap();
         }
     }
-    let update = |d: &mut pdfcraft_cos::Dict| d.set(b"Fields".to_vec(), Object::Array(fields.clone()));
+    let update = |d: &mut asdreader_cos::Dict| d.set(b"Fields".to_vec(), Object::Array(fields.clone()));
     match acro_ref {
         Some(r) => doc.update_dict(r, update).unwrap(),
         None => doc
@@ -2667,7 +2667,7 @@ fn draw_spans(xdp: &str) -> Vec<text::Span> {
 fn a_space_at_the_end_of_a_line_does_not_count_when_fitting_it() {
     // The box is just wide enough for "a. DATE"; the label is written "a. DATE " (as forms
     // often are). The trailing space is never drawn, so the label stays on one line.
-    let w = pdfcraft_fonts::helvetica_width("a. DATE", 10.0) + 0.01;
+    let w = asdreader_fonts::helvetica_width("a. DATE", 10.0) + 0.01;
     let spans = draw_spans(&one_draw("a. DATE ", w, "left"));
     let baselines: std::collections::BTreeSet<i64> = spans.iter().map(|s| (s.baseline * 100.0).round() as i64).collect();
     assert_eq!(baselines.len(), 1, "{spans:?}");
@@ -2689,7 +2689,7 @@ fn a_space_at_the_end_of_a_line_does_not_count_when_fitting_it() {
 #[test]
 fn trailing_spaces_do_not_shift_centered_or_right_aligned_text() {
     let w = 200.0;
-    let ink = pdfcraft_fonts::helvetica_width("TITLE", 10.0);
+    let ink = asdreader_fonts::helvetica_width("TITLE", 10.0);
     let left_edge = |align: &str, text: &str| draw_spans(&one_draw(text, w, align)).first().map(|s| s.x).unwrap();
     // The draw's left edge is the content area's (0.5in); centered and right-aligned text is
     // placed by its drawn width, whatever spaces follow it.
@@ -2825,7 +2825,7 @@ fn an_inherited_namespace_does_not_multiply_an_import() {
 fn long_names_repeated_by_an_index_are_capped() {
     let doc = Document::open(Arc::new(static_shell("<form1/>"))).unwrap();
     let fields = vec![FieldDatum {
-        obj: pdfcraft_cos::ObjRef::new(1000, 0),
+        obj: asdreader_cos::ObjRef::new(1000, 0),
         name: format!("form1[0].{}[9999]", "n".repeat(2_000)),
         data: FieldData::Text("v".into()),
     }];

@@ -8,7 +8,7 @@
 const WINDOW_KEY: &str = "window";
 /// The size egui opens a stored size below (its floor for "ridiculously small" windows), in points.
 const EGUI_FLOOR: f32 = 64.0;
-/// The size a window that opened at [`EGUI_FLOOR`] is given (apps/pdfcraft opens a first start at
+/// The size a window that opened at [`EGUI_FLOOR`] is given (apps/asdreader opens a first start at
 /// this size too), at most nine tenths of the monitor.
 const USABLE: egui::Vec2 = egui::vec2(1440.0, 920.0);
 
@@ -85,7 +85,7 @@ mod tests {
     const SHOWN: &str = "(outer_position_pixels:Some((x:200.0,y:200.0)),inner_size_points:Some((x:1320.0,y:940.0)))";
     const MINIMIZED: &str = "(outer_position_pixels:Some((x:-32000.0,y:-32000.0)),inner_size_points:Some((x:0.0,y:0.0)))";
 
-    /// Closing PdfCraft while it was minimized stored a 0 × 0 window off screen.
+    /// Closing ASDReader while it was minimized stored a 0 × 0 window off screen.
     #[test]
     fn a_minimized_window_keeps_the_last_shown_settings() {
         let mut store = Store::default();

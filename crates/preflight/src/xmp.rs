@@ -1,7 +1,7 @@
 //! XMP metadata for PDF/A: the identification schema and the document information, kept
 //! consistent (ISO 19005-2 §6.6).
 
-use pdfcraft_cos::Document;
+use asdreader_cos::Document;
 
 /// The largest XMP packet read; a larger one is treated as missing.
 pub(crate) const MAX_XMP_BYTES: usize = 8 * 1024 * 1024;

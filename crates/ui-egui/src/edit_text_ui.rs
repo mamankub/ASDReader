@@ -7,9 +7,9 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use asdreader_engine::{Edit, ObjectKind, ObjectTarget};
+use asdreader_render::DocInfo;
 use egui::{Color32, CornerRadius, FontFamily, FontId, Pos2, Rect, Stroke};
-use pdfcraft_engine::{Edit, ObjectKind, ObjectTarget};
-use pdfcraft_render::DocInfo;
 
 use crate::canvas::{DocView, PageXform};
 
@@ -26,11 +26,11 @@ enum TextTarget {
 #[derive(Default)]
 pub(crate) struct TextBackground {
     key: Option<(u64, usize, TextTarget)>,
-    renderer: Option<pdfcraft_render::RenderPool>,
+    renderer: Option<asdreader_render::RenderPool>,
     texture: Option<egui::TextureHandle>,
     tag: Option<u64>,
     received: Option<u64>,
-    draft_key: Option<(String, pdfcraft_engine::BlockStyle)>,
+    draft_key: Option<(String, asdreader_engine::BlockStyle)>,
     draft_rect: Option<[f64; 4]>,
     /// This frame's place for the textless page under the open paragraph's editor. It stays
     /// empty, so the page shows its own text, until the paragraph is changed ([`Self::reveal`]).
@@ -90,7 +90,7 @@ impl TextBackground {
     pub fn prepare(
         &mut self,
         ctx: &egui::Context,
-        doc: &pdfcraft_engine::Document,
+        doc: &asdreader_engine::Document,
         editor: Option<&LineEditor>,
         draft: Option<&crate::content_ui::TextDraft>,
         scale: f32,
@@ -130,7 +130,7 @@ impl TextBackground {
         let scale = scale.min(crate::canvas::TILE_THRESHOLD.min(max_side) / p.width.max(p.height).max(1.0));
         let tag = (scale * 1000.0) as u64;
         if self.tag != Some(tag) {
-            renderer.set_queue(vec![pdfcraft_render::RenderRequest { page, scale, tag, ..Default::default() }]);
+            renderer.set_queue(vec![asdreader_render::RenderRequest { page, scale, tag, ..Default::default() }]);
             self.tag = Some(tag);
         }
         if let Some(out) = renderer.try_recv() {
@@ -235,7 +235,7 @@ pub struct LineEditor {
     /// stays attached while the page is zoomed, scrolled, or rotated.
     source_rect: [f32; 4],
     multiline: bool,
-    source: Option<(pdfcraft_engine::TextBlock, Vec<pdfcraft_engine::TextLine>)>,
+    source: Option<(asdreader_engine::TextBlock, Vec<asdreader_engine::TextLine>)>,
     pub(crate) fonts: BTreeMap<String, String>,
     /// The draft extends outside the source container; its frame follows the live draft bounds.
     pub overflow: bool,
@@ -246,8 +246,8 @@ pub struct LineEditor {
     /// Take the keyboard focus on the next frame.
     pub(crate) focus: bool,
     /// The Format text panel's values, and what the paragraph had (to send only changes).
-    pub look: pdfcraft_engine::AddedText,
-    look0: pdfcraft_engine::AddedText,
+    pub look: asdreader_engine::AddedText,
+    look0: asdreader_engine::AddedText,
     /// A standard family was picked from the font list. The family guessed from a PDF font name
     /// (Calibri reads as Helvetica) can be the one picked, so comparing `look` with `look0` alone
     /// would miss the choice.
@@ -300,7 +300,7 @@ impl LineEditor {
 
     /// A standard family picked from the font list, replacing the paragraph's font even when it
     /// is the family the paragraph's font name reads as.
-    pub(crate) fn choose_family(&mut self, family: pdfcraft_engine::FontFamily) {
+    pub(crate) fn choose_family(&mut self, family: asdreader_engine::FontFamily) {
         self.font_resource = None;
         self.look.family = family;
         self.family_chosen = true;
@@ -326,9 +326,9 @@ impl LineEditor {
     }
 
     /// The formatting the panel changed.
-    pub fn style(&self) -> pdfcraft_engine::BlockStyle {
+    pub fn style(&self) -> asdreader_engine::BlockStyle {
         let (l, o) = (&self.look, &self.look0);
-        let mut style = pdfcraft_engine::BlockStyle {
+        let mut style = asdreader_engine::BlockStyle {
             resource: self.font_resource.clone(),
             family: (l.family != o.family || self.family_chosen || l.bold != o.bold || l.italic != o.italic).then_some((l.family, l.bold, l.italic)),
             size: (l.size != o.size).then_some(l.size),
@@ -350,7 +350,7 @@ impl LineEditor {
                 || style.char_spacing.is_some()
                 || style.scale.is_some())
         {
-            style.ranges.push(pdfcraft_engine::RangeStyle {
+            style.ranges.push(asdreader_engine::RangeStyle {
                 range: range.clone(),
                 family: style.family.take(),
                 resource: style.resource.take(),
@@ -376,7 +376,7 @@ impl LineEditor {
     }
 
     /// Adopt the rewritten paragraph's current geometry before the next overlay frame.
-    pub(crate) fn refresh_source(&mut self, block: &pdfcraft_engine::TextBlock, lines: Vec<pdfcraft_engine::TextLine>) {
+    pub(crate) fn refresh_source(&mut self, block: &asdreader_engine::TextBlock, lines: Vec<asdreader_engine::TextLine>) {
         self.source_rect = block.rect.map(|v| v as f32);
         self.multiline = block.rows.len() > 1;
         self.source = Some((block.clone(), lines));
@@ -386,8 +386,8 @@ impl LineEditor {
 }
 
 /// The look shown for a paragraph: the family and weight guessed from its PDF font name.
-fn source_look(base_font: &str, size: f64, color: [f64; 3], detected_bold: bool, detected_italic: bool) -> pdfcraft_engine::AddedText {
-    use pdfcraft_engine::FontFamily as F;
+fn source_look(base_font: &str, size: f64, color: [f64; 3], detected_bold: bool, detected_italic: bool) -> asdreader_engine::AddedText {
+    use asdreader_engine::FontFamily as F;
     let name = base_font.to_ascii_lowercase();
     let family = if ["courier", "mono", "consolas", "menlo", "monaco", "lucida console"].iter().any(|s| name.contains(s)) {
         F::Courier
@@ -396,7 +396,7 @@ fn source_look(base_font: &str, size: f64, color: [f64; 3], detected_bold: bool,
     } else {
         F::Helvetica
     };
-    pdfcraft_engine::AddedText {
+    asdreader_engine::AddedText {
         family,
         bold: detected_bold || ["bold", "black", "heavy", "semibold", "demi"].iter().any(|s| name.contains(s)),
         italic: detected_italic || ["italic", "oblique", "slanted"].iter().any(|s| name.contains(s)),
@@ -406,13 +406,13 @@ fn source_look(base_font: &str, size: f64, color: [f64; 3], detected_bold: bool,
     }
 }
 
-fn look_of(b: &pdfcraft_engine::TextBlock) -> pdfcraft_engine::AddedText {
+fn look_of(b: &asdreader_engine::TextBlock) -> asdreader_engine::AddedText {
     source_look(&b.base_font, b.size, b.color, b.bold, b.italic)
 }
 
-pub(crate) fn editor_font(look: &pdfcraft_engine::AddedText, size: f32) -> FontId {
+pub(crate) fn editor_font(look: &asdreader_engine::AddedText, size: f32) -> FontId {
     let family = match (look.family, look.bold) {
-        (pdfcraft_engine::FontFamily::Courier, _) => FontFamily::Monospace,
+        (asdreader_engine::FontFamily::Courier, _) => FontFamily::Monospace,
         (_, true) => FontFamily::Name("semibold".into()),
         (_, false) => FontFamily::Proportional,
     };
@@ -624,7 +624,7 @@ fn crop_input(
             s.crop = None;
         }
         if keep_screen(keep) != b {
-            view.pending_edit = Some(Edit::EditPageImage { page, index: i, change: pdfcraft_engine::ImageEdit::Crop(keep) });
+            view.pending_edit = Some(Edit::EditPageImage { page, index: i, change: asdreader_engine::ImageEdit::Crop(keep) });
         }
     } else if (clicked(cancel) || keys(egui::Key::Escape))
         && let Some(s) = view.image_selection.as_mut()
@@ -802,7 +802,7 @@ pub(crate) fn image_input(
     xf: &PageXform,
     page: usize,
     info: &DocInfo,
-    images: &[pdfcraft_engine::PageImage],
+    images: &[asdreader_engine::PageImage],
     view: &mut DocView,
     action: &mut Option<ImageAction>,
     allow_interaction: bool,
@@ -949,7 +949,7 @@ pub(crate) fn image_input(
                 }
                 if degrees.abs() >= 0.05 {
                     view.pending_edit =
-                        Some(Edit::EditPageImage { page, index: i, change: pdfcraft_engine::ImageEdit::RotateBy(f64::from(degrees)) });
+                        Some(Edit::EditPageImage { page, index: i, change: asdreader_engine::ImageEdit::RotateBy(f64::from(degrees)) });
                 }
             }
             return true;
@@ -1011,7 +1011,7 @@ pub(crate) fn image_input(
                 }
                 if preview != b {
                     view.pending_edit =
-                        Some(Edit::EditPageImage { page, index: i, change: pdfcraft_engine::ImageEdit::Move(user_box(xf, info, page, target)) });
+                        Some(Edit::EditPageImage { page, index: i, change: asdreader_engine::ImageEdit::Move(user_box(xf, info, page, target)) });
                 }
             }
             ui.ctx().set_cursor_icon(match opposite {
@@ -1026,7 +1026,7 @@ pub(crate) fn image_input(
             && !ui.ctx().egui_wants_keyboard_input()
         {
             view.image_selection = None;
-            view.pending_edit = Some(Edit::EditPageImage { page, index: i, change: pdfcraft_engine::ImageEdit::Delete });
+            view.pending_edit = Some(Edit::EditPageImage { page, index: i, change: asdreader_engine::ImageEdit::Delete });
             return true;
         }
     }
@@ -1080,11 +1080,11 @@ fn image_menu(
     ui: &mut egui::Ui,
     page: usize,
     hit: usize,
-    images: &[pdfcraft_engine::PageImage],
+    images: &[asdreader_engine::PageImage],
     view: &mut DocView,
     action: &mut Option<ImageAction>,
 ) {
-    use pdfcraft_engine::ImageEdit as E;
+    use asdreader_engine::ImageEdit as E;
     let items: [(&str, Option<E>); 4] = [
         (tl!("Rotate Clockwise"), Some(E::Rotate(1))),
         (tl!("Rotate Counterclockwise"), Some(E::Rotate(3))),
@@ -1160,8 +1160,8 @@ fn image_menu(
 fn open_editor(
     ui: &egui::Ui,
     xf: &PageXform,
-    doc: &pdfcraft_engine::Document,
-    lines: &[pdfcraft_engine::TextBlock],
+    doc: &asdreader_engine::Document,
+    lines: &[asdreader_engine::TextBlock],
     boxes: &[Rect],
     page: usize,
     block: usize,
@@ -1210,8 +1210,8 @@ pub(crate) fn page_input(
     resp: &egui::Response,
     xf: &PageXform,
     page: usize,
-    doc: &pdfcraft_engine::Document,
-    lines: &[pdfcraft_engine::TextBlock],
+    doc: &asdreader_engine::Document,
+    lines: &[asdreader_engine::TextBlock],
     view: &mut DocView,
     allow_interaction: bool,
 ) -> bool {
@@ -1278,7 +1278,7 @@ pub(crate) fn page_input(
                 // edge) moves the paragraph with it.
                 let width = (l.rect[2] - l.rect[0]) + (to[2] - to[0]) - (from[2] - from[0]);
                 let shift = to[0] - from[0];
-                let style = pdfcraft_engine::BlockStyle { width: Some(width), offset: (shift != 0.0).then_some([shift, 0.0]), ..Default::default() };
+                let style = asdreader_engine::BlockStyle { width: Some(width), offset: (shift != 0.0).then_some([shift, 0.0]), ..Default::default() };
                 Edit::EditTextBlock { page, block: d.block, text: l.text.clone(), style }
             } else {
                 // Translation must keep the selected source operators. Rewriting unchanged text
@@ -1340,13 +1340,13 @@ pub(crate) fn page_input(
             }
             if let Some(old) = view.line_editor.take() {
                 let style = old.style();
-                if old.text != old.original || style != pdfcraft_engine::BlockStyle::default() {
+                if old.text != old.original || style != asdreader_engine::BlockStyle::default() {
                     view.applied_editor = Some(old.clone());
                     view.pending_edit = Some(Edit::EditTextBlock { page: old.page, block: old.block, text: old.text, style });
                 }
             }
             // The clicked box opens next frame, from the document with that edit applied.
-            view.pending_text_open = lines.get(hit).map(|l| (page, pdfcraft_engine::BlockKey::of(l)));
+            view.pending_text_open = lines.get(hit).map(|l| (page, asdreader_engine::BlockKey::of(l)));
             return true;
         }
         open_editor(ui, xf, doc, lines, &boxes, page, hit, view);
@@ -1355,7 +1355,7 @@ pub(crate) fn page_input(
 }
 
 /// One TextEdit lays out all source runs; its caret and selection span the whole region.
-pub(crate) fn install_source_fonts(ctx: &egui::Context, doc: &pdfcraft_engine::Document, page: usize) -> BTreeMap<String, String> {
+pub(crate) fn install_source_fonts(ctx: &egui::Context, doc: &asdreader_engine::Document, page: usize) -> BTreeMap<String, String> {
     let programs = doc.text_editor_fonts(page);
     let mut definitions = ctx.fonts(|f| f.definitions().clone());
     // Only the current editor's document fonts live in the atlas. Never accumulate the
@@ -1377,7 +1377,7 @@ pub(crate) fn install_source_fonts(ctx: &egui::Context, doc: &pdfcraft_engine::D
             programs
                 .iter()
                 .filter(|p| {
-                    pdfcraft_fonts::embedding::face_key(&p.face) == pdfcraft_fonts::embedding::face_key(&program.face)
+                    asdreader_fonts::embedding::face_key(&p.face) == asdreader_fonts::embedding::face_key(&program.face)
                         && p.resource != program.resource
                 })
                 .filter_map(|p| families.get(&p.resource).cloned()),
@@ -1731,7 +1731,7 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
 /// The edit a closed paragraph editor applies, or `None` when nothing in it changed.
 pub(crate) fn finished_edit(ed: LineEditor) -> Option<Edit> {
     let style = ed.style();
-    (ed.text != ed.original || style != pdfcraft_engine::BlockStyle::default()).then_some(Edit::EditTextBlock {
+    (ed.text != ed.original || style != asdreader_engine::BlockStyle::default()).then_some(Edit::EditTextBlock {
         page: ed.page,
         block: ed.block,
         text: ed.text,
@@ -1774,8 +1774,8 @@ mod tests {
     }
 
     /// An app with one text document open, and an editor on its first paragraph.
-    fn preview_app() -> (crate::PdfCraftApp, LineEditor) {
-        let mut app = crate::PdfCraftApp::new();
+    fn preview_app() -> (crate::ASDReaderApp, LineEditor) {
+        let mut app = crate::ASDReaderApp::new();
         let bytes = app.session.create_from_text("Preview", "Preview text").unwrap();
         app.open_bytes("preview.pdf", None, bytes.as_ref().clone()).unwrap();
         let doc = app.session.get(app.views[0].id).unwrap();

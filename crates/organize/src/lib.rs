@@ -1,6 +1,6 @@
-//! pdfcraft-organize — page and document-structure edits (L4).
+//! asdreader-organize — page and document-structure edits (L4).
 //!
-//! Every operation mutates a `pdfcraft_cos::Document` (copy-on-write), so callers snapshot the
+//! Every operation mutates a `asdreader_cos::Document` (copy-on-write), so callers snapshot the
 //! document before an edit for undo. Operations never drop data they do not understand.
 //!
 //! Page-tree strategy: before restructuring, inheritable page attributes (`Resources`,
@@ -11,7 +11,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, XrefEntry};
+use asdreader_cos::{Dict, Document, ObjRef, Object, PdfString, XrefEntry};
 
 mod boxes;
 mod dedupe;
@@ -53,7 +53,7 @@ pub enum OrganizeError {
     #[error("{0}")]
     Invalid(String),
     #[error("{0}")]
-    Cos(#[from] pdfcraft_cos::CosError),
+    Cos(#[from] asdreader_cos::CosError),
 }
 
 const INHERITABLE: [&[u8]; 4] = [b"Resources", b"MediaBox", b"CropBox", b"Rotate"];
@@ -81,7 +81,7 @@ type Owners = [Option<std::sync::Arc<Object>>; 4];
 /// Depth-first walk over the leaf pages under `top`. It keeps one cursor per open `/Kids` array,
 /// never one entry per child, and carries inherited attributes as the nodes that set them, so a
 /// child listed many times or shared between nodes is skipped by the seen check before anything
-/// is queued or copied (`pdfcraft_model::pages` walks the same way). Cycles in broken trees end
+/// is queued or copied (`asdreader_model::pages` walks the same way). Cycles in broken trees end
 /// at the seen check and at most a million nodes are visited.
 struct PageWalk<'a> {
     doc: &'a Document,

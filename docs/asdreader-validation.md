@@ -12,7 +12,7 @@
 - แยกช่วงอักษรไทยก่อนจัดรูปข้อความจากฟอนต์เอกสาร แก้สระอำและตำแหน่งเครื่องหมายในข้อความอังกฤษสลับไทย
 - ขณะเพิ่มข้อความ เก็บสระหน้าและสระหลังไว้กับตัวฐานในการขึ้นบรรทัดใหม่ รวมถึงการเก็บเครื่องหมายซ้อนด้วย shaped clusters ที่มีอยู่เดิม
 - `cargo xtask asdreader build|run|test` บังคับมีฟอนต์ไทยก่อน build; `CRAFT_FONTS_REQUIRED` ที่ตั้งไว้แต่ไม่มี `CRAFT_FONTS_DIR` จะหยุดด้วย error
-- CI เดิมบังคับ `require-craft-fonts`, `ASDREADER_REQUIRE_THAI=1` และ `PDFCRAFT_SYSTEM_FONTS=0` ทั้ง Linux และ Windows โดยใช้ reusable workflow เดิม ไม่เพิ่ม actions หรือขั้นตอนติดตั้งแพ็กเกจใหม่
+- CI เดิมบังคับ `require-craft-fonts`, `ASDREADER_REQUIRE_THAI=1` และ `ASDREADER_SYSTEM_FONTS=0` ทั้ง Linux และ Windows โดยใช้ reusable workflow เดิม ไม่เพิ่ม actions หรือขั้นตอนติดตั้งแพ็กเกจใหม่
 - ลบไฟล์ trademark ArtCraft เดิมครบ 8 ไฟล์ตามอนุมัติเจ้าของ และนำรายการออกจาก manifest โดยคง `LICENSE-brand.txt` และเครดิตต้นทางไว้
 - จัดรูป guard ของ ClosePath ใน `crates/edit/src/images.rs` และย่อ boolean ใน `crates/ui-egui/src/compare_ui.rs` ให้ผ่าน lint โดยคงพฤติกรรมเดิม
 
@@ -27,15 +27,15 @@
 
 | การตรวจ | ผล |
 |---|---|
-| `cargo test -p pdfcraft-fonts -p pdfcraft-edit --lib -j 2 --locked` | ผ่าน: fonts 89 และ edit 250 tests |
+| `cargo test -p asdreader-fonts -p asdreader-edit --lib -j 2 --locked` | ผ่าน: fonts 89 และ edit 250 tests |
 | `cargo xtask asdreader test --lib` หลังปรับ lint | ผ่านครบ 339 tests รวม regression ของ path ว่าง; ยืนยันว่า helper เลือกฟอนต์และส่ง flags ได้จริง |
-| `cargo test -p pdfcraft-engine --test it thai -j 2 --locked` | ผ่าน 1 test: ภาพหลัง save/reopen ตรงทุกพิกเซล, ข้อความคัดลอกได้ครบ, undo/redo คืนภาพถูกต้อง |
-| `cargo test -p pdfcraft-ui-egui --features eframe/x11 --test it thai -j 2 --locked` | ผ่าน 2 tests: glyph ไทยครบในทุก UI family ที่ใช้ และพิมพ์ไทยลงหน้า PDF ได้ |
+| `cargo test -p asdreader-engine --test it thai -j 2 --locked` | ผ่าน 1 test: ภาพหลัง save/reopen ตรงทุกพิกเซล, ข้อความคัดลอกได้ครบ, undo/redo คืนภาพถูกต้อง |
+| `cargo test -p asdreader-ui-egui --features eframe/x11 --test it thai -j 2 --locked` | ผ่าน 2 tests: glyph ไทยครบในทุก UI family ที่ใช้ และพิมพ์ไทยลงหน้า PDF ได้ |
 | UI link/update/viewer tests | ผ่าน 38 / 4 / 62 tests ตามลำดับ; update ใช้ข้อมูลจำลอง ไม่มีการตรวจ release จริง |
 | UI shell/picker tests | ผ่าน 61 / 38 tests ตามลำดับ; ชุดที่ render ใช้ software Vulkan |
 | UI compare tests หลังย่อ boolean | ผ่าน 7 tests รวมการกรองพื้นที่เปรียบเทียบและภาพหน้าจอ |
 | `cargo fmt --all --check` | ผ่าน |
-| Clippy: fonts, edit, engine, ui-egui, pdfcraft, xtask | ผ่าน `--all-targets --features eframe/x11 -j 2 --locked -- -D warnings` |
+| Clippy: fonts, edit, engine, ui-egui, asdreader, xtask | ผ่าน `--all-targets --features eframe/x11 -j 2 --locked -- -D warnings` |
 | `cargo xtask wasm` | ผ่าน 31 crates รวม UI; มี warnings ของโค้ด native ที่ไม่ถูกใช้บน wasm (render 4, ui-egui 7) |
 | `cargo xtask layers` | ผ่าน 37 crates ไม่มีการข้ามชั้น dependency |
 | `cargo xtask assets --write` และ `cargo xtask assets` | ผ่าน: 285 repository assets, 5 dependency assets, 22 fetched assets; สร้าง `ATTRIBUTION.md` แล้ว |
@@ -44,7 +44,7 @@
 | ฟอร์แมตไอคอน | ICO ทั้งสองไฟล์มี 9 ขนาด; ICNS มี PNG entries 7 ขนาด |
 | ฟอนต์ขาดหาย | เรียก build script ด้วย required flag: ไม่มี directory และมี manifest ที่ไม่มี Thai ต่างให้ `cargo::error` |
 
-ใช้ `CRAFT_FONTS_REQUIRED=1 ASDREADER_REQUIRE_THAI=1 PDFCRAFT_SYSTEM_FONTS=0` ในการตรวจชุดไทย จึงไม่อาศัยฟอนต์ระบบช่วยให้ผ่าน โดย UI coverage ครอบคลุม codepoint ไทยที่กำหนดใช้ `U+0E01..U+0E3A` และ `U+0E3F..U+0E5B` ที่ scale 1, 1.5 และ 2
+ใช้ `CRAFT_FONTS_REQUIRED=1 ASDREADER_REQUIRE_THAI=1 ASDREADER_SYSTEM_FONTS=0` ในการตรวจชุดไทย จึงไม่อาศัยฟอนต์ระบบช่วยให้ผ่าน โดย UI coverage ครอบคลุม codepoint ไทยที่กำหนดใช้ `U+0E01..U+0E3A` และ `U+0E3F..U+0E5B` ที่ scale 1, 1.5 และ 2
 
 ## ตรวจซ้ำเพื่อเตรียม v0.13.1
 
@@ -54,7 +54,7 @@
 
 Release candidate แรกคอมไพล์ Linux สำเร็จ แต่หยุดเมื่อดาวน์โหลด OCR `.rten` ได้ HTTP 403 ผู้พัฒนาประกาศเลิก URL เดิมใน [ocrs #282](https://github.com/robertknight/ocrs/issues/282) จึงใช้ ONNX จากสคริปต์ทางการที่ตรึง commit พร้อม hash และ license เดิม ตัวโหลดรองรับทั้งคู่ ONNX และคู่ RTEN โดยไม่ผสมรูปแบบ Regression `prefers_complete_onnx_pairs_and_keeps_legacy_models` ถูกเรียกและล้มก่อนแก้
 
-ผลหลังแก้: ดาวน์โหลด ONNX และ license ผ่าน hash ทั้งหมด, OCR 11 tests ผ่านรวม `reads_rendered_text` โดยตั้ง `PDFCRAFT_MODELS` ไปที่โมเดลจริง, engine OCR 6 tests และ engine Thai 1 test ผ่าน; fmt, clippy ของ OCR/engine/xtask, assets, layers และ wasm 31 crates ผ่าน มี dependency เพิ่มเฉพาะ `rten-onnx 0.26.0` ตาม feature ของ RTen เดิม ไม่อัปเกรดแพ็กเกจอื่น
+ผลหลังแก้: ดาวน์โหลด ONNX และ license ผ่าน hash ทั้งหมด, OCR 11 tests ผ่านรวม `reads_rendered_text` โดยตั้ง `ASDREADER_MODELS` ไปที่โมเดลจริง, engine OCR 6 tests และ engine Thai 1 test ผ่าน; fmt, clippy ของ OCR/engine/xtask, assets, layers และ wasm 31 crates ผ่าน มี dependency เพิ่มเฉพาะ `rten-onnx 0.26.0` ตาม feature ของ RTen เดิม ไม่อัปเกรดแพ็กเกจอื่น
 
 CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate memory`) ก่อนถึง build/test ของโค้ด จึงยังไม่มีผลรับรอง FreeBSD
 
@@ -62,7 +62,7 @@ CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate m
 
 [CI บน commit 9c03919](https://github.com/mamankub/ASDReader/actions/runs/41594502355) ผ่าน 4,616 tests (ข้าม 16 tests), doctests, fmt, workspace clippy, CLI without default features, layers, wasm และ assets แต่หยุดที่ `cargo deny` เนื่องจาก `crypto-bigint 0.7.5` มี [RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387.html)
 
-ตรวจแพตช์ [upstream #4366](https://github.com/storytold/pdfcraft/pull/4366) และ changelog จากผู้พัฒนาแล้ว: รุ่น 0.7.6 ถูกถอนภายหลัง จึงใช้รุ่นที่ยังเผยแพร่ `crypto-bigint 0.7.10` พร้อม `ctutils 0.4.8` โดยเปลี่ยนเฉพาะสองแพ็กเกจนี้ใน Cargo.lock ผล `cargo-deny 0.20.2 --log-level error check` ผ่าน advisories, bans, licenses และ sources โดยไม่เพิ่มข้อยกเว้น หลังอัปเดต ทดสอบลายเซ็น 139 tests ผ่าน (ข้าม 1 test), clippy ของ sign/engine ทุก target แบบ `-D warnings`, fmt, layers 37 crates, assets, wasm 31 crates และ parity ผ่าน รุ่นเผยแพร่ต้องสร้างใหม่จาก commit ที่แก้แล้ว
+ตรวจแพตช์ [upstream #4366](https://github.com/mamankub/ASDReader/pull/4366) และ changelog จากผู้พัฒนาแล้ว: รุ่น 0.7.6 ถูกถอนภายหลัง จึงใช้รุ่นที่ยังเผยแพร่ `crypto-bigint 0.7.10` พร้อม `ctutils 0.4.8` โดยเปลี่ยนเฉพาะสองแพ็กเกจนี้ใน Cargo.lock ผล `cargo-deny 0.20.2 --log-level error check` ผ่าน advisories, bans, licenses และ sources โดยไม่เพิ่มข้อยกเว้น หลังอัปเดต ทดสอบลายเซ็น 139 tests ผ่าน (ข้าม 1 test), clippy ของ sign/engine ทุก target แบบ `-D warnings`, fmt, layers 37 crates, assets, wasm 31 crates และ parity ผ่าน รุ่นเผยแพร่ต้องสร้างใหม่จาก commit ที่แก้แล้ว
 
 ## เอกสารสิทธิ์ในแพ็กเกจ
 

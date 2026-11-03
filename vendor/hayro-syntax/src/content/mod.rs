@@ -92,7 +92,7 @@ impl<'a> Readable<'a> for Operator<'a> {
     }
 }
 
-/// PdfCraft patch: how many `EI` candidates an inline image examines, and how far past each
+/// ASDReader patch: how many `EI` candidates an inline image examines, and how far past each
 /// one the end-of-data heuristic looks, before taking the current candidate. Unbounded, the
 /// heuristic re-parsed the rest of the stream for every candidate, and each re-parse ran the
 /// heuristic again on the inline images it met: a fuzzed file hung for minutes.
@@ -117,17 +117,17 @@ pub struct UntypedIter<'a> {
     reader: Reader<'a>,
     stack: Stack<'a>,
     operator: Option<Operator<'a>>,
-    /// PdfCraft patch: this iterator only checks whether data reads as content (the
+    /// ASDReader patch: this iterator only checks whether data reads as content (the
     /// end-of-data heuristic below); inline images it meets end at their first `EI`.
     lookahead: bool,
-    /// PdfCraft patch: whether `reader` holds the whole content stream. The end of a window of a
+    /// ASDReader patch: whether `reader` holds the whole content stream. The end of a window of a
     /// longer stream can fall inside an instruction, so nothing that reads up to it is decided
     /// (see `needs_more`).
     complete: bool,
-    /// PdfCraft patch: set when `next` stopped because the window ran out before the next
+    /// ASDReader patch: set when `next` stopped because the window ran out before the next
     /// instruction was decided. The caller reads more data and resumes at `committed`.
     needs_more: bool,
-    /// PdfCraft patch: the offset just after the instruction `next` returned last.
+    /// ASDReader patch: the offset just after the instruction `next` returned last.
     committed: usize,
 }
 
@@ -137,7 +137,7 @@ impl<'a> UntypedIter<'a> {
         Self::new_window(data, true)
     }
 
-    /// PdfCraft patch: an iterator over `data`, which is the whole stream when `complete`, and
+    /// ASDReader patch: an iterator over `data`, which is the whole stream when `complete`, and
     /// otherwise the start of a longer one.
     pub(crate) fn new_window(data: &'a [u8], complete: bool) -> Self {
         Self {
@@ -238,11 +238,11 @@ impl<'a> UntypedIter<'a> {
                     let stream_data = self.reader.tail()?;
                     let start_offset = self.reader.offset();
                     let mut candidates = 0;
-                    // PdfCraft patch: set when a look-ahead below ran into the end of the window.
+                    // ASDReader patch: set when a look-ahead below ran into the end of the window.
                     let mut lookahead_touched = false;
                     let mut accepted = false;
 
-                    // PdfCraft patch: an unfiltered inline image's byte length is determined by
+                    // ASDReader patch: an unfiltered inline image's byte length is determined by
                     // its parameters (and `/L` or `/Length` when present and consistent), so
                     // `EI` inside its samples does not cut the image short (#3107).
                     match unfiltered_image_end(
@@ -297,7 +297,7 @@ impl<'a> UntypedIter<'a> {
                             // new we don't bother trying to read it.
                             let tail = &self.reader.tail()?[2..];
                             let mut find_reader = Reader::new(tail);
-                            // PdfCraft patch: bounded (see `MAX_EI_CANDIDATES`).
+                            // ASDReader patch: bounded (see `MAX_EI_CANDIDATES`).
                             candidates += 1;
                             let mut steps = 0;
                             let heuristic = !self.lookahead && candidates <= MAX_EI_CANDIDATES;
@@ -326,7 +326,7 @@ impl<'a> UntypedIter<'a> {
                                 find_reader.read_bytes(next_pos)?;
 
                                 if is_ei {
-                                    // PdfCraft patch: a byte above 0x7F between the two "EI"s
+                                    // ASDReader patch: a byte above 0x7F between the two "EI"s
                                     // used to reject the candidate ("binary data in-between, so
                                     // we for sure have not reached the end"). When the candidate
                                     // is the real end, those bytes are the content stream that
@@ -407,7 +407,7 @@ impl<'a> UntypedIter<'a> {
                                 find_reader.read_byte()?;
                             }
 
-                            // PdfCraft patch: the end is only certain if no look-ahead needed bytes
+                            // ASDReader patch: the end is only certain if no look-ahead needed bytes
                             // past the window. Otherwise read more and decide again.
                             if !self.complete
                                 && (lookahead_touched || self.reader.looked_past_end())
@@ -427,7 +427,7 @@ impl<'a> UntypedIter<'a> {
                         }
                     }
 
-                    // PdfCraft patch: without an accepted "EI" the image may still end in later data.
+                    // ASDReader patch: without an accepted "EI" the image may still end in later data.
                     if !accepted && !self.complete {
                         self.needs_more = true;
                         return None;
@@ -445,7 +445,7 @@ impl<'a> UntypedIter<'a> {
             self.reader.skip_white_spaces_and_comments();
         }
 
-        // PdfCraft patch: the window ended between instructions, and another may follow.
+        // ASDReader patch: the window ended between instructions, and another may follow.
         if !self.complete {
             self.needs_more = true;
         }
@@ -453,7 +453,7 @@ impl<'a> UntypedIter<'a> {
         None
     }
 
-    /// PdfCraft patch: skips the blanks and comments before an instruction, as
+    /// ASDReader patch: skips the blanks and comments before an instruction, as
     /// `skip_white_spaces_and_comments` does, and returns where a window may be cut: the start of a
     /// comment that runs into the end of the window, or else where the skipping stopped.
     fn skip_blanks_and_comments(&mut self) -> usize {
@@ -473,7 +473,7 @@ impl<'a> UntypedIter<'a> {
         open_comment.unwrap_or(self.reader.offset())
     }
 
-    /// PdfCraft patch: whether the instruction being read ran into the end of a window, so it
+    /// ASDReader patch: whether the instruction being read ran into the end of a window, so it
     /// cannot be decided yet. Records that more data is needed.
     fn undecided(&mut self) -> bool {
         if !self.complete && self.reader.looked_past_end() {
@@ -508,7 +508,7 @@ impl<'a> TypedIter<'a, UntypedIter<'a>> {
         }
     }
 
-    /// PdfCraft patch: an iterator over a window of a content stream: the whole stream when
+    /// ASDReader patch: an iterator over a window of a content stream: the whole stream when
     /// `complete`, and otherwise the start of a longer one (see [`TypedIter::needs_more`]).
     pub fn new_window(data: &'a [u8], complete: bool) -> Self {
         Self {
@@ -517,14 +517,14 @@ impl<'a> TypedIter<'a, UntypedIter<'a>> {
         }
     }
 
-    /// PdfCraft patch: whether the last `next` returned `None` only because the window ran out
+    /// ASDReader patch: whether the last `next` returned `None` only because the window ran out
     /// before the next instruction was decided. Read more of the stream, then resume at
     /// [`TypedIter::committed`] in a window that starts there.
     pub fn needs_more(&self) -> bool {
         self.untyped.needs_more
     }
 
-    /// PdfCraft patch: the offset in the window just after the last instruction `next` returned.
+    /// ASDReader patch: the offset in the window just after the last instruction `next` returned.
     pub fn committed(&self) -> usize {
         self.untyped.committed
     }
@@ -884,7 +884,7 @@ mod macros {
     pub(crate) use op6;
 }
 
-/// PdfCraft patch: outcome of checking an unfiltered inline image's deterministic byte length.
+/// ASDReader patch: outcome of checking an unfiltered inline image's deterministic byte length.
 enum UnfilteredEnd {
     /// Deterministic end found: `(end_data, end_after_ei)`.
     Found(usize, usize),
@@ -894,7 +894,7 @@ enum UnfilteredEnd {
     Fallback,
 }
 
-/// PdfCraft patch: an unfiltered inline image's sample byte count, including byte padding per row,
+/// ASDReader patch: an unfiltered inline image's sample byte count, including byte padding per row,
 /// and `/Length` or `/L` when present and consistent (#3107).
 fn unfiltered_image_len(dict: &Dict<'_>) -> Option<usize> {
     for key in [b"Filter".as_slice(), b"F"] {
@@ -981,7 +981,7 @@ fn unfiltered_image_len(dict: &Dict<'_>) -> Option<usize> {
     row.checked_mul(height)
 }
 
-/// PdfCraft patch: locate the deterministic `EI` terminator of an unfiltered inline image (#3107).
+/// ASDReader patch: locate the deterministic `EI` terminator of an unfiltered inline image (#3107).
 fn unfiltered_image_end(data: &[u8], dict: &Dict<'_>, complete: bool, header_bytes: usize) -> UnfilteredEnd {
     let Some(end_data) = unfiltered_image_len(dict) else {
         return UnfilteredEnd::Fallback;

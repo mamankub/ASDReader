@@ -4,12 +4,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use pdfcraft_cos::ObjRef;
+use asdreader_cos::ObjRef;
 
-pub use pdfcraft_compare::{Change, Comparison, Kind, Side};
+pub use asdreader_compare::{Change, Comparison, Kind, Side};
 // How far Office export reads into form XObjects; `OfficeExport::truncated_pages` lists the pages
 // that draw more.
-pub use pdfcraft_edit::{MAX_FORM_DEPTH, MAX_FORM_VISITS};
+pub use asdreader_edit::{MAX_FORM_DEPTH, MAX_FORM_VISITS};
 
 use crate::{DocId, Edit, EditError, Markup, NewAnnotation, NoteIcon, Session, Shape};
 
@@ -28,24 +28,24 @@ pub fn colour(kind: Kind) -> crate::Rgb {
 
 impl crate::Document {
     /// Standards ▸ Verify PDF/A: the rules the document breaks for `level`.
-    pub fn pdfa_verify(&self, level: pdfcraft_preflight::Level) -> Vec<pdfcraft_preflight::Issue> {
-        self.editor.as_ref().map(|e| pdfcraft_preflight::verify(&e.cos, level)).unwrap_or_default()
+    pub fn pdfa_verify(&self, level: asdreader_preflight::Level) -> Vec<asdreader_preflight::Issue> {
+        self.editor.as_ref().map(|e| asdreader_preflight::verify(&e.cos, level)).unwrap_or_default()
     }
 
     /// The standards the document declares (Standards panel).
-    pub fn standards(&self) -> pdfcraft_preflight::Declared {
-        self.editor.as_ref().map(|e| pdfcraft_preflight::declared(&e.cos)).unwrap_or_default()
+    pub fn standards(&self) -> asdreader_preflight::Declared {
+        self.editor.as_ref().map(|e| asdreader_preflight::declared(&e.cos)).unwrap_or_default()
     }
 
     /// Every word of the document in reading order, with page and box.
-    pub fn words(&self) -> Vec<pdfcraft_compare::Word> {
-        let config = pdfcraft_render::RenderConfig { password: self.password.as_deref().map(Arc::from), ..Default::default() };
-        let mut r = pdfcraft_render::PageRenderer::new(self.bytes.clone(), config);
+    pub fn words(&self) -> Vec<asdreader_compare::Word> {
+        let config = asdreader_render::RenderConfig { password: self.password.as_deref().map(Arc::from), ..Default::default() };
+        let mut r = asdreader_render::PageRenderer::new(self.bytes.clone(), config);
         let mut out = Vec::new();
         for (page, info) in self.info.pages.iter().enumerate() {
-            let res = r.render(pdfcraft_render::RenderRequest { page, kind: pdfcraft_render::RequestKind::Text, scale: 1.0, ..Default::default() });
+            let res = r.render(asdreader_render::RenderRequest { page, kind: asdreader_render::RequestKind::Text, scale: 1.0, ..Default::default() });
             if let Some(t) = res.text {
-                out.extend(crate::js::page_words(&t, info).into_iter().map(|(text, rect)| pdfcraft_compare::Word { text, page, rect }));
+                out.extend(crate::js::page_words(&t, info).into_iter().map(|(text, rect)| asdreader_compare::Word { text, page, rect }));
             }
         }
         out
@@ -60,7 +60,7 @@ impl Session {
         let b = self.get(new).ok_or(EditError::NoDocument)?;
         a.check_copying()?;
         b.check_copying()?;
-        Ok(pdfcraft_compare::compare(&a.words(), &b.words()))
+        Ok(asdreader_compare::compare(&a.words(), &b.words()))
     }
 
     /// Visual compare: regions where page n of `new` looks different from page n of `old`
@@ -69,22 +69,22 @@ impl Session {
         let a = self.get(old).ok_or(EditError::NoDocument)?;
         let b = self.get(new).ok_or(EditError::NoDocument)?;
         let renderer = |d: &crate::Document| {
-            pdfcraft_render::PageRenderer::new(
+            asdreader_render::PageRenderer::new(
                 d.bytes.clone(),
-                pdfcraft_render::RenderConfig { password: d.password.as_deref().map(Arc::from), ..Default::default() },
+                asdreader_render::RenderConfig { password: d.password.as_deref().map(Arc::from), ..Default::default() },
             )
         };
         let (mut ra, mut rb) = (renderer(a), renderer(b));
         let scale = dpi.clamp(18.0, 150.0) / 72.0;
         let mut out = Vec::new();
         for (page, info) in b.info.pages.iter().enumerate().take(a.info.pages.len()) {
-            let req = pdfcraft_render::RenderRequest { page, scale, ..Default::default() };
+            let req = asdreader_render::RenderRequest { page, scale, ..Default::default() };
             let (x, y) = (ra.render(req), rb.render(req));
             if x.error.is_some() || y.error.is_some() {
                 continue;
             }
             let s = y.width as f32 / info.width.max(1e-3);
-            for r in pdfcraft_compare::visual_regions((&y.rgba, y.width, y.height), (&x.rgba, x.width, x.height), 24) {
+            for r in asdreader_compare::visual_regions((&y.rgba, y.width, y.height), (&x.rgba, x.width, x.height), 24) {
                 let p = info.view_to_user(r[0] as f32 / s, r[1] as f32 / s);
                 let q = info.view_to_user(r[2] as f32 / s, r[3] as f32 / s);
                 out.push((page, [p[0].min(q[0]) as f64, p[1].min(q[1]) as f64, p[0].max(q[0]) as f64, p[1].max(q[1]) as f64]));
@@ -97,7 +97,7 @@ impl Session {
     pub fn compare_report(&self, old: DocId, new: DocId) -> Result<Arc<Vec<u8>>, EditError> {
         let c = self.compare(old, new)?;
         let name = |id| self.get(id).map(|d| d.name.clone()).unwrap_or_default();
-        self.create_report("Compare Report", &pdfcraft_compare::report(&c, &name(old), &name(new)))
+        self.create_report("Compare Report", &asdreader_compare::report(&c, &name(old), &name(new)))
     }
 
     /// Mark the differences in `new` as comments: highlights over replaced and inserted text
@@ -183,14 +183,14 @@ type PreparedImage = Result<(&'static str, Arc<[u8]>), bool>;
 impl crate::Document {
     /// The pages as paragraphs and images (for Word, HTML and RTF export), including what
     /// form XObjects draw.
-    pub fn export_pages(&self) -> Vec<pdfcraft_export::Page> {
+    pub fn export_pages(&self) -> Vec<asdreader_export::Page> {
         self.export_pages_checked(true, MAX_EXPORT_IMAGE_BYTES).0
     }
 
     /// [`Self::export_pages`], and the pages whose forms were left partly unread or whose
     /// pictures went past `image_budget` bytes ([`OfficeExport::truncated_pages`]). Without
     /// `images` no picture is prepared.
-    pub(crate) fn export_pages_checked(&self, images: bool, image_budget: usize) -> (Vec<pdfcraft_export::Page>, Vec<usize>) {
+    pub(crate) fn export_pages_checked(&self, images: bool, image_budget: usize) -> (Vec<asdreader_export::Page>, Vec<usize>) {
         let Some(cos) = self.editor.as_ref().map(|e| &e.cos) else { return (Vec::new(), Vec::new()) };
         let mut truncated = Vec::new();
         // Each image object is encoded once and shared by every place that draws it.
@@ -212,7 +212,7 @@ impl crate::Document {
                 let crop_width = f64::from(info.crop[2] - info.crop[0]);
                 let display_width = f64::from(if info.rotation % 180 == 0 { info.width } else { info.height });
                 let unit = if crop_width > 0.0 && crop_width.is_finite() && display_width.is_finite() { display_width / crop_width } else { 1.0 };
-                let reading = pdfcraft_edit::reading_blocks_checked(cos, i).unwrap_or_default();
+                let reading = asdreader_edit::reading_blocks_checked(cos, i).unwrap_or_default();
                 let forms_unread = reading.truncated;
                 let blocks = reading
                     .blocks
@@ -220,7 +220,7 @@ impl crate::Document {
                     .filter(|b| !b.text.trim().is_empty())
                     .map(|b| {
                         let f = b.base_font.to_ascii_lowercase();
-                        pdfcraft_export::Block {
+                        asdreader_export::Block {
                             text: b.text,
                             rect: visible_rect(b.rect),
                             size: b.size * unit,
@@ -231,20 +231,20 @@ impl crate::Document {
                         }
                     })
                     .collect();
-                let placed = if images { pdfcraft_edit::reading_images(cos, i).unwrap_or_default() } else { Vec::new() };
+                let placed = if images { asdreader_edit::reading_images(cos, i).unwrap_or_default() } else { Vec::new() };
                 let mut over_budget = false;
                 let images = placed
                     .iter()
                     .filter_map(|im| {
                         let object = im.object?;
                         let prepared = encoded.entry(object).or_insert_with(|| {
-                            let (ext, bytes) = pdfcraft_create::image_file(cos, object).map_err(|_| false)?;
+                            let (ext, bytes) = asdreader_create::image_file(cos, object).map_err(|_| false)?;
                             image_bytes = image_bytes.checked_sub(bytes.len()).ok_or(true)?;
                             Ok((if ext == "jpg" { "jpg" } else { "png" }, Arc::from(bytes)))
                         });
                         over_budget |= matches!(prepared, Err(true));
                         let (ext, bytes) = prepared.clone().ok()?;
-                        Some(pdfcraft_export::Image {
+                        Some(asdreader_export::Image {
                             ext,
                             bytes,
                             rect: visible_rect(im.rect),
@@ -257,8 +257,8 @@ impl crate::Document {
                     truncated.push(i);
                 }
                 // The page colour (Edit a PDF ▸ Background, a producer's page fill) for formats that keep one.
-                let background = pdfcraft_edit::page_background(cos, i).ok().flatten();
-                pdfcraft_export::Page { width: info.width as f64, height: info.height as f64, blocks, images, background }
+                let background = asdreader_edit::page_background(cos, i).ok().flatten();
+                asdreader_export::Page { width: info.width as f64, height: info.height as f64, blocks, images, background }
             })
             .collect();
         (pages, truncated)
@@ -276,10 +276,10 @@ impl crate::Document {
         let (pages, truncated_pages) = self.export_pages_checked(format != OfficeFormat::Rtf, MAX_EXPORT_IMAGE_BYTES);
         let title = self.info.title.clone().unwrap_or_else(|| self.name.trim_end_matches(".pdf").to_string());
         let bytes = match format {
-            OfficeFormat::Docx => pdfcraft_export::docx(&pages, &title),
-            OfficeFormat::Pptx => pdfcraft_export::pptx(&pages, &title),
-            OfficeFormat::Html => pdfcraft_export::html(&pages, &title).into_bytes(),
-            OfficeFormat::Rtf => pdfcraft_export::rtf(&pages).into_bytes(),
+            OfficeFormat::Docx => asdreader_export::docx(&pages, &title),
+            OfficeFormat::Pptx => asdreader_export::pptx(&pages, &title),
+            OfficeFormat::Html => asdreader_export::html(&pages, &title).into_bytes(),
+            OfficeFormat::Rtf => asdreader_export::rtf(&pages).into_bytes(),
         };
         OfficeExport { bytes, truncated_pages }
     }

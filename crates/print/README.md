@@ -1,4 +1,4 @@
-# pdfcraft-print
+# asdreader-print
 
 Layer L4: printing (execution plan M10.5).
 
@@ -44,12 +44,21 @@ Headless `doc_print` defaults are unchanged.
 
 `spool` delegates discovery, driver options, preferences and submission to
 [`craft-print`](https://github.com/storytold/craft-libs/tree/main/crates/print).
-PdfCraft retains page selection, imposition, annotations and print-permission checks.
+ASDReader retains page selection, imposition, annotations and print-permission checks.
 CUPS jobs stream through stdin with `fit-to-page=false`. Windows renders sheets through
 `Windows.Data.Pdf` and spools them at their physical PDF size with per-page paper and
 orientation, zero added margins and hardware-edge clipping. Long-edge and short-edge duplex
 use the corresponding Windows binding edges. Random, exclusively created Windows job files
 are removed on success and failure. Other targets offer the print-ready PDF instead.
+
+**Print resolution and the printer's own settings.** A Windows job starts from the printer's
+settings for the current user, the ones Printing Preferences stores (resolution, print quality, paper
+type, input tray, two-sided), and the job's own options (copies, collation, colour, paper,
+orientation, no scaling) are merged over them. The job is therefore printed at the resolution set for the
+printer, not at the driver's default. This is the `vendor/winprint` patch to `PrintTicketBuilder::new`
+(see `vendor/README.md`); if the user's settings can't be read, the job falls back to the driver's
+defaults as before. CUPS jobs already use the queue's defaults and the user's `lpoptions`. Print as
+image keeps the dots per inch the Print dialog asks for. This needs checking on a real printer.
 
 The shared dependency requires Rust 1.95. Transport and native Windows regression tests
 live in craft-libs; local tests retain composition, facade, engine, automation and UI coverage.
@@ -57,8 +66,8 @@ The desktop UI discovers printers and submits jobs on workers, so neither operat
 the dialog; the Windows backend starts without a console window. Physical printer output
 still needs hardware validation.
 
-In a browser there is no spooler: the app (`pdfcraft-ui-egui`'s `web_print`) draws the print-ready
-PDF's sheets with PdfCraft's renderer and prints them through the browser's print dialog, which
+In a browser there is no spooler: the app (`asdreader-ui-egui`'s `web_print`) draws the print-ready
+PDF's sheets with ASDReader's renderer and prints them through the browser's print dialog, which
 sets copies, two-sided printing and colour. This crate stays free of web APIs.
 
 Not yet: print as image, poster labels, PostScript output, colour conversion for

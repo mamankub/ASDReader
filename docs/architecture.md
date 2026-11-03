@@ -1,8 +1,8 @@
-# PdfCraft architecture
+# ASDReader architecture
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-23 · **Change:** minor (xtask ci: translation gaps report) · **Target:** Adobe Acrobat Pro (Acrobat DC, continuous track 26.002.21931, macOS)
 
-How PdfCraft is built today. The design rationale and the planned crates live in
+How ASDReader is built today. The design rationale and the planned crates live in
 `plan/architecture.md` and `plan/adr/` (local-only); this file describes what is on `main`. Each
 crate's `README.md` has the detail.
 
@@ -15,9 +15,9 @@ handwritten JS/TS, in the product or the build.
 
 | Binary | What it is |
 |---|---|
-| `apps/pdfcraft` | The desktop app (macOS, Windows, Linux, FreeBSD): eframe/egui on wgpu, single instance, Apple events, update check on request |
-| `apps/pdfcraft-cli` | `inspect`, `edit`, `combine`, `extract`, `split`, `run` (any automation tool or a JSON script), `tools`, `ui` (drive the running app), and the opt-in `mcp` server |
-| `apps/pdfcraft-web` | The same egui shell compiled to WebAssembly |
+| `apps/asdreader` | The desktop app (macOS, Windows, Linux, FreeBSD): eframe/egui on wgpu, single instance, Apple events, update check on request |
+| `apps/asdreader-cli` | `inspect`, `edit`, `combine`, `extract`, `split`, `run` (any automation tool or a JSON script), `tools`, `ui` (drive the running app), and the opt-in `mcp` server |
+| `apps/asdreader-web` | The same egui shell compiled to WebAssembly |
 
 ## Layers
 
@@ -42,7 +42,7 @@ Planned crates that the layer table already reserves (`arlington`, `color`, `ops
 
 The PDF object graph *is* the model (`crates/engine/README.md` §The editing model):
 
-1. Each open document holds a `pdfcraft_cos::Document`: the parsed objects plus a copy-on-write
+1. Each open document holds a `asdreader_cos::Document`: the parsed objects plus a copy-on-write
    overlay. Unknown data is preserved because nothing is rebuilt that wasn't understood.
 2. An edit runs on a clone; on success the previous state goes onto the undo stack. Clones share
    unchanged data, so snapshots are cheap.
@@ -85,9 +85,9 @@ Every user-facing feature is reachable headlessly (`AGENTS.md` §3):
 
 - the **command registry** (`crates/engine/src/commands.rs`, 184 commands) generates menus,
   shortcuts and the command palette;
-- the **automation tool table** (`crates/automation`, 141 tools) is shared by `pdfcraft-cli run`
-  and the opt-in **MCP server** (stdio only; `pdfcraft-cli mcp`), confined to `--root`;
-- the opt-in **UI control channel** (`pdfcraft --control FILE`; loopback, per-launch token) lets an
+- the **automation tool table** (`crates/automation`, 141 tools) is shared by `asdreader-cli run`
+  and the opt-in **MCP server** (stdio only; `asdreader-cli mcp`), confined to `--root`;
+- the opt-in **UI control channel** (`asdreader --control FILE`; loopback, per-launch token) lets an
   agent inspect, click, type, run commands and take screenshots of the real interface.
 
 ## Safety
@@ -99,7 +99,7 @@ Every user-facing feature is reachable headlessly (`AGENTS.md` §3):
 
 ## Build and quality gates
 
-`cargo xtask ci` runs fmt, clippy (`-D warnings`), a check of `pdfcraft-cli` without default
+`cargo xtask ci` runs fmt, clippy (`-D warnings`), a check of `asdreader-cli` without default
 features, the tests (`xtask test`: cargo-nextest when installed, else `cargo test`, then the
 doctests), `xtask i18n-report` (the strings each interface language has no translation for; it
 never fails), the layering check, the WASM check (one `cargo check` over every crate below L8),

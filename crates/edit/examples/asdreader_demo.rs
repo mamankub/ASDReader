@@ -1,10 +1,10 @@
 //! Synthetic ASDReader specimen, generated with the app's PDF writer and OFL fonts.
-//! CRAFT_FONTS_DIR=../craft-fonts cargo run -p pdfcraft-edit --example asdreader_demo
-use pdfcraft_cos::{Dict, Document, Object, SaveOptions};
-use pdfcraft_edit::{AddedText, Content, add_content};
+//! CRAFT_FONTS_DIR=../craft-fonts cargo run -p asdreader-edit --example asdreader_demo
+use asdreader_cos::{Dict, Document, Object, SaveOptions};
+use asdreader_edit::{AddedText, Content, add_content};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    if pdfcraft_fonts::document_thai_font().is_none() {
+    if asdreader_fonts::document_thai_font().is_none() {
         return Err("set CRAFT_FONTS_DIR to the pinned craft-fonts checkout (Noto Sans Thai is required)".into());
     }
     let mut doc = Document::new_empty();
@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ("จัดหน้า หมุนหน้า รวมไฟล์ และแยกเอกสาร", 20.0, 239.0),
             ("ค้นหาและคัดลอกข้อความในเอกสารที่มี text layer", 19.0, 307.0),
             ("โหมดสว่างและโหมดมืดสำหรับการอ่าน", 20.0, 375.0),
-            ("สร้างจาก PdfCraft ด้วย Rust และ egui", 18.0, 474.0),
+            ("สร้างจาก ASDReader ด้วย Rust และ egui", 18.0, 474.0),
             ("github.com/mamankub/ASDReader", 16.0, 757.0),
         ],
     ];
@@ -75,7 +75,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(&path, pdfcraft_cos::write_full(&doc, &SaveOptions::default())?)?;
+    std::fs::write(&path, asdreader_cos::write_full(&doc, &SaveOptions::default())?)?;
     println!("{}", path.display());
     Ok(())
 }

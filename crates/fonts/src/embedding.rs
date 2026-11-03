@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
+use asdreader_cos::{Dict, Document, ObjRef, Object, PdfString, Stream};
 use skrifa::{
     FontRef, MetadataProvider,
     instance::{LocationRef, Size},
@@ -44,8 +44,14 @@ pub fn names(bytes: &[u8]) -> Result<(String, String), String> {
     Ok((family, postscript))
 }
 
-/// A selected external font is document input. Require its own open-licence declaration;
-/// never turn a proprietary system-interface fallback into an exported PDF font.
+/// A selected external font is document input: a face the user picked on their own computer
+/// (Edit ▸ Installed fonts…, or Load font…). It does not have to declare an open licence. The
+/// font's own embedding permissions decide whether it may go into a PDF, and [`validate`]
+/// enforces them (restricted-licence, preview-and-print and bitmap-only faces are refused). Two
+/// of the project's asset exclusions still apply, because they are about provenance rather than
+/// licensing: the Adobe-authored families and the Source Han / Noto CJK families (AGENTS.md §1.1).
+/// Nothing here makes a system font a bundled asset: the program is read from where the user
+/// chose it, embedded into that one document, and never copied anywhere else.
 pub fn validate_document_input(bytes: &[u8]) -> Result<(), String> {
     use skrifa::string::StringId;
     let (family, _) = names(bytes)?;
@@ -58,13 +64,6 @@ pub fn validate_document_input(bytes: &[u8]) -> Result<(), String> {
         [StringId::COPYRIGHT_NOTICE, StringId::MANUFACTURER].into_iter().flat_map(|id| f.localized_strings(id)).map(|s| s.to_string()).collect();
     if attribution.to_ascii_lowercase().contains("adobe") {
         return Err("Adobe-authored font assets are excluded by the project's asset policy".into());
-    }
-    let license: String = f.localized_strings(StringId::LICENSE_DESCRIPTION).map(|s| s.to_string()).collect();
-    if !["SIL OPEN FONT", "SIL Open Font", "Apache License", "Ubuntu Font Licence", "Bitstream Vera", "MIT License"]
-        .iter()
-        .any(|l| license.contains(l))
-    {
-        return Err("select an openly licensed font whose name table declares its licence (OFL, Apache, Ubuntu, Bitstream Vera or MIT)".into());
     }
     Ok(())
 }
@@ -371,6 +370,34 @@ mod tests {
         embed(&mut doc, &mut second, bytes, "Inter").unwrap();
         assert_eq!(doc.scan_objects().filter(|(_, o)| matches!(o.as_ref(), Object::Stream(s) if s.dict.get(b"PCFullFont").is_some())).count(), 1);
         assert_eq!(face_key("ABCDEF+Droid-Sans-Fallback"), face_key("Droid Sans Fallback"));
+    }
+
+    /// A font installed on the user's computer need not declare an open licence (Tahoma and most
+    /// system fonts do not): its embedding permissions decide, and the provenance exclusions stay.
+    #[test]
+    fn an_installed_font_needs_no_open_licence_declaration() {
+        let inter = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+        assert_eq!(validate_document_input(inter), Ok(()));
+        // The same face with its licence text blanked in the name table (same length, both the
+        // ASCII and the UTF-16BE spellings), as a commercial font without a declaration would be.
+        let mut bare = inter.to_vec();
+        let blank = |bytes: &mut Vec<u8>, from: &[u8], to: &[u8]| {
+            let mut found = 0;
+            let mut at = 0;
+            while let Some(i) = bytes.get(at..).and_then(|rest| rest.windows(from.len()).position(|w| w == from)) {
+                bytes[at + i..at + i + from.len()].copy_from_slice(to);
+                at += i + from.len();
+                found += 1;
+            }
+            found
+        };
+        let utf16 = |s: &str| s.encode_utf16().flat_map(u16::to_be_bytes).collect::<Vec<u8>>();
+        let blanked = blank(&mut bare, b"SIL Open Font", b"XXX Open Font") + blank(&mut bare, &utf16("SIL Open Font"), &utf16("XXX Open Font"));
+        assert!(blanked > 0, "Inter declares its licence in the name table");
+        assert!(bare.windows(13).all(|w| w != b"SIL Open Font"), "the declaration is gone");
+        assert_eq!(validate_document_input(&bare), Ok(()), "no licence declaration is required");
+        // What the face's own permissions refuse is still refused, and garbage never gets through.
+        assert!(validate_document_input(b"not a font").is_err());
     }
 
     #[test]

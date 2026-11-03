@@ -6,11 +6,11 @@
 </p>
 
 <h1 align="center">ASDReader</h1>
-<p align="center"><b>อ่านและจัดการ PDF พร้อมการแสดงผลภาษาไทย</b><br>พัฒนาด้วย Rust ต่อยอดจาก PdfCraft · ใช้งานบนเดสก์ท็อปและเว็บ</p>
+<p align="center"><b>อ่านและจัดการ PDF พร้อมการแสดงผลภาษาไทย</b><br>พัฒนาด้วย Rust ต่อยอดจาก ASDReader · ใช้งานบนเดสก์ท็อปและเว็บ</p>
 
 ![ASDReader เปิดเอกสารตัวอย่างภาษาไทยพร้อมเมนูภาษาไทย](docs/images/asdreader-thai.png)
 
-ASDReader เป็นโปรแกรมอ่านและแก้ไข PDF แบบโอเพนซอร์ส สำหรับเปิดเอกสาร ค้นหาข้อความ จัดหน้า ใส่คำอธิบาย และทำงานกับเอกสารในเครื่อง โดยไม่ต้องสมัครบัญชี ตัวโปรแกรมต่อยอดจาก [PdfCraft](https://github.com/storytold/pdfcraft) ภายใต้สิทธิ์ `MIT OR Apache-2.0` และใช้แบรนด์ ASDReader ของตนเอง
+ASDReader เป็นโปรแกรมอ่านและแก้ไข PDF แบบโอเพนซอร์ส สำหรับเปิดเอกสาร ค้นหาข้อความ จัดหน้า ใส่คำอธิบาย และทำงานกับเอกสารในเครื่อง โดยไม่ต้องสมัครบัญชี ตัวโปรแกรมต่อยอดจาก [ASDReader](https://github.com/mamankub/ASDReader) ภายใต้สิทธิ์ `MIT OR Apache-2.0` และใช้แบรนด์ ASDReader ของตนเอง
 
 ภาพประกอบใน README นี้เป็นภาพที่ render จาก **UI ของ ASDReader จริง** พร้อมเอกสารสังเคราะห์ที่สร้างด้วย PDF writer ของโปรเจกต์ ใช้ฟอนต์เปิด Inter และ Noto Sans Thai ไม่มีภาพจากโปรแกรม PDF อื่นหรือเอกสารของผู้ใช้
 
@@ -48,10 +48,10 @@ ASDReader ใช้ **Noto Sans Thai** จากชุด [craft-fonts](https://
 
 ## ดาวน์โหลดรุ่นแรก
 
-[ASDReader v0.13.1](https://github.com/mamankub/ASDReader/releases/tag/v0.13.1) เป็นรุ่นแรกของ fork นี้ โดยต่อเลขเวอร์ชันจาก PdfCraft 0.13.0 เพื่อไม่ชน tag ที่นำเข้าจากต้นทาง
+[ASDReader v0.13.1](https://github.com/mamankub/ASDReader/releases/tag/v0.13.1) เป็นรุ่นแรกของ fork นี้ โดยต่อเลขเวอร์ชันจาก ASDReader 0.13.0 เพื่อไม่ชน tag ที่นำเข้าจากต้นทาง
 
-- **Windows x64:** แตกไฟล์ `ASDReader-0.13.1-windows-x64-portable.zip` แล้วเปิด `pdfcraft.exe` ไม่ต้องติดตั้ง MSI; การตั้งค่าอยู่ข้างโปรแกรมใน `PdfCraftData`
-- **Linux x86_64:** แตกไฟล์ `ASDReader-0.13.1-linux-x86_64.tar.gz` แล้วเรียก `bin/pdfcraft --language th` ต้องมี glibc 2.35 ขึ้นไป, ระบบหน้าต่าง X11/Wayland, libxkbcommon และไดรเวอร์ Vulkan/EGL
+- **Windows x64:** แตกไฟล์ `ASDReader-0.13.1-windows-x64-portable.zip` แล้วเปิด `ASDReader.exe` ไม่ต้องติดตั้ง MSI; การตั้งค่าอยู่ข้างโปรแกรมใน `ASDReaderData`
+- **Linux x86_64:** แตกไฟล์ `ASDReader-0.13.1-linux-x86_64.tar.gz` แล้วเรียก `bin/asdreader --language th` ต้องมี glibc 2.35 ขึ้นไป, ระบบหน้าต่าง X11/Wayland, libxkbcommon และไดรเวอร์ Vulkan/EGL
 - ทั้งสองแพ็กเกจมีฟอนต์ไทย, CLI, OCR models รูปแบบ ONNX จากผู้พัฒนาต้นทาง และไฟล์สิทธิ์การใช้งาน; ไม่ได้เพิ่ม OCR ภาษาไทย
 - ตรวจความครบถ้วนด้วย `SHA256SUMS.txt` จากหน้า release; Windows portable ยังไม่มีลายเซ็นดิจิทัล และรุ่นนี้ยังไม่มีแพ็กเกจ macOS/Web/ARM64
 
@@ -81,21 +81,21 @@ cargo xtask asdreader build --release
 
 คำสั่ง `asdreader` จะหา `../craft-fonts` โดยอัตโนมัติ หรือใช้ตำแหน่งจาก `CRAFT_FONTS_DIR` แล้วเปิด `CRAFT_FONTS_REQUIRED=1` และ `ASDREADER_REQUIRE_THAI=1` เพื่อให้ build ล้มพร้อมข้อความชัดเจนหากไม่มีชุดฟอนต์หรือไม่มี face ภาษาไทย
 
-ชื่อ Cargo package, binary และ ID สำหรับ packaging บางส่วนยังใช้ `pdfcraft` เพื่อให้ทำงานกับโครงสร้างเดิมได้ เช่น `target/release/pdfcraft` และ `pdfcraft-cli` ชื่อที่แสดงในแอปและ artwork เป็น ASDReader ส่วนข้อมูลการตั้งค่าที่เก็บไว้ยังใช้ตำแหน่งเดิม
+ชื่อ Cargo package, binary และ ID สำหรับ packaging บางส่วนยังใช้ `asdreader` เพื่อให้ทำงานกับโครงสร้างเดิมได้ เช่น `target/release/asdreader` และ `asdreader-cli` ชื่อที่แสดงในแอปและ artwork เป็น ASDReader ส่วนข้อมูลการตั้งค่าที่เก็บไว้ยังใช้ตำแหน่งเดิม
 
-ดูไฟล์ที่มีเผยแพร่ได้ที่ [Releases ของ ASDReader](https://github.com/mamankub/ASDReader/releases) ตัวติดตั้งและการลงลายมือชื่อของ PdfCraft ต้นทางไม่ใช่ตัวติดตั้งหรือใบรับรองของ ASDReader
+ดูไฟล์ที่มีเผยแพร่ได้ที่ [Releases ของ ASDReader](https://github.com/mamankub/ASDReader/releases) ตัวติดตั้งและการลงลายมือชื่อของ ASDReader ต้นทางไม่ใช่ตัวติดตั้งหรือใบรับรองของ ASDReader
 
 ## CLI และการควบคุมด้วย agent
 
 ```sh
 # แสดงเครื่องมือที่ engine มี
-cargo run -p pdfcraft-cli -- tools
+cargo run -p asdreader-cli -- tools
 
 # ทำงานตาม JSON script โดยจำกัดพื้นที่อ่าน/เขียน
-cargo run -p pdfcraft-cli -- run --script steps.json --root ./work
+cargo run -p asdreader-cli -- run --script steps.json --root ./work
 
 # เปิด MCP เฉพาะเมื่อมีผู้เรียก ไม่เปิด listener โดยอัตโนมัติ
-cargo run -p pdfcraft-cli -- mcp
+cargo run -p asdreader-cli -- mcp
 ```
 
 หาก script เขียนข้อความไทย ต้องตั้ง `CRAFT_FONTS_DIR=../craft-fonts ASDREADER_REQUIRE_THAI=1` ตอน build CLI ด้วย รายละเอียดอยู่ใน [คู่มือ automation](crates/automation/README.md)
@@ -108,12 +108,12 @@ cargo run -p pdfcraft-cli -- mcp
 export CRAFT_FONTS_DIR="$PWD/../craft-fonts"
 export CRAFT_FONTS_REQUIRED=1
 export ASDREADER_REQUIRE_THAI=1
-export PDFCRAFT_SYSTEM_FONTS=0
+export ASDREADER_SYSTEM_FONTS=0
 
 cargo fmt --all --check
 cargo xtask asdreader test
-cargo test -p pdfcraft-ui-egui --features eframe/x11 --test it thai -j 2 --locked
-cargo clippy -p pdfcraft-fonts -p pdfcraft-edit -j 2 --all-targets -- -D warnings
+cargo test -p asdreader-ui-egui --features eframe/x11 --test it thai -j 2 --locked
+cargo clippy -p asdreader-fonts -p asdreader-edit -j 2 --all-targets -- -D warnings
 cargo xtask layers
 cargo xtask assets
 ```
@@ -131,10 +131,10 @@ cargo xtask assets
 ```sh
 export CRAFT_FONTS_DIR="$PWD/../craft-fonts"
 export ASDREADER_REQUIRE_THAI=1
-export PDFCRAFT_SYSTEM_FONTS=0
+export ASDREADER_SYSTEM_FONTS=0
 
-cargo run -p pdfcraft-edit --example asdreader_demo --locked
-cargo build -p pdfcraft-ui-egui --example shot --features eframe/x11 -j 2 --locked
+cargo run -p asdreader-edit --example asdreader_demo --locked
+cargo build -p asdreader-ui-egui --example shot --features eframe/x11 -j 2 --locked
 
 target/debug/examples/shot docs/images/asdreader-thai.png dist/demo/asdreader-thai.pdf --language th --panel none --zoom 75 --size 1440x1000 --scale 2 --width 1600
 target/debug/examples/shot docs/images/asdreader-dark.png dist/demo/asdreader-thai.pdf --language th --theme dark --page 2 --panel none --zoom 75 --size 1440x1000 --scale 2 --width 1600
@@ -145,7 +145,7 @@ target/debug/examples/shot docs/images/asdreader-home.png --language th --size 1
 
 ## สิทธิ์และเครดิต
 
-ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของ ArtCraft Team, PdfCraft contributors และ dependency ไว้ใน [NOTICE](NOTICE)
+ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของ ArtCraft Team, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
 
 logo/icon ของ ASDReader เป็นรูปทรงต้นฉบับสีแดงนีออน `#FF1744` และขาว `#FFFFFF` ส่วน wordmark ใช้เส้นอักษรจาก Inter ที่มีสิทธิ์ OFL ฟอนต์ Lucide icons และ asset อื่นคงสิทธิ์ของเจ้าของตาม [ATTRIBUTION.md](ATTRIBUTION.md) ฟอนต์จาก build input มีรายละเอียดใน [craft-fonts attribution](https://github.com/storytold/craft-fonts/blob/3d9ab3a132ed0eff457e424226a435a901da30d3/ATTRIBUTION.md)
 

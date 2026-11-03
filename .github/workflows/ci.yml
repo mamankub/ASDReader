@@ -79,7 +79,7 @@ jobs:
       # Missing Thai input is a build error; system fonts must not mask missing glyphs.
       env: |
         ASDREADER_REQUIRE_THAI=1
-        PDFCRAFT_SYSTEM_FONTS=0
+        ASDREADER_SYSTEM_FONTS=0
       # egui/winit/rfd, and the independent oracles (crates/oracle).
       packages: >-
         libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev
@@ -87,8 +87,8 @@ jobs:
       # cargo-deny for the deny step of `cargo xtask ci`, which requires it under CI.
       tools: cargo-nextest@0.9.149,cargo-deny@0.20.2
       # A missing oracle fails the job instead of printing a skip notice that reads as a pass.
-      linux-env: PDFCRAFT_ORACLES_REQUIRED=1
-      windows-env: PDFCRAFT_REQUIRE_WINRES=1
+      linux-env: ASDREADER_ORACLES_REQUIRED=1
+      windows-env: ASDREADER_REQUIRE_WINRES=1
       # Windows checks what differs by platform: the build (with resources) and the tests.
       windows-command: |
         cargo clippy --workspace --all-targets --locked -- -D warnings

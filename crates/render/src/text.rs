@@ -1,4 +1,4 @@
-//! Text extraction (bootstrap for `pdfcraft-text`, architecture §8).
+//! Text extraction (bootstrap for `asdreader-text`, architecture §8).
 //!
 //! A hayro `Device` that ignores paint and records every glyph: its Unicode value (ToUnicode →
 //! encoding → glyph name fallbacks, handled by hayro) and its box in *page view space*, i.e.
@@ -605,11 +605,11 @@ impl TextDevice {
     }
 }
 
-/// Whether `PDFCRAFT_TEXT_DEBUG` is set. `draw_glyph` runs once per glyph and `getenv` scans the
+/// Whether `ASDREADER_TEXT_DEBUG` is set. `draw_glyph` runs once per glyph and `getenv` scans the
 /// whole environment under a lock, so read it once.
 fn text_debug() -> bool {
     static DEBUG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *DEBUG.get_or_init(|| std::env::var_os("PDFCRAFT_TEXT_DEBUG").is_some())
+    *DEBUG.get_or_init(|| std::env::var_os("ASDREADER_TEXT_DEBUG").is_some())
 }
 
 impl<'a> Device<'a> for TextDevice {
@@ -712,7 +712,7 @@ impl<'a> Device<'a> for TextDevice {
     fn actual_text(&mut self, text: &[u8]) {
         // A replacement nested in another is already covered by the outer one.
         if self.actual.is_none() && self.excluded_depth.is_none() {
-            self.actual = Some((self.depth, pdfcraft_cos::PdfString::literal(text).to_text(), Vec::new()));
+            self.actual = Some((self.depth, asdreader_cos::PdfString::literal(text).to_text(), Vec::new()));
         }
     }
     fn end_marked_content(&mut self) {

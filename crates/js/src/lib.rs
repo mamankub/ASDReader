@@ -1,4 +1,4 @@
-//! pdfcraft-js — Acrobat JavaScript for forms (L3).
+//! asdreader-js — Acrobat JavaScript for forms (L3).
 //!
 //! Field scripts (format, keystroke, validate, calculate), button actions and document-level
 //! scripts run in [boa](https://boajs.dev), a JavaScript engine written in Rust, with the subset
@@ -157,7 +157,7 @@ pub enum Request {
     /// `this.pageNum = n` (0-based).
     GoToPage(usize),
     LaunchUrl(String),
-    /// `this.submitForm(url)`: never sent on PdfCraft's own.
+    /// `this.submitForm(url)`: never sent on ASDReader's own.
     Submit(String),
     /// `field.setFocus()`.
     Focus(String),
@@ -1211,7 +1211,7 @@ pub fn run_shared(script: &str, event: &Event, doc: &DocInfo, fields: Arc<Vec<Fi
     {
         std::thread::scope(|scope| {
             let spawned = std::thread::Builder::new()
-                .name("pdfcraft-js".into())
+                .name("asdreader-js".into())
                 .stack_size(SCRIPT_STACK)
                 .spawn_scoped(scope, || run_here(script, event, doc, fields, doc_scripts, limits));
             match spawned {
