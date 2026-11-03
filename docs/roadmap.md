@@ -239,6 +239,7 @@ M2 (renderer), M7 (content editing), M10 (OCR and Office), M11 (Preflight and st
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-11-03 | minor | ASDReader packaging: official ONNX models replace retired RTEN downloads; retain complete legacy pairs and test discovery/inference. FreeBSD VM boot remains unverified because the runner cannot allocate guest memory. |
 | 2026-11-03 | minor | Prepared ASDReader v0.13.1: versioned Windows x64 portable and Linux x86_64 release candidates, required Thai fonts and checksums. Publication evidence belongs to the release and its workflow run. |
 | 2026-11-03 | minor | ASDReader fork M7/M14 locally validated candidate: Thai shaping/wrapping fixes and new branding; Linux tests, clippy, assets, layers and wasm pass. Old trademark files removed with owner approval; existing CI now requires Thai fonts; details in `asdreader-validation.md`. Upstream estimates unchanged. |
 | 2026-10-22 | minor | M4, #3916 partial: edits and Undo/Redo cancel Organize page drags. Pointer-release and save/reopen regressions check page order. Estimates unchanged. |

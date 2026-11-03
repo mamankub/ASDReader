@@ -53,6 +53,7 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: asdreader-release-${{ matrix.artifact }}
+          cache-on-failure: true
       - name: Check version and font hashes
         shell: bash
         env:
@@ -84,6 +85,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends libxkbcommon-dev libwayland-dev libx11-dev libxrandr-dev libxi-dev libgl1-mesa-dev libgtk-3-dev
+      - name: Verify model downloads before the application build
+        shell: bash
+        run: cargo xtask models assets/models
       - name: Build Linux archive
         if: runner.os == 'Linux'
         run: bash packaging/linux/package.sh --formats tar
@@ -93,9 +97,12 @@ jobs:
         run: ./packaging/windows/package.ps1 -Arch x64 -PortableOnly
       - name: Thai regression and asset checks
         if: runner.os == 'Linux'
+        env:
+          PDFCRAFT_MODELS: ${{ github.workspace }}/assets/models
         run: |
           cargo test --release --locked -p pdfcraft-fonts -p pdfcraft-edit --lib
           cargo test --release --locked -p pdfcraft-engine --test it thai
+          cargo test --release --locked -p pdfcraft-ocr --lib
           cargo xtask assets
           cargo xtask layers
       - name: Record candidate checksums and source commit

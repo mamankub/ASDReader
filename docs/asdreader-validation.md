@@ -50,6 +50,14 @@
 
 หลังปรับเวอร์ชัน รัน fmt, scoped clippy, fonts/edit 339 tests, engine Thai 1 test, layers, assets และ wasm ผ่านอีกครั้ง ตรวจ Cargo.lock ว่าเปลี่ยนเฉพาะ 36 workspace versions และตรวจ actionlint สำหรับ CI/release, Bash syntax, PowerShell 7.6.9 parser และ font hashes ครบ 7 ไฟล์ผ่าน
 
+## อุปสรรค release ที่พบจริง
+
+Release candidate แรกคอมไพล์ Linux สำเร็จ แต่หยุดเมื่อดาวน์โหลด OCR `.rten` ได้ HTTP 403 ผู้พัฒนาประกาศเลิก URL เดิมใน [ocrs #282](https://github.com/robertknight/ocrs/issues/282) จึงใช้ ONNX จากสคริปต์ทางการที่ตรึง commit พร้อม hash และ license เดิม ตัวโหลดรองรับทั้งคู่ ONNX และคู่ RTEN โดยไม่ผสมรูปแบบ Regression `prefers_complete_onnx_pairs_and_keeps_legacy_models` ถูกเรียกและล้มก่อนแก้
+
+ผลหลังแก้: ดาวน์โหลด ONNX และ license ผ่าน hash ทั้งหมด, OCR 11 tests ผ่านรวม `reads_rendered_text` โดยตั้ง `PDFCRAFT_MODELS` ไปที่โมเดลจริง, engine OCR 6 tests และ engine Thai 1 test ผ่าน; fmt, clippy ของ OCR/engine/xtask, assets, layers และ wasm 31 crates ผ่าน มี dependency เพิ่มเฉพาะ `rten-onnx 0.26.0` ตาม feature ของ RTen เดิม ไม่อัปเกรดแพ็กเกจอื่น
+
+CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate memory`) ก่อนถึง build/test ของโค้ด จึงยังไม่มีผลรับรอง FreeBSD
+
 ## ภาพที่ตรวจด้วยตา
 
 ใช้ `egui_kittest` กับ Mesa lavapipe เพื่อ render UI ของแอปจริง ดู [โหมดสว่าง](images/asdreader-thai.png), [โหมดมืด](images/asdreader-dark.png) และ [หน้าแรก](images/asdreader-home.png) วิธีสร้างซ้ำอยู่ใน README ไม่ใช่ภาพ mockup และไม่มีเอกสารหรือข้อมูลส่วนตัวของผู้ใช้

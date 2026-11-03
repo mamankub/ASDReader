@@ -14,9 +14,12 @@ use std::path::{Path, PathBuf};
 
 pub use pdfcraft_fonts::helvetica_width;
 
-/// The model files, as named in ATTRIBUTION.toml.
+/// Legacy model filenames, retained for existing installations.
 pub const DETECTION_MODEL: &str = "text-detection.rten";
 pub const RECOGNITION_MODEL: &str = "text-recognition.rten";
+/// The supported model files fetched by ATTRIBUTION.toml.
+pub const DETECTION_ONNX_MODEL: &str = "text-detection.onnx";
+pub const RECOGNITION_ONNX_MODEL: &str = "text-recognition.onnx";
 
 /// The recognition model's alphabet, as it was trained (ocrs-models' `DEFAULT_ALPHABET`): its
 /// output classes follow this order. The ocrs crate's own copy has an `E` where the training had
@@ -48,10 +51,13 @@ pub struct Models {
 }
 
 impl Models {
-    /// The models in `dir`, if both files are there.
+    /// Prefer a complete ONNX pair, then a complete legacy RTEN pair in the same directory.
+    /// Never combine formats or files from different model directories.
     pub fn in_dir(dir: &Path) -> Option<Models> {
-        let m = Models { detection: dir.join(DETECTION_MODEL), recognition: dir.join(RECOGNITION_MODEL) };
-        (m.detection.is_file() && m.recognition.is_file()).then_some(m)
+        [(DETECTION_ONNX_MODEL, RECOGNITION_ONNX_MODEL), (DETECTION_MODEL, RECOGNITION_MODEL)].into_iter().find_map(|(detection, recognition)| {
+            let m = Models { detection: dir.join(detection), recognition: dir.join(recognition) };
+            (m.detection.is_file() && m.recognition.is_file()).then_some(m)
+        })
     }
 
     /// Look for the models: `$PDFCRAFT_MODELS`, then where the release packages install them
@@ -319,6 +325,31 @@ mod tests {
         let w = PlacedWord::place(&Word { text: "Up".into(), rect: [0.0, 0.0, 50.0, 10.0] }, to_user);
         assert_eq!(w.across, [0.0, 50.0]);
         assert_eq!(w.up, [-10.0, 0.0]);
+    }
+
+    #[test]
+    fn prefers_complete_onnx_pairs_and_keeps_legacy_models() {
+        let root = std::env::temp_dir().join(format!("asdreader-ocr-formats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let write = |name: &str| std::fs::write(root.join(name), b"model").unwrap();
+        assert_eq!(Models::in_dir(&root), None);
+        write("text-detection.onnx");
+        write(RECOGNITION_MODEL);
+        assert_eq!(Models::in_dir(&root), None, "never mix formats");
+        write(DETECTION_MODEL);
+        let legacy = Models::in_dir(&root).unwrap();
+        assert_eq!(legacy.detection, root.join(DETECTION_MODEL));
+        write("text-recognition.onnx");
+        let onnx = Models::in_dir(&root).unwrap();
+        assert_eq!(onnx.detection, root.join("text-detection.onnx"));
+        assert_eq!(onnx.recognition, root.join("text-recognition.onnx"));
+        std::fs::remove_file(root.join(DETECTION_MODEL)).unwrap();
+        std::fs::remove_file(root.join(RECOGNITION_MODEL)).unwrap();
+        assert_eq!(Models::in_dir(&root), Some(onnx));
+        std::fs::remove_file(root.join("text-recognition.onnx")).unwrap();
+        assert_eq!(Models::in_dir(&root), None, "an incomplete pair is unavailable");
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     /// #103: every release package's layout puts the models where the installed app looks.

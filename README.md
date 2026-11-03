@@ -52,7 +52,7 @@ ASDReader ใช้ **Noto Sans Thai** จากชุด [craft-fonts](https://
 
 - **Windows x64:** แตกไฟล์ `ASDReader-0.13.1-windows-x64-portable.zip` แล้วเปิด `pdfcraft.exe` ไม่ต้องติดตั้ง MSI; การตั้งค่าอยู่ข้างโปรแกรมใน `PdfCraftData`
 - **Linux x86_64:** แตกไฟล์ `ASDReader-0.13.1-linux-x86_64.tar.gz` แล้วเรียก `bin/pdfcraft --language th` ต้องมี glibc 2.35 ขึ้นไป, ระบบหน้าต่าง X11/Wayland, libxkbcommon และไดรเวอร์ Vulkan/EGL
-- ทั้งสองแพ็กเกจมีฟอนต์ไทย, CLI, OCR models เดิมของต้นทาง และไฟล์สิทธิ์การใช้งาน; ไม่ได้เพิ่ม OCR ภาษาไทย
+- ทั้งสองแพ็กเกจมีฟอนต์ไทย, CLI, OCR models รูปแบบ ONNX จากผู้พัฒนาต้นทาง และไฟล์สิทธิ์การใช้งาน; ไม่ได้เพิ่ม OCR ภาษาไทย
 - ตรวจความครบถ้วนด้วย `SHA256SUMS.txt` จากหน้า release; Windows portable ยังไม่มีลายเซ็นดิจิทัล และรุ่นนี้ยังไม่มีแพ็กเกจ macOS/Web/ARM64
 
 Repository นี้ยังเป็น private: ผู้ดาวน์โหลดต้องมีสิทธิ์ GitHub ของ repo และการตรวจอัปเดตจากในแอปแบบไม่ล็อกอินอาจเข้าถึง release ไม่ได้
