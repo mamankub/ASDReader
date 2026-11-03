@@ -1,11 +1,11 @@
-PdfCraft
+ASDReader (based on PdfCraft)
 Copyright (c) 2026 ArtCraft Team and the PdfCraft contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
 
-The ArtCraft name, wordmark and logos in docs/brand/ are trademarks of the ArtCraft Team. They are
-not open source and are not covered by the license above; their terms are in
-docs/brand/LICENSE-brand.txt.
+ASDReader artwork is contributor-original under MIT OR Apache-2.0 (docs/brand/LICENSE-asdreader.txt).
+The upstream ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team, not open source.
+Their historical terms remain in docs/brand/LICENSE-brand.txt; their logo files are removed from this fork.
 
 Third-party material
 
@@ -13,10 +13,9 @@ This product bundles third-party material under its own licenses, listed below. 
 list (author, source, license) is in ATTRIBUTION.md.
 
 - Lucide icons (assets/icons/*.svg) — ISC License. See assets/icons/LICENSE-lucide.txt.
-  The Windows PDF file icon (assets/app-icon/pdfcraft-document.svg and .ico) adapts Lucide's
-  file-text outline and combines it with contributor-original artwork. See
-  assets/app-icon/LICENSE-document.txt (ISC AND (MIT OR Apache-2.0)), packaged as
-  LICENSE-document.txt beside the Windows executables.
+  ASDReader's replacement PDF file icon is contributor-original (MIT OR Apache-2.0). The prior
+  Lucide-based icon's historical notices remain in assets/app-icon/LICENSE-document.txt, also
+  packaged as LICENSE-document.txt beside the Windows executables.
 - Inter typeface (assets/fonts/Inter-*.ttf) — SIL Open Font License 1.1. See assets/fonts/OFL-Inter.txt.
 - JetBrains Mono typeface (assets/fonts/JetBrainsMono-*.ttf) — SIL Open Font License 1.1. See assets/fonts/OFL-JetBrainsMono.txt.
 - Dancing Script typeface (assets/fonts/DancingScript.ttf), Copyright 2016 The Dancing Script Project Authors — SIL Open Font License 1.1 (Reserved Font Name "Dancing Script"). See assets/fonts/OFL-DancingScript.txt.
@@ -35,7 +34,11 @@ list (author, source, license) is in ATTRIBUTION.md.
 - lopdf (bootstrap document inspection, via crates.io) — MIT.
 - egui default fonts (epaint_default_fonts, via eframe) — Ubuntu Light (Ubuntu Font Licence 1.0),
   Hack (MIT / Bitstream Vera licence), Noto Emoji (SIL OFL 1.1), emoji-icon-font (MIT).
+  Full font licence texts: assets/licenses/LICENSE-egui-default-fonts.txt (epaint_default_fonts 0.36.2).
 - Colour profile in hayro-interpret — CGATS001Compat-v2-micro.icc (CC0-1.0, Clinton Ingram).
+
+Archive packages include ATTRIBUTION.md and the source-relative licence files listed in
+packaging/asset-licences.txt, in addition to the craft-fonts and OCR model licences.
 
 Required notices:
 

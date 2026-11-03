@@ -191,6 +191,7 @@ Ranked; detail and the full milestone table in [docs/roadmap.md](docs/roadmap.md
 
 ## Progress log
 
+- **2026-11-03 (ASDReader archive notices):** Archives now carry ATTRIBUTION.md and complete notices for embedded UI fonts, icons and PDF resources; source-relative licence paths are shared by Linux/Windows packaging.
 - **2026-11-03 (ASDReader release packaging repair):** The first Linux binary compiled, but deprecated RTEN model URLs returned HTTP 403. Migrated downloads to the author's supported ONNX pair with pinned hashes and complete-pair legacy fallback; added download preflight before application builds.
 - **2026-11-03 (ASDReader v0.13.1 release preparation):** Owner authorized commit, push and first release. Version continues upstream 0.13.0; candidate builds target Linux x86_64 and unsigned Windows x64 portable with pinned Thai fonts. See `docs/releases/v0.13.1.md`.
 - **2026-11-03 (ASDReader fork, M7/M14 locally validated candidate):** New neon-red/white branding, Thai README with native app screenshots, required-Thai build entry point, Thai/Latin script itemization and spacing/leading-vowel wrapping regressions. Scoped font/edit/engine/UI tests, clippy, assets, layers and the 31-crate wasm check pass on Linux. Old trademark files removed with owner approval; existing CI now requires Thai fonts. Upstream readiness estimates unchanged; verification details are recorded in `docs/asdreader-validation.md`.

@@ -58,6 +58,10 @@ Release candidate แรกคอมไพล์ Linux สำเร็จ แต
 
 CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate memory`) ก่อนถึง build/test ของโค้ด จึงยังไม่มีผลรับรอง FreeBSD
 
+## เอกสารสิทธิ์ในแพ็กเกจ
+
+แพ็กเกจ archive แนบ ATTRIBUTION.md และไฟล์ใบอนุญาตที่ NOTICE อ้างถึงสำหรับ Inter, JetBrains Mono, Dancing Script, ฟอนต์เริ่มต้นของ egui, Lucide และทรัพยากร PDF ที่ฝังมากับแอป เพิ่มจากใบอนุญาต craft-fonts/โมเดล OCR ที่คัดลอกอยู่แล้ว สคริปต์ Linux และ Windows ใช้รายการเดียวกันใน `packaging/asset-licences.txt` และ NOTICE ระบุการเปลี่ยนแบรนด์พร้อมเก็บเครดิตต้นทาง ตรวจ staging helpers จริงทั้ง Bash และ PowerShell แล้ว: คัดลอกครบ 11 ไฟล์และ byte ตรงต้นฉบับ; ฝั่ง Linux คงใบอนุญาตฟอนต์ไทยและ ATTRIBUTION.md ครบ
+
 ## ภาพที่ตรวจด้วยตา
 
 ใช้ `egui_kittest` กับ Mesa lavapipe เพื่อ render UI ของแอปจริง ดู [โหมดสว่าง](images/asdreader-thai.png), [โหมดมืด](images/asdreader-dark.png) และ [หน้าแรก](images/asdreader-home.png) วิธีสร้างซ้ำอยู่ใน README ไม่ใช่ภาพ mockup และไม่มีเอกสารหรือข้อมูลส่วนตัวของผู้ใช้

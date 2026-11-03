@@ -64,7 +64,7 @@ warn() {
 # Copy licence and readme files that exist into a package directory.
 copy_docs() {
   local dest="$1" f
-  for f in README.md LICENSE LICENSE-MIT LICENSE-APACHE COPYRIGHT NOTICE; do
+  for f in README.md LICENSE LICENSE-MIT LICENSE-APACHE COPYRIGHT NOTICE ATTRIBUTION.md; do
     if [[ -f "$ROOT/$f" ]]; then cp "$ROOT/$f" "$dest/"; fi
   done
   copy_font_licences "$dest"
@@ -75,12 +75,23 @@ copy_docs() {
 # its fonts, so the package carries their licences: fonts/<family>/OFL.txt -> OFL-<family>.txt.
 copy_font_licences() {
   local dest="$1" f family
+  copy_asset_licences "$dest"
   [[ -n "${CRAFT_FONTS_DIR:-}" ]] || return 0
   for f in "$CRAFT_FONTS_DIR"/fonts/*/OFL.txt; do
     [[ -f "$f" ]] || continue
     family="$(basename "$(dirname "$f")")"
     cp "$f" "$dest/OFL-$family.txt"
   done
+}
+
+# Keep the licence texts beside each embedded asset's source-relative path in NOTICE.
+copy_asset_licences() {
+  local dest="$1" f
+  while IFS= read -r f; do
+    [[ -n "$f" ]] || continue
+    mkdir -p "$dest/$(dirname "$f")"
+    cp "$ROOT/$f" "$dest/$f"
+  done < "$ROOT/packaging/asset-licences.txt"
 }
 
 # Fetch the OCR models into a package directory (#103): `cargo xtask models DEST` downloads every

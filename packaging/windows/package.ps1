@@ -34,6 +34,15 @@ function Invoke-Native([string] $What, [scriptblock] $Block) {
   if ($LASTEXITCODE -ne 0) { throw "$What failed with exit code $LASTEXITCODE" }
 }
 
+function Copy-AssetLicences([string] $Destination) {
+  foreach ($relative in Get-Content (Join-Path $Root 'packaging/asset-licences.txt')) {
+    if (-not $relative) { continue }
+    $outputPath = Join-Path $Destination $relative
+    New-Item -ItemType Directory -Force -Path (Split-Path $outputPath -Parent) | Out-Null
+    Copy-Item (Join-Path $Root $relative) $outputPath
+  }
+}
+
 # The version lives in one place: [workspace.package] version in the root Cargo.toml.
 $Version = $env:PDFCRAFT_VERSION
 if (-not $Version) {
@@ -136,10 +145,11 @@ foreach ($f in 'NOTICE', 'LICENSE-document.txt') {
   Copy-Item (Join-Path $Stage $f) $Portable
 }
 Copy-Item -Recurse $Models (Join-Path $Portable 'models')
-foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE') {
+foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'ATTRIBUTION.md') {
   $p = Join-Path $Root $f
   if (Test-Path $p) { Copy-Item $p $Portable }
 }
+Copy-AssetLicences $Portable
 # Builds made with craft-fonts (CRAFT_FONTS_DIR, set for every release) embed its fonts: ship their
 # licences, fonts\<family>\OFL.txt -> OFL-<family>.txt.
 if ($env:CRAFT_FONTS_DIR) {
