@@ -135,7 +135,7 @@ Assert-KeptOnUpdate 'INSTALLDESKTOPSHORTCUT' 'WIX_UPGRADE_DETECTED' 'EXISTINGDES
 $secure = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''SecureCustomProperties''' 1
 if (($secure[0] -split ';') -notcontains 'INSTALLDESKTOPSHORTCUT') { throw "INSTALLDESKTOPSHORTCUT is not secure: '$($secure[0])'" }
 # The install folder page: Welcome's Next opens it, its PathEdit and Browse edit INSTALLFOLDER (under
-# Program Files by default), and Install applies the folder before setup runs.
+# Program Files by default: ProgramFiles6432Folder is C:\Program Files for a 64-bit package), and Install applies the folder before setup runs.
 if (($secure[0] -split ';') -notcontains 'INSTALLFOLDER') { throw "INSTALLFOLDER is not secure: '$($secure[0])'" }
 $next = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallWelcome'' AND `Control_` = ''Next'' AND `Event` = ''NewDialog''' 1
 Assert-Equal $next[0] 'InstallFolder' 'Welcome Next opens the folder page'
@@ -154,7 +154,7 @@ foreach ($control in 'LookIn', 'Folders', 'Path') {
   Assert-Equal $c[0] '_BrowseProperty' "Browse dialog $control"
 }
 $installDir = Read-Row 'SELECT `Directory_Parent`, `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''' 2
-if ($installDir[0] -notmatch '^ProgramFiles(64)?Folder$' -or $installDir[1] -notmatch 'ASDReader$') { throw "default install folder: $($installDir -join ' ')" }
+if ($installDir[0] -ne 'ProgramFiles6432Folder' -or $installDir[1] -notmatch '(^|\|)ASDReader$') { throw "default install folder: $($installDir -join ' ')" }
 $checkbox = Read-Row 'SELECT `Type`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''DesktopShortcut''' 3
 Assert-Equal $checkbox[0] 'CheckBox' 'Welcome desktop-shortcut control'
 Assert-Equal $checkbox[1] 'INSTALLDESKTOPSHORTCUT' 'Welcome checkbox property'
