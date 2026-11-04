@@ -142,7 +142,7 @@ Assert-Equal $next[0] 'InstallFolder' 'Welcome Next opens the folder page'
 $folder = Read-Row 'SELECT `Type`, `Property`, `Attributes` FROM `Control` WHERE `Dialog_` = ''InstallFolder'' AND `Control` = ''Folder''' 3
 Assert-Equal $folder[0] 'PathEdit' 'Install folder field'
 Assert-Equal $folder[1] '_BrowseProperty' 'Install folder field property'
-if (([int] $folder[2] -band 0x400000) -eq 0) { throw "the install folder field is not indirect: $($folder[2])" }
+if (([int] $folder[2] -band 0x8) -eq 0) { throw "the install folder field is not indirect: $($folder[2])" }
 $browse = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Browse'' AND `Event` = ''SpawnDialog''' 1
 Assert-Equal $browse[0] 'BrowseFolder' 'Browse opens the folder chooser'
 $target = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Install'' AND `Event` = ''SetTargetPath''' 1
