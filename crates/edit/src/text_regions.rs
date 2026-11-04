@@ -545,19 +545,51 @@ pub(super) fn rewrite_styled_block(
     let mut fallback_names: std::collections::BTreeMap<(String, char), String> = std::collections::BTreeMap::new();
     let mut full_faces: HashMap<String, String> = HashMap::new();
     let mut programs: HashMap<String, Option<std::sync::Arc<Vec<u8>>>> = HashMap::new();
+    // A row with Thai the paragraph's font can't show is written whole in one Thai face (spaces,
+    // digits and Latin too): shaped text must stay in one face along its row (see below).
+    let thai_rows: Vec<Option<(String, std::sync::Arc<Vec<u8>>)>> = draft
+        .split('\n')
+        .map(|row| {
+            let missing = row.chars().any(|c| is_thai(c) && !metrics.get(&first.font).is_some_and(|m| source_encodes(m, &c.to_string())));
+            if missing { thai_face(row, first.bold) } else { None }
+        })
+        .collect();
+    let mut row_index = 0_usize;
     for (range, index) in styled_spans {
         let source = lines.get(index).unwrap_or(first);
         for ch in draft.get(range).unwrap_or_default().chars() {
             if ch == '\n' {
                 chars.push((ch, index, source.font.clone()));
+                row_index += 1;
                 continue;
             }
             let s = ch.to_string();
+            let thai_row = thai_rows.get(row_index).cloned().flatten();
             let name = if let Some(resource) = overrides.get(&index).and_then(|r| r.resource.as_ref()).or(style.resource.as_ref()) {
                 if !metrics.get(resource).is_some_and(|m| source_encodes(m, &s)) {
                     return Err(EditError::Invalid(format!("the selected font resource {resource} cannot show U+{:04X}", u32::from(ch))));
                 }
                 resource.clone()
+            } else if let Some((family, bytes)) = thai_row {
+                // Thai typed into a paragraph whose font has no Thai and isn't installed (a
+                // document font that was never embedded): an installed Thai face of the same
+                // weight (Tahoma, Leelawadee…), embedded whole and shaped, so the vowels and tone
+                // marks sit on their letters. The Type 3 fallback below draws one Japanese glyph
+                // per character and has no Thai.
+                let key = format!("thai {family}");
+                if let Some(name) = full_faces.get(&key) {
+                    name.clone()
+                } else {
+                    let name = asdreader_fonts::embedding::embed(doc, &mut fonts, &bytes, &family).map_err(EditError::Invalid)?;
+                    let font = fonts
+                        .get(name.as_bytes())
+                        .and_then(|f| doc.dict(f))
+                        .ok_or_else(|| EditError::Invalid("the Thai font could not be loaded".into()))?;
+                    metrics.insert(name.clone(), Metrics::from_dict(doc, &font));
+                    full_faces.insert(key, name.clone());
+                    substituted = Some(family);
+                    name
+                }
             } else if metrics.get(&source.font).is_some_and(|m| source_encodes(m, &s)) {
                 source.font.clone()
             } else if let Some((name, _)) = metrics.iter().find(|(_, m)| {
@@ -602,6 +634,8 @@ pub(super) fn rewrite_styled_block(
                     full_faces.insert(key, name.clone());
                     name
                 }
+            } else if is_thai(ch) {
+                return Err(no_thai_font(ch));
             } else {
                 let family = source_family(&source.base_font);
                 if needs_type3(&s) {
@@ -1031,4 +1065,31 @@ pub(super) fn rewrite_styled_block(
         d.set(b"Resources".to_vec(), Object::Dict(res));
     })?;
     Ok(LineEdit { substituted })
+}
+
+fn is_thai(ch: char) -> bool {
+    matches!(u32::from(ch), 0x0E00..=0x0E7F)
+}
+
+/// A Thai face to embed for `text` (a row with Thai): family name and program. An installed face of
+/// the paragraph's weight that has every character first (see `asdreader_fonts::installed`), then
+/// the bundled one if it can be embedded (a static build of it; the variable Noto Sans Thai can't).
+/// `None` when there is no such face.
+fn thai_face(text: &str, bold: bool) -> Option<(String, std::sync::Arc<Vec<u8>>)> {
+    let text: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    if let Some(face) = asdreader_fonts::installed::installed_thai_face(&text, bold) {
+        return Some((face.family.clone(), face.bytes.clone()));
+    }
+    asdreader_fonts::document_thai_font()
+        .filter(|f| asdreader_fonts::embedding::validate(f.bytes).is_ok() && asdreader_fonts::embedding::covers(f.bytes, &text))
+        .map(|f| (f.family.to_owned(), std::sync::Arc::new(f.bytes.to_vec())))
+}
+
+/// Thai the paragraph's font can't show and no Thai face can be embedded for.
+pub(super) fn no_thai_font(ch: char) -> EditError {
+    EditError::Invalid(format!(
+        "the paragraph's font has no Thai (no glyph for {ch} (U+{:04X})) and no Thai font that can be embedded is installed; \
+         choose a Thai font for the paragraph (Installed fonts… or Load font…), such as Tahoma or TH Sarabun New",
+        u32::from(ch)
+    ))
 }

@@ -136,6 +136,76 @@ pub fn thai_fallback() -> Option<Arc<FontData>> {
     CACHE.get_or_init(|| script_fallback(&thai_candidates(), THAI_PROBE)).clone()
 }
 
+/// The installed Thai faces that Thai typed into a document paragraph can be written with, best
+/// first, regular and bold (`asdreader_fonts::installed`). Read once, the first time a paragraph
+/// needs one; none when installed fonts are turned off. Unlike the interface faces above, these
+/// are embedded in the document the user edits, as a font chosen with Installed fonts… is, and only
+/// faces whose embedding permissions allow it are kept.
+pub fn document_thai_faces() -> Vec<asdreader_fonts::installed::InstalledFace> {
+    if std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0") {
+        return Vec::new();
+    }
+    let mut seen = std::collections::HashSet::new();
+    document_thai_candidates()
+        .into_iter()
+        .filter(|path| seen.insert(path.clone()))
+        .filter_map(|path| {
+            let meta = std::fs::metadata(&path).ok()?;
+            if !meta.is_file() || meta.len() > MAX_BYTES {
+                return None;
+            }
+            let face = asdreader_fonts::installed::InstalledFace::new(std::fs::read(&path).ok()?)?;
+            log::info!("Thai document font: {} ({})", face.family, path.display());
+            Some(face)
+        })
+        .collect()
+}
+
+/// Where the Thai document faces are, best first: looped faces, each with its bold, then the
+/// interface list.
+fn document_thai_candidates() -> Vec<PathBuf> {
+    let mut list: Vec<PathBuf> = if cfg!(windows) {
+        let fonts = windows_fonts();
+        let mut list: Vec<PathBuf> = [
+            "tahoma.ttf",
+            "tahomabd.ttf",
+            "THSarabunNew.ttf",
+            "THSarabunNew Bold.ttf",
+            "leelawad.ttf",
+            "leelawdb.ttf",
+            "LeelawUI.ttf",
+            "LeelaUIb.ttf",
+        ]
+        .iter()
+        .map(|f| fonts.join(f))
+        .collect();
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            let user = PathBuf::from(local).join("Microsoft/Windows/Fonts");
+            list.push(user.join("THSarabunNew.ttf"));
+            list.push(user.join("THSarabunNew Bold.ttf"));
+        }
+        list
+    } else if cfg!(target_os = "macos") {
+        ["/System/Library/Fonts/Supplemental/Tahoma.ttf", "/System/Library/Fonts/Supplemental/Tahoma Bold.ttf", "/Library/Fonts/Tahoma.ttf"]
+            .iter()
+            .map(PathBuf::from)
+            .collect()
+    } else {
+        unix_fonts(&[
+            "truetype/noto/NotoSansThaiLooped-Regular.ttf",
+            "truetype/noto/NotoSansThaiLooped-Bold.ttf",
+            "truetype/google-fonts/Sarabun-Regular.ttf",
+            "truetype/google-fonts/Sarabun-Bold.ttf",
+            "truetype/tlwg/Garuda.ttf",
+            "truetype/tlwg/Garuda-Bold.ttf",
+            "truetype/thai-tlwg/Garuda.ttf",
+            "truetype/thai-tlwg/Garuda-Bold.ttf",
+        ])
+    };
+    list.extend(thai_candidates());
+    list
+}
+
 fn script_fallback(candidates: &[PathBuf], probe: char) -> Option<Arc<FontData>> {
     if std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0") {
         return None;

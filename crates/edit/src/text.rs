@@ -2043,6 +2043,11 @@ fn type3_font(
     bold: bool,
     max_glyphs: usize,
 ) -> Result<Type3Fallback, EditError> {
+    // Thai needs shaping, which a one-glyph-per-character Type 3 font can't do, and the fallback
+    // faces have no Thai anyway: say what to do about the Thai instead.
+    if let Some(ch) = text.chars().find(|c| matches!(u32::from(*c), 0x0E00..=0x0E7F)) {
+        return Err(regions::no_thai_font(ch));
+    }
     let (faces, hebrew) = type3_faces(text, family, bold)?;
     // Each unique character once, in order of first appearance.
     let mut chars = Vec::new();
