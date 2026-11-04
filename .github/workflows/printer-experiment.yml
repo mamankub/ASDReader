@@ -61,6 +61,36 @@ jobs:
           Start-Sleep 3
           Get-Item $out | Format-List Name, Length
           Copy-Item $out "$env:GITHUB_WORKSPACE\thai-test.pdf"
+      - name: Print the Thai page to a local TCP port that captures the job
+        shell: pwsh
+        run: |
+          $cap = Join-Path $env:RUNNER_TEMP 'captured.bin'
+          Remove-Item $cap -ErrorAction SilentlyContinue
+          $job = Start-Job -ArgumentList $cap -ScriptBlock {
+            param($cap)
+            $l = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 9100); $l.Start()
+            $c = $l.AcceptTcpClient(); $s = $c.GetStream()
+            $f = [IO.File]::Create($cap); $s.CopyTo($f); $f.Close(); $c.Close(); $l.Stop()
+          }
+          Start-Sleep 2
+          Add-PrinterPort -Name 'ASDPDF:' -PrinterHostAddress 127.0.0.1 -PortNumber 9100
+          Add-Printer -Name 'ASD PDF Printer (tcp test)' -DriverName 'Microsoft Print To PDF' -PortName 'ASDPDF:'
+          Add-Type -AssemblyName System.Drawing
+          $pd = New-Object System.Drawing.Printing.PrintDocument
+          $pd.PrinterSettings.PrinterName = 'ASD PDF Printer (tcp test)'
+          $pd.add_PrintPage({ param($s, $e)
+            $font = New-Object System.Drawing.Font('Tahoma', 20)
+            $e.Graphics.DrawString('เจ้าของบ้าน ไฟฟ้า ปั้น น้ำ ที่ตั้ง (tcp)', $font, [System.Drawing.Brushes]::Black, 100, 100)
+            $e.HasMorePages = $false })
+          $pd.Print()
+          Wait-Job $job -Timeout 60 | Out-Null
+          "job state: $($job.State)"
+          if (Test-Path $cap) {
+            $b = [IO.File]::ReadAllBytes($cap)
+            "captured bytes: $($b.Length); header: $([Text.Encoding]::ASCII.GetString($b[0..7]))"
+            Copy-Item $cap "$env:GITHUB_WORKSPACE	hai-tcp.pdf"
+          } else { 'nothing captured' }
+          Get-PrintJob -PrinterName 'ASD PDF Printer (tcp test)' -ErrorAction SilentlyContinue | Format-Table ID, JobStatus
       - name: Remove the queue again
         if: always()
         shell: pwsh
@@ -72,5 +102,7 @@ jobs:
         if: always()
         with:
           name: printer-experiment
-          path: thai-test.pdf
+          path: |
+            thai-test.pdf
+            thai-tcp.pdf
           if-no-files-found: warn
