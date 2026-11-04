@@ -84,6 +84,15 @@ impl<'a> RenderCache<'a> {
             outline_cache: Rc::new(RefCell::new(HashMap::new())),
         }
     }
+
+    /// ASDReader patch: a new render cache whose decoded images are `images`, shared with every
+    /// other cache made with it (the workers of one document).
+    pub fn with_images(images: &hayro_interpret::SharedImageCache) -> Self {
+        Self {
+            interpreter_cache: InterpreterCache::with_images(images),
+            outline_cache: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
 }
 
 /// ASDReader patch: replacement colours for the "reading colours" view setting (Acrobat's
@@ -308,6 +317,21 @@ pub fn render_into<'a>(
         pix_height,
         vc_settings.render_mode,
     );
+}
+
+/// ASDReader patch: interpret `page` without drawing it, for what `interpreter_settings` collects
+/// on the way (its `content_index`, which `Record` mode fills in). The page is laid out as
+/// [`render`] lays it out at scale 1, with no tile.
+pub fn interpret_only(page: &Page<'_>, interpreter_settings: &InterpreterSettings) {
+    let (width, height) = page.render_dimensions();
+    let mut state = Context::new(
+        page.initial_transform(true).to_kurbo(),
+        Rect::new(0.0, 0.0, f64::from(width).ceil(), f64::from(height).ceil()),
+        &InterpreterCache::new(),
+        page.xref(),
+        interpreter_settings.clone(),
+    );
+    interpret_page(page, &mut state, &mut hayro_interpret::DummyDevice);
 }
 
 // Just a convenience method for testing.

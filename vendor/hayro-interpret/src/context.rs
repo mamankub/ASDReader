@@ -141,6 +141,12 @@ impl<'a> InterpreterCache<'a> {
         }
     }
 
+    /// ASDReader patch: a new cache whose decoded images are `images`, shared with every other
+    /// cache made with it.
+    pub fn with_images(images: &crate::SharedImageCache) -> Self {
+        Self { decoded_cache: images.0.clone(), ..Self::new() }
+    }
+
     /// ASDReader patch (32): how many images were decoded through this cache (its misses, not
     /// counting images that are never cached), for diagnostics and tests.
     pub fn decoded_image_decodes(&self) -> usize {
@@ -233,6 +239,21 @@ impl<'a> Context<'a> {
         };
 
         self.states.push(cur);
+    }
+
+    /// ASDReader patch: the transform the content started with (page space to device space).
+    pub(crate) fn initial_transform(&self) -> Affine {
+        self.root_transforms.first().copied().unwrap_or(Affine::IDENTITY)
+    }
+
+    /// ASDReader patch: whether a `W`/`W*` waits for the next painting operator.
+    pub(crate) fn clip_pending(&self) -> bool {
+        self.clip.is_some()
+    }
+
+    /// ASDReader patch: whether no path is under construction.
+    pub(crate) fn path_is_empty(&self) -> bool {
+        self.path.elements().is_empty()
     }
 
     pub(crate) fn bbox(&self) -> Rect {

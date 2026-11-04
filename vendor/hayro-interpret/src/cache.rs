@@ -110,18 +110,36 @@ pub(crate) struct DecodedImageKey {
     pub(crate) preview: bool,
 }
 
-#[derive(Default)]
+/// One entry: filled once, by the first thread that asks for it; any other thread asking
+/// meanwhile waits for that decode instead of running its own (ASDReader patch: several workers
+/// drawing tiles of one page decoded its scanned underlay once each).
+type Slot = Arc<std::sync::OnceLock<Option<Arc<dyn Any + Send + Sync>>>>;
+
 struct DecodedImageCacheInner {
-    map: HashMap<DecodedImageKey, Option<Box<dyn Any + Send + Sync>>>,
+    map: HashMap<DecodedImageKey, Slot>,
     bytes: usize,
     /// ASDReader patch (32): how many keyed decodes ran (cache misses).
     decodes: usize,
+    /// ASDReader patch: the most bytes of pixels kept.
+    budget: usize,
+}
+
+std::thread_local! {
+    /// ASDReader patch: the keys this thread is decoding, innermost last. A decode that needs a
+    /// key it is already decoding (an image that is its own soft mask) decodes it again without
+    /// the cache instead of waiting for itself.
+    static DECODING: core::cell::RefCell<Vec<DecodedImageKey>> = const { core::cell::RefCell::new(Vec::new()) };
 }
 
 impl DecodedImageCache {
     pub(crate) fn new() -> Self {
+        Self::with_budget(DEFAULT_IMAGE_BUDGET)
+    }
+
+    /// ASDReader patch: a cache that keeps at most `budget` bytes of pixels.
+    pub(crate) fn with_budget(budget: usize) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(DecodedImageCacheInner::default())),
+            inner: Arc::new(Mutex::new(DecodedImageCacheInner { map: HashMap::new(), bytes: 0, decodes: 0, budget })),
             preview: false,
         }
     }
@@ -141,58 +159,78 @@ impl DecodedImageCache {
     }
 
     /// The decoded image for `key`, from the cache or from `f`. `None` as the key decodes
-    /// without the cache.
+    /// without the cache. An image larger than the cache's budget is decoded each time.
     pub(crate) fn get_or_insert_with<T: Clone + Send + Sync + 'static>(
         &self,
         key: Option<DecodedImageKey>,
-        budget: usize,
         size_of: impl FnOnce(&T) -> usize,
         f: impl FnOnce() -> Option<T>,
     ) -> Option<T> {
         let Some(key) = key else { return f() };
-        // Fast path: a hit clones the pixels without decoding.
-        let hit = match self.inner.lock() {
-            Ok(locked) => locked
-                .map
-                .get(&key)
-                .and_then(|val| val.as_ref())
-                .and_then(|val| val.downcast_ref::<T>().cloned()),
+        if DECODING.with(|keys| keys.borrow().contains(&key)) {
+            return f();
+        }
+        let slot = match self.inner.lock() {
+            Ok(mut locked) => locked.map.entry(key).or_default().clone(),
             // A thread panicked while holding the lock: decode without the cache.
             Err(_) => return f(),
         };
-        if let Some(hit) = hit {
-            return Some(hit);
-        }
-        // Miss: decode without holding the lock (decoding must never deadlock the cache).
-        let val = f();
-        let Ok(mut locked) = self.inner.lock() else {
+        let mut decoded_here = None;
+        let value = slot.get_or_init(|| {
+            DECODING.with(|keys| keys.borrow_mut().push(key));
+            let val = f();
+            DECODING.with(|keys| keys.borrow_mut().pop());
+            let size = val.as_ref().map_or(0, size_of);
+            decoded_here = Some((size, val.clone()));
+            val.map(|v| Arc::new(v) as Arc<dyn Any + Send + Sync>)
+        });
+        let hit = value.as_ref().and_then(|v| v.downcast_ref::<T>()).cloned();
+        if let Some((size, val)) = decoded_here {
+            if let Ok(mut locked) = self.inner.lock() {
+                locked.decodes = locked.decodes.saturating_add(1);
+                if size > locked.budget {
+                    // Too large to keep: later renders decode it again.
+                    locked.map.remove(&key);
+                } else {
+                    if locked.bytes.saturating_add(size) > locked.budget {
+                        // A fresh epoch, keeping this one.
+                        locked.map.retain(|k, _| *k == key);
+                        locked.bytes = 0;
+                    }
+                    locked.bytes = locked.bytes.saturating_add(size);
+                }
+            }
             return val;
-        };
-        locked.decodes = locked.decodes.saturating_add(1);
-        // Another thread may have decoded it meanwhile: keep the first copy.
-        if let Some(existing) = locked.map.get(&key)
-            && let Some(existing) = existing.as_ref().and_then(|val| val.downcast_ref::<T>())
-        {
-            return Some(existing.clone());
         }
-        let size = match &val {
-            Some(v) => size_of(v),
-            None => 0,
-        };
-        if size > budget {
-            return val;
-        }
-        if locked.bytes.saturating_add(size) > budget {
-            locked.map.clear();
-            locked.bytes = 0;
-        }
-        locked.bytes = locked.bytes.saturating_add(size);
-        locked.map.insert(
-            key,
-            val.clone()
-                .map(|val| Box::new(val) as Box<dyn Any + Send + Sync>),
-        );
-        val
+        hit
+    }
+}
+
+/// ASDReader patch: the pixel budget of a cache made by [`DecodedImageCache::new`].
+const DEFAULT_IMAGE_BUDGET: usize = 64 << 20;
+
+/// ASDReader patch: decoded images shared by the interpreter caches made with it
+/// ([`InterpreterCache::with_images`](crate::InterpreterCache::with_images)), for several
+/// workers rendering one document: an image is decoded once for all of them, and an image no
+/// larger than `budget` bytes is kept for every later render.
+#[derive(Clone)]
+pub struct SharedImageCache(pub(crate) DecodedImageCache);
+
+impl SharedImageCache {
+    /// A cache that keeps at most `budget` bytes of decoded pixels.
+    pub fn new(budget: usize) -> Self {
+        Self(DecodedImageCache::with_budget(budget))
+    }
+
+    /// How many images were decoded through it (its misses), for diagnostics and tests.
+    pub fn decodes(&self) -> usize {
+        self.0.decodes()
+    }
+}
+
+impl Default for SharedImageCache {
+    fn default() -> Self {
+        Self::new(DEFAULT_IMAGE_BUDGET)
     }
 }
 

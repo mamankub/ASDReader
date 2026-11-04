@@ -115,3 +115,33 @@ with `crates/render/examples/page_timing.rs`):
   (`filter::lzw_flate::flate::fast`) instead of the pdf.js port; a stream flate2 rejects goes on
   with the port from where flate2 stopped. `raster::tests::a_damaged_flate_content_stream_draws_what_decodes`
   and the module's own tests.
+
+## Drawing only what is in view (content index, shared images)
+
+Other readers parse a page's objects once and then draw only those in the area shown. Two
+patches do the same for zooming and scrolling through large documents:
+
+- `hayro-interpret`: `content_index` (`ContentIndexMode`, `ContentIndex`). Interpreting a page
+  in `Record` mode (`hayro::interpret_only`, which draws nothing) divides its content into items
+  (`q … Q` blocks, marked content, text objects, one path with its painting operator, `Do`, `sh`,
+  and the instructions that set part of the state), merges neighbours into groups with the
+  page-space box of what they draw, and records for each group the instructions whose effect
+  outlasts it. A render in `Use` mode passes over the bytes of every group whose box misses the
+  area drawn (`ContentReader::skip`) and runs that replay instead; a hidden layer's content draws
+  nothing and is passed over in every render. Images, Type 3 glyphs, transparency groups, soft
+  masks, clips that outlast their item and any other instruction are never passed over, and
+  content with mismatched nesting gets no index. `asdreader-render` makes a page's index on a
+  thread of its own after a render of the page took 250 ms or more (`ContentIndexes`), so the
+  render that showed the page first pays nothing. On the 40 MB sheet, four zoomed tiles take
+  0.6 s instead of 3.5 s. `raster::tests::renders_with_the_content_index_are_the_renders_without_it`
+  compares tiles at five scales, and the page at two more, with and without the index, pixel
+  for pixel, on a page made to break it (a stray `Q`, state set between blocks, layers, text
+  that clips, clips, forms, images, a shading).
+- `hayro-interpret`: `SharedImageCache`, `InterpreterCache::with_images` and
+  `hayro::RenderCache::with_images`. The decoded-image cache can be shared by every worker of a
+  pool, with its own budget (512 MiB in `asdreader-render`, `PoolImages`), and each image is
+  decoded by one thread while the others wait for it. A page over a scanned plan (an
+  8000 × 5600 JPEG, 134 MB decoded, which the old 64 MiB cache per worker never kept) drew four
+  zoomed tiles in 2.0 s; now 0.9 s the first time and 0.2 s after. An image that is its own soft
+  mask is decoded without the cache instead of waiting for itself.
+  `raster::tests::a_pools_workers_decode_an_image_once`.

@@ -120,6 +120,10 @@ pub struct InterpreterSettings {
     /// costs a decode and a resample each for pixels nobody can see. Never set it for a final
     /// render (tiles, whole pages, print, export).
     pub preview: bool,
+    /// ASDReader patch: make or use the index of the page's content that lets a render of part
+    /// of the page skip what cannot reach it (see `content_index`). Only a page's own top-level
+    /// content is indexed.
+    pub content_index: crate::content_index::ContentIndexMode,
 }
 
 impl Default for InterpreterSettings {
@@ -142,6 +146,7 @@ impl Default for InterpreterSettings {
             ocg_overrides: Arc::new(Vec::new()),
             cancelled: None,
             preview: false,
+            content_index: crate::content_index::ContentIndexMode::Off,
         }
     }
 }
@@ -170,7 +175,37 @@ pub fn interpret_page<'a>(
     // ASDReader patch: the page's own contents count against its content budget too, where they
     // are decoded whole. Streamed content is only ever held a window at a time.
     crate::context::charge_content(content.materialized_len());
-    interpret_content(&mut content, resources, context, device);
+    // ASDReader patch: the page's content index (see `content_index`). Taken out of the settings
+    // so that nothing nested (forms, patterns, masks, glyphs) sees it.
+    let mode = core::mem::take(&mut context.settings.content_index);
+    let initial = context.initial_transform();
+    let to_page = initial.inverse();
+    let page_box = to_page.transform_rect_bbox(context.bbox());
+    let slot = match &mode {
+        crate::content_index::ContentIndexMode::Record(slot) => Some(slot.clone()),
+        _ => None,
+    };
+    let (mut indexing, collected) =
+        crate::content_index::Indexing::new(mode, to_page, context.bbox(), page_box);
+    match collected {
+        Some(collected) => {
+            let mut bounds = crate::content_index::BoundsDevice {
+                inner: &mut *device,
+                collecting: collected,
+                to_page,
+                glyph_bounds: std::collections::HashMap::new(),
+            };
+            interpret_content(&mut content, resources, context, &mut bounds, &mut indexing);
+        }
+        None => interpret_content(&mut content, resources, context, device, &mut indexing),
+    }
+    if let Some(slot) = slot {
+        let cancelled = context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed));
+        let cut = content.truncated() || crate::context::content_was_truncated();
+        if !cancelled && !cut && let Some(index) = indexing.finish() {
+            *slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::new(index));
+        }
+    }
 
     if context.settings.render_annotations
         && let Some(annot_arr) = page.raw().get::<Array<'_>>(ANNOTS)
@@ -363,20 +398,41 @@ fn named_color_space<'a>(
 /// Interprets the instructions that `ops` yields, until they run out or the caller cancels. It runs
 /// once per window of a content stream, between one `save_state` and its restore (see
 /// `interpret_content`).
+/// ASDReader patch: `indexing` makes or uses the page's content index (see `content_index`);
+/// `base` is the offset of the window's first byte in the page's decoded content. Returns where to
+/// continue when a group of the index is skipped.
 fn interpret_window<'a>(
     ops: &mut TypedIter<'_>,
     resources: &Resources<'a>,
     context: &mut Context<'a>,
     device: &mut impl Device<'a>,
-) {
+    indexing: &mut crate::content_index::Indexing,
+    base: u64,
+    window: &[u8],
+) -> Option<(u64, Vec<u8>)> {
+    use crate::content_index::Op;
     // ASDReader patch (38): the resources' DefaultGray, DefaultRGB and DefaultCMYK replace the
     // device spaces that colour operators and images select (ISO 32000-2 §8.6.5.6).
     let defaults = DefaultColorSpaces::new(resources, &context.interpreter_cache.object_cache);
-    while let Some(op) = ops.next() {
+    let indexed = !matches!(indexing, crate::content_index::Indexing::Off);
+    let recording = indexing.recording();
+    loop {
+        let pos = base + ops.committed() as u64;
+        if indexed
+            && let Some(skip) = indexing.skip_to(pos, context.num_states(), context.path_is_empty(), context.clip_pending())
+        {
+            return Some(skip);
+        }
+        let Some(op) = ops.next() else { break };
         // ASDReader patch: stop when the caller cancelled (see `InterpreterSettings::cancelled`).
         if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
             break;
         }
+        let (kind, clean_before) = if recording {
+            (index_op(&op), context.path_is_empty() && !context.clip_pending())
+        } else {
+            (Op::Other, false)
+        };
         match op {
             TypedInstruction::SaveState(_) => context.save_state(),
             TypedInstruction::StrokeColorDeviceRgb(s) => {
@@ -909,6 +965,83 @@ fn interpret_window<'a>(
                 warn!("failed to read an operator");
             }
         }
+        if recording {
+            let end = base + ops.committed() as u64;
+            let from = usize::try_from(pos - base).unwrap_or(usize::MAX);
+            let to = usize::try_from(end - base).unwrap_or(usize::MAX);
+            let bytes = window.get(from..to).unwrap_or(&[]);
+            indexing.after(kind, pos, end, bytes, context.num_states(), clean_before, context.path_is_empty());
+        }
+    }
+    None
+}
+
+/// ASDReader patch: what `op` is to the content index (see `content_index`).
+fn index_op(op: &TypedInstruction<'_, '_>) -> crate::content_index::Op {
+    use crate::content_index::{Key, Op, Sets};
+    use TypedInstruction as I;
+    match op {
+        I::SaveState(_) => Op::Save,
+        I::RestoreState(_) => Op::Restore,
+        I::BeginText(_) => Op::BeginText,
+        I::EndText(_) => Op::EndText,
+        I::BeginMarkedContent(_) | I::BeginMarkedContentWithProperties(_) => Op::BeginMarked,
+        I::EndMarkedContent(_) => Op::EndMarked,
+        I::MarkedContentPoint(_) | I::MarkedContentPointWithProperties(_) => Op::Nothing,
+        I::MoveTo(_)
+        | I::LineTo(_)
+        | I::CubicTo(_)
+        | I::CubicStartTo(_)
+        | I::CubicEndTo(_)
+        | I::ClosePath(_)
+        | I::RectPath(_) => Op::Build,
+        I::ClipNonZero(_) | I::ClipEvenOdd(_) => Op::Clip,
+        I::StrokePath(_)
+        | I::CloseAndStrokePath(_)
+        | I::FillPathNonZero(_)
+        | I::FillPathNonZeroCompatibility(_)
+        | I::FillPathEvenOdd(_)
+        | I::FillAndStrokeNonZero(_)
+        | I::FillAndStrokeEvenOdd(_)
+        | I::CloseFillAndStrokeNonZero(_)
+        | I::CloseFillAndStrokeEvenOdd(_)
+        | I::EndPath(_) => Op::Paint,
+        I::Transform(_) => Op::State(Key::Cm, Sets::Other),
+        I::LineWidth(_) => Op::State(Key::LineWidth, Sets::Other),
+        I::LineCap(_) => Op::State(Key::LineCap, Sets::Other),
+        I::LineJoin(_) => Op::State(Key::LineJoin, Sets::Other),
+        I::MiterLimit(_) => Op::State(Key::MiterLimit, Sets::Other),
+        I::DashPattern(_) => Op::State(Key::Dash, Sets::Other),
+        I::RenderingIntent(_) => Op::State(Key::Intent, Sets::Other),
+        I::FlatnessTolerance(_) => Op::State(Key::Flatness, Sets::Other),
+        I::SetGraphicsState(_) => Op::State(Key::Gs, Sets::Other),
+        I::ColorSpaceStroke(_) => Op::State(Key::StrokeColor, Sets::Space),
+        I::ColorSpaceNonStroke(_) => Op::State(Key::FillColor, Sets::Space),
+        I::StrokeColorDeviceGray(_) | I::StrokeColorDeviceRgb(_) | I::StrokeColorCmyk(_) => {
+            Op::State(Key::StrokeColor, Sets::Space)
+        }
+        I::NonStrokeColorDeviceGray(_) | I::NonStrokeColorDeviceRgb(_) | I::NonStrokeColorCmyk(_) => {
+            Op::State(Key::FillColor, Sets::Space)
+        }
+        I::StrokeColor(_) | I::StrokeColorNamed(_) => Op::State(Key::StrokeColor, Sets::Colour),
+        I::NonStrokeColor(_) | I::NonStrokeColorNamed(_) => Op::State(Key::FillColor, Sets::Colour),
+        I::CharacterSpacing(_) => Op::State(Key::Text(0), Sets::Other),
+        I::WordSpacing(_) => Op::State(Key::Text(1), Sets::Other),
+        I::HorizontalScaling(_) => Op::State(Key::Text(2), Sets::Other),
+        I::TextLeading(_) => Op::State(Key::Text(3), Sets::Other),
+        I::TextFont(_) => Op::State(Key::Text(4), Sets::Other),
+        I::TextRenderingMode(_) => Op::State(Key::Text(5), Sets::Other),
+        I::TextRise(_) => Op::State(Key::Text(6), Sets::Other),
+        I::XObject(_) | I::Shading(_) => Op::Draw,
+        I::NextLine(_)
+        | I::NextLineAndSetLeading(_)
+        | I::SetTextMatrix(_)
+        | I::NextLineUsingLeading(_)
+        | I::ShowText(_)
+        | I::NextLineAndShowText(_)
+        | I::ShowTextWithParameters(_)
+        | I::ShowTexts(_) => Op::TextObject,
+        _ => Op::Other,
     }
 }
 
@@ -923,7 +1056,15 @@ pub fn interpret<'a>(
 
     context.save_state();
 
-    interpret_window(&mut ops, resources, context, device);
+    interpret_window(
+        &mut ops,
+        resources,
+        context,
+        device,
+        &mut crate::content_index::Indexing::Off,
+        0,
+        &[],
+    );
 
     while context.num_states() > num_states {
         context.restore_state(device);
@@ -946,21 +1087,56 @@ fn interpret_content<'a>(
     resources: &Resources<'a>,
     context: &mut Context<'a>,
     device: &mut impl Device<'a>,
+    indexing: &mut crate::content_index::Indexing,
 ) {
     let num_states = context.num_states();
 
     context.save_state();
+    indexing.set_level(context.num_states());
 
     let mut window = Vec::with_capacity(CONTENT_WINDOW);
     let mut exhausted = false;
     let mut cut = false;
+    // ASDReader patch: the offset of `window[0]` in the decoded content.
+    let mut base = 0_u64;
     loop {
-        let (committed, needs_more) = {
+        let (committed, needs_more, skip) = {
             let mut ops = TypedIter::new_window(&window, exhausted);
-            interpret_window(&mut ops, resources, context, device);
-            (ops.committed(), ops.needs_more())
+            let skip = interpret_window(&mut ops, resources, context, device, indexing, base, &window);
+            (ops.committed(), ops.needs_more(), skip)
         };
+        // ASDReader patch: a group of the content index that can't reach the area being
+        // rendered: its bytes are passed over unread.
+        if let Some((end, replay)) = skip {
+            // What the group set that outlasts it, so that what follows is drawn as before.
+            if !replay.is_empty() {
+                let mut replayed = TypedIter::new(&replay);
+                interpret_window(&mut replayed, resources, context, device, &mut crate::content_index::Indexing::Off, 0, &[]);
+            }
+            let ahead = usize::try_from(end.saturating_sub(base)).unwrap_or(usize::MAX);
+            if ahead <= window.len() {
+                window.drain(..ahead);
+            } else {
+                let rest = ahead - window.len();
+                window.clear();
+                if content.skip(rest) < rest {
+                    exhausted = true;
+                }
+            }
+            base = end;
+            if !exhausted && window.len() < CONTENT_WINDOW {
+                let want = CONTENT_WINDOW - window.len();
+                if content.read_into(&mut window, want) < want {
+                    exhausted = true;
+                }
+            }
+            if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+                break;
+            }
+            continue;
+        }
         window.drain(..committed);
+        base += committed as u64;
 
         let cancelled = context
             .settings

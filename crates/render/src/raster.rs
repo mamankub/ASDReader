@@ -25,7 +25,7 @@ use work_queue::{ResultReceiver, WorkQueue};
 
 use hayro::hayro_interpret::font::{FontData, FontQuery};
 use hayro::hayro_interpret::hayro_cmap::CidFamily;
-use hayro::hayro_interpret::{InterpreterSettings, InterpreterWarning};
+use hayro::hayro_interpret::{ContentIndex, ContentIndexMode, InterpreterSettings, InterpreterWarning};
 use hayro::hayro_syntax::Pdf;
 use hayro::vello_cpu::color::AlphaColor;
 use hayro::vello_cpu::color::palette::css::{TRANSPARENT, WHITE};
@@ -302,12 +302,113 @@ pub fn device_pixels(pt: f32, scale: f32) -> u32 {
 /// and reported as `Err((message, panicked))`.
 type Output = (u32, u32, Pixels, Option<Arc<crate::text::PageText>>);
 
+/// The content index of each page (see `hayro_interpret::ContentIndex`): a tile, or the page at
+/// another scale, passes over the content that cannot reach it. A page that took long to draw
+/// (`HEAVY_MILLIS`) gets its index from a thread of its own that interprets the page without
+/// drawing it, so the render that showed it first paid nothing for it; until the index is ready,
+/// renders read all of the content as before. The indexes belong to one document and one
+/// `RenderConfig`, as a pool does.
+#[derive(Default)]
+pub(crate) struct ContentIndexes {
+    slots: Mutex<std::collections::HashMap<usize, IndexSlot>>,
+    /// Pages whose index is being made.
+    building: Arc<Mutex<std::collections::HashSet<usize>>>,
+    /// Set when the pool goes: index threads stop at their next content operator.
+    pub(crate) closing: Arc<AtomicBool>,
+    /// A render at least this long makes its page worth an index; `HEAVY_MILLIS` until set.
+    heavy_millis: std::sync::atomic::AtomicU32,
+}
+
+/// The decoded images of a pool's document, shared by its workers: an image is decoded once for
+/// all of them, and one up to `POOL_IMAGE_BUDGET` bytes is kept for later renders. A tile of a
+/// page drawn over a scanned plan decoded the whole scan again; with its own cache per worker and
+/// 64 MiB each, a large scan (an 8000 × 5600 underlay is 134 MB) was never kept at all.
+struct PoolImages(hayro::hayro_interpret::SharedImageCache);
+
+/// The pixel bytes a pool keeps decoded.
+const POOL_IMAGE_BUDGET: usize = 512 << 20;
+
+impl Default for PoolImages {
+    fn default() -> Self {
+        Self(hayro::hayro_interpret::SharedImageCache::new(POOL_IMAGE_BUDGET))
+    }
+}
+
+impl std::ops::Deref for PoolImages {
+    type Target = hayro::hayro_interpret::SharedImageCache;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Where a page's index goes once it is made.
+type IndexSlot = Arc<Mutex<Option<Arc<ContentIndex>>>>;
+
+/// A render at least this long makes its page worth an index.
+const HEAVY_MILLIS: u32 = 250;
+/// The most index threads a pool runs at once.
+const MAX_INDEXING: usize = 2;
+
+impl ContentIndexes {
+    /// What a render of `req` does with its page's index.
+    fn mode(&self, req: &RenderRequest) -> ContentIndexMode {
+        if req.kind != RequestKind::Pixels {
+            return ContentIndexMode::Off;
+        }
+        let slot = lock(&self.slots).get(&req.page).cloned();
+        match slot.and_then(|slot| lock(&slot).clone()) {
+            Some(index) => ContentIndexMode::Use(index),
+            None => ContentIndexMode::Off,
+        }
+    }
+
+    /// After a render of `req` that took `millis`: start making the page's index if the page is
+    /// heavy and has none yet.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn consider(&self, pdf: &Arc<Pdf>, req: &RenderRequest, millis: u32, config: &RenderConfig) {
+        let heavy = match self.heavy_millis.load(Ordering::Relaxed) {
+            0 => HEAVY_MILLIS,
+            set => set.saturating_sub(1),
+        };
+        if req.kind != RequestKind::Pixels || millis < heavy || self.closing.load(Ordering::Acquire) {
+            return;
+        }
+        let slot = lock(&self.slots).entry(req.page).or_default().clone();
+        if lock(&slot).is_some() {
+            return;
+        }
+        {
+            let mut building = lock(&self.building);
+            if building.len() >= MAX_INDEXING || !building.insert(req.page) {
+                return;
+            }
+        }
+        let (pdf, page) = (pdf.clone(), req.page);
+        let settings =
+            InterpreterSettings { cancelled: Some(self.closing.clone()), content_index: ContentIndexMode::Record(slot), ..config.settings() };
+        let building = self.building.clone();
+        let spawned = std::thread::Builder::new().name("asdreader-index".into()).spawn(move || {
+            let _ = catch_unwind(AssertUnwindSafe(|| {
+                let pages = pdf.pages();
+                if let Some(p) = pages.get(page) {
+                    hayro::interpret_only(p, &settings);
+                }
+            }));
+            lock(&building).remove(&page);
+        });
+        if spawned.is_err() {
+            lock(&self.building).remove(&page);
+        }
+    }
+}
+
 fn render_page<'a>(
     pdf: &'a Pdf,
     cache: &RenderCache<'a>,
     settings: &InterpreterSettings,
     config: &RenderConfig,
     req: RenderRequest,
+    indexes: &ContentIndexes,
 ) -> Result<Output, (String, bool)> {
     let reading = request_reading(config, &req);
     if req.kind == RequestKind::Text {
@@ -381,6 +482,7 @@ fn render_page<'a>(
         // Previews render at low detail (tiny images are skipped); finals always draw all.
         let mut preview_settings = settings.clone();
         preview_settings.preview = req.preview;
+        preview_settings.content_index = indexes.mode(&req);
         render_into(page, cache, &preview_settings, &rs, pixels.bytes_mut());
         Ok((w.into(), h.into(), pixels, None))
     }));
@@ -441,13 +543,14 @@ pub struct PageRenderer {
     pdf: Option<Pdf>,
     settings: InterpreterSettings,
     stats: RenderStats,
+    indexes: ContentIndexes,
 }
 
 impl PageRenderer {
     pub fn new(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
         let pdf = parse(&bytes, config.password.as_deref());
         let settings = config.settings();
-        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() }, indexes: ContentIndexes::default() }
     }
 
     pub fn page_count(&self) -> usize {
@@ -489,7 +592,7 @@ impl PageRenderer {
         let cache = RenderCache::new();
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let settings = warning_settings(&self.settings, warnings.clone());
-        let r = render_page(pdf, &cache, &settings, &self.config, req);
+        let r = render_page(pdf, &cache, &settings, &self.config, req, &self.indexes);
         let warnings = take_warnings(&warnings);
         if matches!(r, Err((_, true))) {
             self.pdf = parse(&self.bytes, self.config.password.as_deref());
@@ -560,6 +663,10 @@ struct ParseGate {
 /// State shared by the pool and its workers.
 #[derive(Default)]
 struct Shared {
+    /// The pages' content indexes, shared by the workers.
+    indexes: ContentIndexes,
+    /// The document's decoded images, shared by the workers (see `PoolImages`).
+    images: PoolImages,
     /// Desired requests, active jobs and bounded completed results share one deduplication key.
     queue: Arc<WorkQueue>,
     /// Per worker id: the request it is rendering and since when.
@@ -825,6 +932,23 @@ impl RenderPool {
         self.inline.is_some()
     }
 
+    /// Whether `page` has its content index yet (see `ContentIndexes`): from then on, tiles and
+    /// renders at other scales pass over the content that can't reach them.
+    pub fn has_content_index(&self, page: usize) -> bool {
+        lock(&self.shared.indexes.slots).get(&page).is_some_and(|slot| lock(slot).is_some())
+    }
+
+    /// Index pages whose render took at least `millis` (tests and benchmarks; 0 indexes every page).
+    pub fn set_content_index_threshold(&self, millis: u32) {
+        self.shared.indexes.heavy_millis.store(millis.saturating_add(1), Ordering::Relaxed);
+    }
+
+    /// How many images the pool's workers have decoded so far (their shared cache's misses), for
+    /// diagnostics and tests.
+    pub fn decoded_images(&self) -> usize {
+        self.shared.images.decodes()
+    }
+
     /// Snapshot the work counters collected by this pool.
     pub fn stats(&self) -> RenderStats {
         self.inline.as_ref().map_or_else(|| self.shared.stats.snapshot(), |renderer| renderer.borrow().stats())
@@ -1010,6 +1134,7 @@ impl Drop for RenderPool {
         for s in lock(&self.shared.stop).iter() {
             s.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        self.shared.indexes.closing.store(true, Ordering::Release);
     }
 }
 
@@ -1126,7 +1251,7 @@ fn worker(
                         }) {
                             Some(pdf) => {
                                 let shared_generation = pdf.is_some();
-                                (pdf, RenderCache::new(), shared_generation)
+                                (pdf, RenderCache::with_images(&shared.images), shared_generation)
                             }
                             None => {
                                 let pdf = if !request_cancelled.load(Ordering::Acquire)
@@ -1137,7 +1262,7 @@ fn worker(
                                 } else {
                                     None
                                 };
-                                (pdf, RenderCache::new(), false)
+                                (pdf, RenderCache::with_images(&shared.images), false)
                             }
                         }
                     };
@@ -1220,7 +1345,7 @@ fn worker(
                         panic!("injected page panic");
                     }
                     match pdf {
-                        Some(pdf) => render_page(pdf, cache, &settings, &config, req),
+                        Some(pdf) => render_page(pdf, cache, &settings, &config, req, &shared.indexes),
                         None => Err(("the document could not be parsed".into(), false)),
                     }
                 }))
@@ -1248,6 +1373,11 @@ fn worker(
                 }
                 if *shared_generation && !shared.parser.valid.load(Ordering::Acquire) {
                     break Some((finish(req, start, r, request_warnings), valid));
+                }
+                if r.is_ok()
+                    && let Some(pdf) = pdf
+                {
+                    shared.indexes.consider(pdf, &req, start.millis(), &config);
                 }
                 if out.send_valid_with_tokens(finish(req, start, r, request_warnings), valid).is_err() {
                     return;
@@ -4986,6 +5116,209 @@ trailer << /Root 1 0 R >>
         }
     }
 
+    /// A page that uses everything the content index has to get right: a stray `Q` first, colours,
+    /// line widths, dashes, `gs` and `cm` set between the blocks they apply to, a colour space
+    /// chosen once and colours set in it later, a hidden and a visible layer, fonts set outside
+    /// the text objects that use them, text that clips, clips inside and outside `q … Q`, forms,
+    /// images (inline too), a shading, and entities with and without a `q … Q` of their own.
+    fn index_torture_pdf() -> Vec<u8> {
+        let mut rng = 0x2545_F491_4F6C_DD1D_u64;
+        let mut next = move |n: u64| {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng % n
+        };
+        let mut c = String::from("Q\n/CS1 CS /CS1 cs\n");
+        for i in 0..900_u64 {
+            let (x, y) = (next(560) + 10, next(360) + 10);
+            if i % 7 == 0 {
+                c.push_str(&format!("{} {} {} RG\n", next(10) as f32 / 10.0, next(10) as f32 / 10.0, next(10) as f32 / 10.0));
+            }
+            if i % 9 == 0 {
+                c.push_str(&format!("{} {} {} sc\n", next(10) as f32 / 10.0, next(10) as f32 / 10.0, next(10) as f32 / 10.0));
+            }
+            if i % 11 == 0 {
+                c.push_str(if i % 22 == 0 { "/G1 gs\n" } else { "/G2 gs\n" });
+            }
+            if i % 13 == 0 {
+                c.push_str(if i % 26 == 0 { "[4 2] 1 d\n" } else { "[] 0 d\n" });
+            }
+            if i % 17 == 0 {
+                c.push_str(&format!("{} w {} J {} j\n", next(30) as f32 / 10.0, next(3), next(3)));
+            }
+            if i % 31 == 0 {
+                c.push_str(&format!("/F1 {} Tf {} Tc\n", 6 + next(10), next(3)));
+            }
+            if i == 450 {
+                c.push_str("1 0 0 1 3 -2 cm\n");
+            }
+            match next(16) {
+                0 => c.push_str(&format!("q {x} {y} m {} {} l {} {} l S Q\n", x + next(30), y + next(30), x + next(40), y)),
+                1 => c.push_str(&format!("{x} {y} m {} {} l S\n", x + next(50), y + next(20))),
+                2 => c.push_str(&format!("{x} {y} {} {} re f\n", next(20) + 1, next(20) + 1)),
+                3 => c.push_str(&format!("/OC /oc1 BDC q 1 0 0 RG 4 w {x} {y} m {} {} l S Q EMC\n", x + 40, y + 30)),
+                4 => c.push_str(&format!("/OC /oc0 BDC {x} {y} m {} {} l S 0.1 0.6 0.2 RG EMC\n", x + 25, y + 10)),
+                5 => c.push_str(&format!("BT {x} {y} Td (Ab{i}) Tj ET\n")),
+                6 => c.push_str(&format!("BT /F1 9 Tf {x} {y} Td 2 Tr (Hi) Tj 0 Tr ET\n")),
+                7 => c.push_str(&format!("q BT 7 Tr /F1 30 Tf {x} {y} Td (W) Tj ET 0 0 1 rg {x} {y} 30 30 re f Q\n")),
+                8 => c.push_str(&format!("q {x} {y} 30 20 re W n 1 0 0 rg {} {} 60 60 re f Q\n", x - 10, y - 10)),
+                9 => c.push_str(&format!("q 1 0 0 1 {x} {y} cm /Fm1 Do Q\n")),
+                10 => c.push_str(&format!("q 12 0 0 12 {x} {y} cm /Im1 Do Q\n")),
+                11 => c.push_str(&format!("q 6 0 0 6 {x} {y} cm BI /W 2 /H 2 /CS /G /BPC 8 /F /AHx ID 00FFFF00> EI Q\n")),
+                12 => c.push_str(&format!("q {x} {y} 40 25 re W n 1 0 0 1 {x} {y} cm /Sh1 sh Q\n")),
+                13 => c.push_str(&format!("/OC /oc1 BDC BT {x} {y} Td (Hidden) Tj ET EMC\n")),
+                14 => c.push_str(&format!(
+                    "q 2 0 0 2 0 0 cm {} {} m {} {} {} {} {} {} c S Q\n",
+                    x / 2,
+                    y / 2,
+                    x / 2 + 10,
+                    y / 2 + 20,
+                    x / 2 + 20,
+                    y / 2 - 5,
+                    x / 2 + 30,
+                    y / 2
+                )),
+                _ => c.push_str(&format!("{x} {y} m {} {} l h B\n", x + 15, y + 15)),
+            }
+        }
+        // A clip at the page's own level, near the end: everything after it is cut to it.
+        c.push_str("100 50 400 300 re W n 0 0 0 RG 1 w 0 0 m 600 400 l S\n");
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /OFF [7 0 R] >> >> >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 400] /Contents 4 0 R /Resources << \
+             /ExtGState << /G1 << /LW 2.5 /CA 0.6 >> /G2 << /LW 0.2 /CA 1 /D [[1 1] 0] >> >> \
+             /Font << /F1 5 0 R >> /ColorSpace << /CS1 /DeviceRGB >> \
+             /XObject << /Fm1 8 0 R /Im1 9 0 R >> /Properties << /oc0 6 0 R /oc1 7 0 R >> \
+             /Shading << /Sh1 << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 40 0] \
+             /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> >> >> >>"
+                .to_string(),
+            format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len()),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+            "<< /Type /OCG /Name (On) >>".to_string(),
+            "<< /Type /OCG /Name (Off) >>".to_string(),
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 23 >>\nstream\n0 0 1 rg 0 0 20 20 re f\nendstream".to_string(),
+            "<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 \
+             /Filter /ASCIIHexDecode /Length 26 >>\nstream\nFF000000FF000000FFFFFFFF>\nendstream"
+                .to_string(),
+        ];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+            pdf.extend_from_slice(o.as_bytes());
+            pdf.extend_from_slice(b"\nendobj\n");
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    /// Tiles, and the page at other scales, drawn with the page's content index (passing over
+    /// what can't reach them) have exactly the pixels drawn without it.
+    #[test]
+    fn renders_with_the_content_index_are_the_renders_without_it() {
+        let bytes = Arc::new(index_torture_pdf());
+        let mut reference = PageRenderer::new(bytes.clone(), RenderConfig::default());
+        let pool = RenderPool::new(bytes, 2, RenderConfig::default());
+        pool.set_content_index_threshold(0);
+        pool.set_queue(vec![RenderRequest { page: 0, scale: 1.0, ..Default::default() }]);
+        let first = receive_before_deadline(&pool);
+        assert!(first.error.is_none(), "{:?}", first.error);
+        let since = std::time::Instant::now();
+        while !pool.has_content_index(0) {
+            assert!(since.elapsed() < std::time::Duration::from_secs(20), "the page gets its index");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let mut requests = Vec::new();
+        for (scale, side) in [(0.5_f32, 97_u32), (1.0, 128), (1.7, 160), (2.5, 256), (4.0, 300)] {
+            let (w, h) = (device_pixels(600.0, scale), device_pixels(400.0, scale));
+            let mut y = 0;
+            while y < h {
+                let mut x = 0;
+                while x < w {
+                    requests.push(RenderRequest {
+                        page: 0,
+                        scale,
+                        tile: Some(Tile { x, y, w: side.min(w - x), h: side.min(h - y) }),
+                        tag: u64::from(scale.to_bits()) << 20 | u64::from(x) << 10 | u64::from(y),
+                        ..Default::default()
+                    });
+                    x += side;
+                }
+                y += side;
+            }
+        }
+        requests.push(RenderRequest { page: 0, scale: 1.3, tag: 1, ..Default::default() });
+        requests.push(RenderRequest { page: 0, scale: 0.2, tag: 2, preview: true, ..Default::default() });
+        for chunk in requests.chunks(24) {
+            pool.set_queue(chunk.to_vec());
+            let mut got: Vec<RenderedPage> = (0..chunk.len()).map(|_| receive_before_deadline(&pool)).collect();
+            got.sort_by_key(|p| p.request.tag);
+            for page in got {
+                assert!(page.error.is_none(), "{:?}", page.error);
+                let expected = reference.render(page.request);
+                assert!(
+                    (page.width, page.height) == (expected.width, expected.height) && page.rgba == expected.rgba,
+                    "{:?} differs with the index",
+                    page.request
+                );
+            }
+        }
+    }
+
+    /// The workers of a pool share decoded images: tiles drawn at once on four workers decode the
+    /// page's image once, and later renders not at all. An image that is its own soft mask is
+    /// drawn without waiting for itself.
+    #[test]
+    fn a_pools_workers_decode_an_image_once() {
+        use std::io::Write as _;
+        let (w, h) = (900_usize, 700_usize);
+        let pixels: Vec<u8> = (0..w * h * 3).map(|i| (i * 7 % 251) as u8).collect();
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+        z.write_all(&pixels).expect("compresses");
+        let data = z.finish().expect("compresses");
+        let content = b"q 400 0 0 300 0 0 cm /Im1 Do Q q 50 0 0 50 300 200 cm /Im2 Do Q";
+        let mut pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R /Im2 6 0 R >> >> >> endobj\n".to_vec();
+        pdf.extend_from_slice(format!("4 0 obj << /Length {} >> stream\n", content.len()).as_bytes());
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(b"\nendstream endobj\n");
+        pdf.extend_from_slice(
+            format!("5 0 obj << /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >> stream\n", data.len())
+                .as_bytes(),
+        );
+        pdf.extend_from_slice(&data);
+        pdf.extend_from_slice(b"\nendstream endobj\n6 0 obj << /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8 /SMask 6 0 R /Length 4 >> stream\n\x00\x80\xc0\xff\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+        let pool = RenderPool::new(Arc::new(pdf), 4, RenderConfig::default());
+        let tiles: Vec<RenderRequest> = (0..8)
+            .map(|i| RenderRequest {
+                page: 0,
+                scale: 3.0,
+                tile: Some(Tile { x: (i % 4) * 300, y: (i / 4) * 450, w: 300, h: 450 }),
+                tag: i.into(),
+                ..Default::default()
+            })
+            .collect();
+        pool.set_queue(tiles.clone());
+        for _ in 0..tiles.len() {
+            let page = receive_before_deadline(&pool);
+            assert!(page.error.is_none(), "{:?}", page.error);
+        }
+        let after_tiles = pool.decoded_images();
+        pool.set_queue(vec![RenderRequest { page: 0, scale: 1.5, tag: 99, ..Default::default() }]);
+        assert!(receive_before_deadline(&pool).error.is_none());
+        // The large image once; the small one (and its mask, decoded without the cache when it
+        // asks for itself) at most twice more.
+        assert!((1..=3).contains(&after_tiles), "{after_tiles} decodes for eight tiles");
+        assert_eq!(pool.decoded_images(), after_tiles, "a later render decodes nothing");
+    }
+
     /// A Flate content stream that turns bad partway is drawn as far as it decodes, as before the
     /// streaming decoder moved to flate2 (hayro-syntax patch: `flate::fast`).
     #[test]
@@ -7453,9 +7786,10 @@ endstream endobj
         let pdf = parse(&Arc::new(pdf), None).expect("parses");
         let cache = RenderCache::new();
         let settings = InterpreterSettings::default();
-        let preview = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true)).expect("preview renders");
-        let fin = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false)).expect("final renders");
-        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false)).expect("final renders");
+        let preview = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true), &ContentIndexes::default()).expect("preview renders");
+        let fin = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false), &ContentIndexes::default()).expect("final renders");
+        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false), &ContentIndexes::default())
+            .expect("final renders");
         assert_eq!(rgb_at(&preview.2, w, 35, 35), [0, 0, 255]);
         assert_eq!(&fin.2[..], &fresh.2[..], "a final render after a preview matches one with a fresh cache");
     }

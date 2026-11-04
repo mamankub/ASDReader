@@ -32,6 +32,7 @@ This crate has one optional feature:
 mod log;
 
 mod cache;
+mod content_index;
 mod context;
 mod convert;
 mod device;
@@ -52,7 +53,8 @@ pub mod pattern;
 pub mod shading;
 pub mod util;
 
-pub use cache::CacheKey;
+pub use cache::{CacheKey, SharedImageCache};
+pub use content_index::{ContentIndex, ContentIndexMode};
 pub use context::*;
 pub use device::*;
 pub use function::Function;

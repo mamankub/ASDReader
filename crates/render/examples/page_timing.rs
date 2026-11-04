@@ -17,6 +17,10 @@
 //! - `tiny`: one 16 px tile, which shows the fixed cost of a request.
 //! - `text`: the text layer of page 1.
 //! - `sweep`: whole pages and tiles at six scales, the broadest identity check.
+//!
+//! A scenario named `warm-NAME` renders page 1 whole at the `fit` scale first, untimed, as the
+//! canvas does when a document opens, and waits for the page's content index that a heavy page
+//! then gets (at most a minute): the timed requests of `NAME` use it.
 
 use std::error::Error;
 use std::sync::Arc;
@@ -60,9 +64,21 @@ fn main() -> Result<(), Box<dyn Error>> {
         let pages = pdf.pages();
         pages.first().ok_or("the document has no pages")?.render_dimensions()
     };
-    let requests = scenario_requests(scenario, width, height)?;
+    let (warm, name) = match scenario.strip_prefix("warm-") {
+        Some(name) => (true, name),
+        None => (false, scenario.as_str()),
+    };
+    let requests = scenario_requests(name, width, height)?;
 
     let pool = RenderPool::new(bytes, threads, RenderConfig::default());
+    if warm {
+        run(&pool, &scenario_requests("fit", width, height)?)?;
+        let since = Instant::now();
+        while !pool.has_content_index(0) && since.elapsed() < Duration::from_secs(60) {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        println!("index_ready={} after_ms={}", pool.has_content_index(0), since.elapsed().as_millis());
+    }
     for round in 0..rounds {
         let (mut results, first, wall) = run(&pool, &requests)?;
         results.sort_by_key(|r| (r.request.page, r.request.scale.to_bits(), r.request.tile.map(|t| (t.x, t.y, t.w, t.h))));

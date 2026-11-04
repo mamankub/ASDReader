@@ -461,7 +461,6 @@ impl<'a> ImageXObject<'a> {
         };
         cache.get_or_insert_with(
             self.decode_key(cache, true, target_dimension),
-            MAX_DECODED_IMAGE_BYTES,
             decoded_mask_size,
             || decode_mask(self, target_dimension),
         )
@@ -481,7 +480,6 @@ impl<'a> ImageXObject<'a> {
         };
         cache.get_or_insert_with(
             self.decode_key(cache, false, target_dimension),
-            MAX_DECODED_IMAGE_BYTES,
             decoded_raster_size,
             || decode_raster(self, target_dimension),
         )
@@ -552,10 +550,6 @@ impl<'a> ImageXObject<'a> {
         dict.contains_key(SMASK_IN_DATA) || dict.contains_key(SMASK) || dict.contains_key(MASK)
     }
 }
-
-/// ASDReader patch: budget for [`DecodedImageCache`] entries per interpreter cache: decoded
-/// image pixels shared across tiles and scales. Past it the cache starts a fresh epoch.
-const MAX_DECODED_IMAGE_BYTES: usize = 64 << 20;
 
 /// ASDReader patch: pixel bytes held by a decoded mask.
 fn decoded_mask_size(mask: &DecodedMask) -> usize {

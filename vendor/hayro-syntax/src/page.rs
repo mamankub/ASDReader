@@ -366,6 +366,23 @@ impl<'a> ContentReader<'a> {
         out.len() - start
     }
 
+    /// ASDReader patch: passes over the next `count` bytes of the decoded content, as
+    /// [`ContentReader::read_into`] would produce them, and returns how many there were. Fewer
+    /// than `count` only at the end of the content, or where it is cut short.
+    pub fn skip(&mut self, count: usize) -> usize {
+        let mut scratch = Vec::new();
+        let mut skipped = 0;
+        while skipped < count {
+            scratch.clear();
+            let got = self.read_into(&mut scratch, (count - skipped).min(1 << 20));
+            if got == 0 {
+                break;
+            }
+            skipped += got;
+        }
+        skipped
+    }
+
     /// The bytes of the content that were decoded whole when the reader was made. The caller
     /// charges these against its own budget, as it did for the whole content.
     pub fn materialized_len(&self) -> usize {
