@@ -5,7 +5,7 @@ macOS, Windows, Linux, FreeBSD and the web, signs the ones it has certificates f
 updates a **draft** GitHub Release named `ASDReader v<version>`. Nobody sees a draft until a
 maintainer publishes it.
 
-The pipeline was ported from ASDesign Photo's. User-facing names say **ASDReader**; files, binaries and
+User-facing names say **ASDReader**; files, binaries and
 ids stay lowercase (`asdreader-<version>-<platform>-<arch>.<ext>`, `io.github.mamankub.asdreader`).
 
 ## Cutting a release
@@ -170,7 +170,7 @@ xkbcommon) and the GPU (Vulkan, EGL) are loaded at runtime from the system; the 
 them as dependencies (see `nfpm.yaml`).
 
 Each AppImage embeds update information
-(`gh-releases-zsync|storytold|asdreader|latest|asdreader-*-linux-<arch>.AppImage.zsync`), and its
+(`gh-releases-zsync|mamankub|asdreader-help|latest|asdreader-*-linux-<arch>.AppImage.zsync`), and its
 `.zsync` is published beside it, so AppImageUpdate and AppImageLauncher can update it in place,
 downloading only the changed blocks. `latest` is the newest published, non-pre-release version.
 `package.sh` writes the `.zsync` when `zsyncmake` (the `zsync` package) is installed and warns

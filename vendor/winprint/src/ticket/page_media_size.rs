@@ -5,11 +5,7 @@ use super::{
 };
 use xml::name::OwnedName;
 
-define_feature_option_pack!(
-    OwnedName::qualified("PageMediaSize", NS_PSK, Some("psk")),
-    PageMediaSize,
-    PredefinedMediaName
-);
+define_feature_option_pack!(OwnedName::qualified("PageMediaSize", NS_PSK, Some("psk")), PageMediaSize, PredefinedMediaName);
 
 impl PageMediaSize {
     /// Get the size of the media.
@@ -34,10 +30,7 @@ impl PageMediaSize {
 mod tests {
     use crate::{
         test_utils::null_device,
-        ticket::{
-            FeatureOptionPack, FeatureOptionPackWithPredefined, PredefinedMediaName,
-            PrintCapabilities, PrintTicketBuilder,
-        },
+        ticket::{FeatureOptionPack, FeatureOptionPackWithPredefined, PredefinedMediaName, PrintCapabilities, PrintTicketBuilder},
     };
 
     #[test]
@@ -56,11 +49,7 @@ mod tests {
         let capabilities = PrintCapabilities::fetch(&device).unwrap();
         for media in capabilities.page_media_sizes() {
             let size = media.size();
-            assert!(
-                size.width_in_micron() | size.height_in_micron() > 0,
-                "Size is zero for {:#?}",
-                media
-            );
+            assert!(size.width_in_micron() | size.height_in_micron() > 0, "Size is zero for {:#?}", media);
         }
     }
 
@@ -70,11 +59,7 @@ mod tests {
         let capabilities = PrintCapabilities::fetch(&device).unwrap();
         for media in capabilities.page_media_sizes() {
             let display_name = media.display_name();
-            assert!(
-                display_name.is_some(),
-                "Display name is not found for {:#?}",
-                media
-            );
+            assert!(display_name.is_some(), "Display name is not found for {:#?}", media);
         }
     }
 
@@ -82,9 +67,6 @@ mod tests {
     fn a4_should_be_found() {
         let device = null_device::thread_local();
         let capabilities = PrintCapabilities::fetch(&device).unwrap();
-        capabilities
-            .page_media_sizes()
-            .find(|x| x.as_predefined_name() == Some(PredefinedMediaName::ISOA4))
-            .unwrap();
+        capabilities.page_media_sizes().find(|x| x.as_predefined_name() == Some(PredefinedMediaName::ISOA4)).unwrap();
     }
 }

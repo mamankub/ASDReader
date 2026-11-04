@@ -92,33 +92,20 @@ pub struct DxgiPrintContext {
 
 impl DxgiPrintContext {
     /// Create a new print context, used for printing via DXGI.
-    pub fn new(
-        device: &PrinterDevice,
-        options: &PrintTicket,
-        job_name: &OsStr,
-    ) -> Result<Self, DxgiPrintContextError> {
+    pub fn new(device: &PrinterDevice, options: &PrintTicket, job_name: &OsStr) -> Result<Self, DxgiPrintContextError> {
         // Initialize COM before calling any COM functions.
         let _com_initializer = ComInitializer::new();
         unsafe {
-            let dev_mode = options
-                .to_dev_mode(device)
-                .map_err(DxgiPrintContextError::PrintTicketError)?;
+            let dev_mode = options.to_dev_mode(device).map_err(DxgiPrintContextError::PrintTicketError)?;
             let raster_dpi = {
                 let dev_mode = &*(dev_mode.as_ptr() as *const DEVMODEW);
-                let dpi_x = if (dev_mode.dmFields & windows::Win32::Graphics::Gdi::DM_PRINTQUALITY)
-                    .0
-                    != 0
-                {
+                let dpi_x = if (dev_mode.dmFields & windows::Win32::Graphics::Gdi::DM_PRINTQUALITY).0 != 0 {
                     Some(dev_mode.Anonymous1.Anonymous1.dmPrintQuality)
                 } else {
                     None
                 };
                 let dpi_y =
-                    if (dev_mode.dmFields & windows::Win32::Graphics::Gdi::DM_YRESOLUTION).0 != 0 {
-                        Some(dev_mode.dmYResolution)
-                    } else {
-                        None
-                    };
+                    if (dev_mode.dmFields & windows::Win32::Graphics::Gdi::DM_YRESOLUTION).0 != 0 { Some(dev_mode.dmYResolution) } else { None };
                 match (dpi_x, dpi_y) {
                     (Some(x), Some(y)) => max(x, y),
                     (Some(x), None) => x,
@@ -140,39 +127,23 @@ impl DxgiPrintContext {
                 Some(ptr::addr_of_mut!(d3d_context)),
             )
             .map_err(DxgiPrintContextError::InitializeDirectX)?;
-            let d3d_device = d3d_device.ok_or(DxgiPrintContextError::InitializeDirectX(
-                windows::core::Error::from_hresult(E_UNEXPECTED),
-            ))?;
-            let d3d_context = d3d_context.ok_or(DxgiPrintContextError::InitializeDirectX(
-                windows::core::Error::from_hresult(E_UNEXPECTED),
-            ))?;
-            let dxgi_device = d3d_device
-                .cast::<IDXGIDevice>()
-                .map_err(DxgiPrintContextError::InitializeDirectX)?;
+            let d3d_device = d3d_device.ok_or(DxgiPrintContextError::InitializeDirectX(windows::core::Error::from_hresult(E_UNEXPECTED)))?;
+            let d3d_context = d3d_context.ok_or(DxgiPrintContextError::InitializeDirectX(windows::core::Error::from_hresult(E_UNEXPECTED)))?;
+            let dxgi_device = d3d_device.cast::<IDXGIDevice>().map_err(DxgiPrintContextError::InitializeDirectX)?;
 
             let d2d_factory_options = D2D1_FACTORY_OPTIONS::default();
-            let d2d_factory: ID2D1Factory1 = D2D1CreateFactory(
-                D2D1_FACTORY_TYPE_SINGLE_THREADED,
-                Some(&d2d_factory_options),
-            )
-            .map_err(DxgiPrintContextError::InitializeDirectX)?;
+            let d2d_factory: ID2D1Factory1 =
+                D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, Some(&d2d_factory_options)).map_err(DxgiPrintContextError::InitializeDirectX)?;
 
-            let d2d_device = d2d_factory
-                .CreateDevice(&dxgi_device)
-                .map_err(DxgiPrintContextError::InitializeDirectX)?;
-            let d2d_context = d2d_device
-                .CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE)
-                .map_err(DxgiPrintContextError::InitializeDirectX)?;
+            let d2d_device = d2d_factory.CreateDevice(&dxgi_device).map_err(DxgiPrintContextError::InitializeDirectX)?;
+            let d2d_context = d2d_device.CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE).map_err(DxgiPrintContextError::InitializeDirectX)?;
 
             let wic_factory: IWICImagingFactory2 =
-                CoCreateInstance(&CLSID_WICImagingFactory2, None, CLSCTX_ALL)
-                    .map_err(DxgiPrintContextError::InitializeDirectX)?;
+                CoCreateInstance(&CLSID_WICImagingFactory2, None, CLSCTX_ALL).map_err(DxgiPrintContextError::InitializeDirectX)?;
 
             let document_target_factory: IPrintDocumentPackageTargetFactory =
-                CoCreateInstance(&PrintDocumentPackageTargetFactory, None, CLSCTX_ALL)
-                    .map_err(DxgiPrintContextError::FailedToStartJob)?;
-            let print_ticket_stream = SHCreateMemStream(Some(options.get_xml()))
-                .ok_or(DxgiPrintContextError::StreamNotAllocated)?;
+                CoCreateInstance(&PrintDocumentPackageTargetFactory, None, CLSCTX_ALL).map_err(DxgiPrintContextError::FailedToStartJob)?;
+            let print_ticket_stream = SHCreateMemStream(Some(options.get_xml())).ok_or(DxgiPrintContextError::StreamNotAllocated)?;
             let document_target = document_target_factory
                 .CreateDocumentPackageTargetForPrintJob(
                     PCWSTR(wchar::to_wide_chars(device.os_name()).as_ptr()),
@@ -181,31 +152,18 @@ impl DxgiPrintContext {
                     &print_ticket_stream,
                 )
                 .map_err(DxgiPrintContextError::FailedToStartJob)?;
-            let print_control_options = D2D1_PRINT_CONTROL_PROPERTIES {
-                rasterDPI: raster_dpi as f32,
-                ..Default::default()
-            };
+            let print_control_options = D2D1_PRINT_CONTROL_PROPERTIES { rasterDPI: raster_dpi as f32, ..Default::default() };
             let print_control = d2d_device
-                .CreatePrintControl(
-                    &wic_factory,
-                    &document_target,
-                    Some(ptr::addr_of!(print_control_options)),
-                )
+                .CreatePrintControl(&wic_factory, &document_target, Some(ptr::addr_of!(print_control_options)))
                 .map_err(DxgiPrintContextError::FailedToStartJob)?;
 
-            let completion_source =
-                PrintCompletionSource::new().map_err(DxgiPrintContextError::FailedToCreateEvent)?;
+            let completion_source = PrintCompletionSource::new().map_err(DxgiPrintContextError::FailedToCreateEvent)?;
             let completion_waiter = completion_source.waiter();
             let completion_source: IPrintDocumentPackageStatusEvent = completion_source.into();
-            let cpc: IConnectionPointContainer = document_target
-                .cast()
-                .map_err(DxgiPrintContextError::FailedToCreateEvent)?;
-            let status_connection = cpc
-                .FindConnectionPoint(&IPrintDocumentPackageStatusEvent::IID)
-                .map_err(DxgiPrintContextError::FailedToCreateEvent)?;
-            let status_cookie = status_connection
-                .Advise(&completion_source)
-                .map_err(DxgiPrintContextError::FailedToCreateEvent)?;
+            let cpc: IConnectionPointContainer = document_target.cast().map_err(DxgiPrintContextError::FailedToCreateEvent)?;
+            let status_connection =
+                cpc.FindConnectionPoint(&IPrintDocumentPackageStatusEvent::IID).map_err(DxgiPrintContextError::FailedToCreateEvent)?;
+            let status_cookie = status_connection.Advise(&completion_source).map_err(DxgiPrintContextError::FailedToCreateEvent)?;
 
             Ok(Self {
                 d3d_device,
@@ -230,14 +188,9 @@ impl DxgiPrintContext {
     /// Close the print context and wait for the completion of the print job.
     pub fn close_and_wait(mut self) -> Result<(), DxgiPrintContextError> {
         unsafe {
-            self.print_control
-                .Close()
-                .map(|_| ())
-                .map_err(DxgiPrintContextError::FailedToClosePrintControl)?;
+            self.print_control.Close().map(|_| ()).map_err(DxgiPrintContextError::FailedToClosePrintControl)?;
         }
-        self.completion_waiter
-            .wait()
-            .map_err(DxgiPrintContextError::CompletionFailed)?;
+        self.completion_waiter.wait().map_err(DxgiPrintContextError::CompletionFailed)?;
         self.completed = true;
         Ok(())
     }

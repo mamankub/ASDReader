@@ -22,16 +22,16 @@ fn support_button_in_the_top_bar_opens_asdreader_issues() {
     h.get_by_label("Support").click();
     h.run_steps(2);
     assert_eq!(h.state().last_opened_url.as_deref(), Some(links::DISCORD));
-    assert_eq!(links::DISCORD, "https://github.com/mamankub/ASDReader/issues");
+    assert_eq!(links::DISCORD, "https://mamankub.github.io/asdreader-help/support/");
 }
 
 #[test]
 fn home_screen_links() {
     for (label, url) in [
         ("ASDReader support", links::DISCORD),
-        ("ASDReader documentation", "https://github.com/mamankub/ASDReader#readme"),
-        ("ASDReader on GitHub", "https://github.com/mamankub/ASDReader"),
-        ("ASDReader releases", "https://github.com/mamankub/ASDReader/releases"),
+        ("ASDReader documentation", "https://mamankub.github.io/asdreader-help/manual/"),
+        ("ASDReader on GitHub", "https://github.com/mamankub/asdreader-help"),
+        ("ASDReader releases", "https://mamankub.github.io/asdreader-help/download/"),
     ] {
         let mut h = harness(|_| {});
         assert!(h.query_all_by_label("ASDReader support").count() >= 1);

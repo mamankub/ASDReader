@@ -4,8 +4,7 @@
 embedded SVG catalogs; `buttons` paints accessible icon buttons; `tabs` handles tab fitting and
 interaction; `layout` provides toolbar fitting, split geometry and resize handles; `theme` shares widget-state styling.
 `docking` supplies transactional panel moves and an optional docking surface.
-The current delivery covers nine creative apps (ASDesign Design, ASDesign Vector, ASDesign Photo, ASDesign Film, ASDesign Effect, ASDesign CAD, ASDReader, ASDesign Light and ASDesign Sound); prior basic and office adapters are separate. The [suite audit](../../docs/ui-components-audit.md#adoption-and-acceptance)
-records their scope and acceptance limits. Assets, complete themes, localization and command handling
+ASDReader uses these controls. Assets, complete themes, localization and command handling
 remain in each application. No icons, fonts or application engines are bundled.
 
 ## SVG catalogs
@@ -37,7 +36,7 @@ It sets tint and size on the returned image.
 The library does not install loaders or an egui theme.
 
 The catalog is immutable. SVGs are prepared once and held in `Arc<[u8]>`; lookups share those bytes.
-The fallback uses the requested name in its URI, matching ASDesign Photo and ASDesign Vector. Missing both
+The fallback uses the requested name in its URI. Missing both
 the requested name and fallback produces empty bytes for the loader to report as an error, without
 indexed lookups or a panic. `contains` and `canonical_name` inspect only actual catalog entries. ASDReader resolves an unknown
 name to `square` before calling `source`, preserving its fallback cache key.
@@ -191,7 +190,7 @@ into silently missing commands. See the API documentation for the accepted numer
 ## Theme mechanisms
 
 `theme::WidgetPalette` applies background colors to egui's five widget states, with a supplied
-corner radius and foreground stroke. ASDesign Vector, ASDesign Design and ASDesign Light construct it from their existing
+corner radius and foreground stroke. An app constructs it from its existing
 local tokens. It updates each state's strong/weak background fill, radius and foreground; borders,
 expansion and all other visual settings are retained.
 
@@ -214,8 +213,7 @@ common operation and the differences preserved by the adapters.
 ## Compatibility and checks
 
 The crate uses egui 0.36 and Rust 1.95 or later. Its production dependency disables egui's default
-features so fonts and rendering features remain the application's choice. See the
-[suite audit](../../docs/ui-components-audit.md) for candidates, policies and adoption order.
+features so fonts and rendering features remain the application's choice.
 
 Validation:
 

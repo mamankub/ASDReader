@@ -190,8 +190,8 @@ if has appimage; then
   # Update information: AppImageUpdate, AppImageLauncher and the like read it from the file and
   # fetch only the blocks that changed in a newer release, through the .zsync published next to
   # each AppImage on GitHub Releases. `latest` is the newest published release that is not a
-  # pre-release. A fork's builds point at its own releases through GITHUB_REPOSITORY.
-  REPO="${GITHUB_REPOSITORY:-mamankub/ASDReader}"
+  # pre-release. Releases are published in the public mamankub/asdreader-help repository (ASDREADER_RELEASES_REPOSITORY overrides it).
+  REPO="${ASDREADER_RELEASES_REPOSITORY:-mamankub/asdreader-help}"
   UPDATE_INFO="gh-releases-zsync|${REPO%%/*}|${REPO#*/}|latest|asdreader-*-linux-$ARCH.AppImage.zsync"
   # Extract-and-run: works without FUSE (containers, CI). The output embeds the static runtime,
   # so users don't need libfuse2 either. With zsyncmake on the host (CI installs the zsync

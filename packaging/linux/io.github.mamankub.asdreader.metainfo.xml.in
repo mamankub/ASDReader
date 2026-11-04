@@ -19,10 +19,10 @@
   <launchable type="desktop-id">io.github.mamankub.asdreader.desktop</launchable>
   <icon type="stock">io.github.mamankub.asdreader</icon>
   <!-- Only url types known to appstream 0.15 (Ubuntu 22.04, where CI validates): no vcs-browser. -->
-  <url type="homepage">https://github.com/mamankub/ASDReader</url>
-  <url type="bugtracker">https://github.com/mamankub/ASDReader/issues</url>
-  <url type="help">https://github.com/mamankub/ASDReader</url>
-  <url type="contact">https://github.com/mamankub/ASDReader/issues</url>
+  <url type="homepage">https://mamankub.github.io/asdreader-help/</url>
+  <url type="bugtracker">https://github.com/mamankub/asdreader-help/issues</url>
+  <url type="help">https://mamankub.github.io/asdreader-help/manual/</url>
+  <url type="contact">https://mamankub.github.io/asdreader-help/support/</url>
   <categories>
     <category>Office</category>
     <category>Viewer</category>

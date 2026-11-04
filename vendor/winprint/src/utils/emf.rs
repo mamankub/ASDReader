@@ -14,18 +14,14 @@ use windows::{
         Foundation::{LPARAM, RECT},
         Graphics::{
             Gdi::{
-                CloseEnhMetaFile, CreateEnhMetaFileW, DeleteEnhMetaFile, EnumEnhMetaFile,
-                GetEnhMetaFileHeader, GetWorldTransform, ModifyWorldTransform,
-                PlayEnhMetaFileRecord, SetWorldTransform, StretchDIBits, BITMAPINFO,
-                BITMAPINFOHEADER, BI_JPEG, BI_PNG, BI_RGB, DIB_USAGE, EMRSTRETCHDIBITS,
-                EMR_MODIFYWORLDTRANSFORM, EMR_SETLAYOUT, EMR_SETWORLDTRANSFORM, EMR_STRETCHDIBITS,
-                ENHMETAHEADER, ENHMETARECORD, HANDLETABLE, HDC, HENHMETAFILE, MWT_IDENTITY,
-                MWT_LEFTMULTIPLY, MWT_RIGHTMULTIPLY, ROP_CODE, XFORM,
+                CloseEnhMetaFile, CreateEnhMetaFileW, DeleteEnhMetaFile, EnumEnhMetaFile, GetEnhMetaFileHeader, GetWorldTransform,
+                ModifyWorldTransform, PlayEnhMetaFileRecord, SetWorldTransform, StretchDIBits, BITMAPINFO, BITMAPINFOHEADER, BI_JPEG, BI_PNG, BI_RGB,
+                DIB_USAGE, EMRSTRETCHDIBITS, EMR_MODIFYWORLDTRANSFORM, EMR_SETLAYOUT, EMR_SETWORLDTRANSFORM, EMR_STRETCHDIBITS, ENHMETAHEADER,
+                ENHMETARECORD, HANDLETABLE, HDC, HENHMETAFILE, MWT_IDENTITY, MWT_LEFTMULTIPLY, MWT_RIGHTMULTIPLY, ROP_CODE, XFORM,
             },
             Imaging::{
-                CLSID_WICImagingFactory2, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone,
-                WICBitmapPaletteTypeMedianCut, WICDecodeMetadataCacheOnDemand,
-                D2D::IWICImagingFactory2,
+                CLSID_WICImagingFactory2, GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, WICBitmapPaletteTypeMedianCut,
+                WICDecodeMetadataCacheOnDemand, D2D::IWICImagingFactory2,
             },
         },
         System::Com::{CoCreateInstance, CLSCTX_ALL},
@@ -47,26 +43,11 @@ pub struct Emf {
 impl Emf {
     /// Creates a new EMF by drawing on a metafile DC.
     /// All units are in .01-millimeter units.
-    pub unsafe fn new(
-        hdc: HDC,
-        width: i32,
-        height: i32,
-        draw: impl FnOnce(HDC) -> bool,
-    ) -> Result<Self, EmfCreateFailedError> {
+    pub unsafe fn new(hdc: HDC, width: i32, height: i32, draw: impl FnOnce(HDC) -> bool) -> Result<Self, EmfCreateFailedError> {
         // in .01-millimeter units
-        let frame = RECT {
-            left: 0,
-            top: 0,
-            right: width,
-            bottom: height,
-        };
+        let frame = RECT { left: 0, top: 0, right: width, bottom: height };
 
-        let emf_hdc = CreateEnhMetaFileW(
-            Some(hdc),
-            PCWSTR::null(),
-            Some(ptr::addr_of!(frame)),
-            PCWSTR::null(),
-        );
+        let emf_hdc = CreateEnhMetaFileW(Some(hdc), PCWSTR::null(), Some(ptr::addr_of!(frame)), PCWSTR::null());
         if emf_hdc.is_invalid() {
             return Err(EmfCreateFailedError);
         }
@@ -84,11 +65,7 @@ impl Emf {
         Ok(Self { metafile })
     }
 
-    pub unsafe fn playback(
-        &self,
-        printer_hdc: HDC,
-        rect: RECT,
-    ) -> Result<(), EmfPlaybackFailedError> {
+    pub unsafe fn playback(&self, printer_hdc: HDC, rect: RECT) -> Result<(), EmfPlaybackFailedError> {
         let mut base_matrix = XFORM::default();
         if !GetWorldTransform(printer_hdc, &mut base_matrix).as_bool() {
             return Err(EmfPlaybackFailedError);
@@ -100,12 +77,7 @@ impl Emf {
         let mut context = EnumerationContext { base_matrix };
 
         let mut header = ENHMETAHEADER::default();
-        if GetEnhMetaFileHeader(
-            self.metafile,
-            mem::size_of::<ENHMETAHEADER>() as u32,
-            Some(&mut header),
-        ) != mem::size_of::<ENHMETAHEADER>() as u32
-        {
+        if GetEnhMetaFileHeader(self.metafile, mem::size_of::<ENHMETAHEADER>() as u32, Some(&mut header)) != mem::size_of::<ENHMETAHEADER>() as u32 {
             return Err(EmfPlaybackFailedError);
         }
         if EnumEnhMetaFile(
@@ -130,11 +102,8 @@ impl Emf {
         param: LPARAM,
     ) -> i32 {
         let context = &mut *(param.0 as *mut EnumerationContext);
-        let handle_table_slice = if handle_table.is_null() || handle_count <= 0 {
-            &[]
-        } else {
-            slice::from_raw_parts(handle_table, handle_count as usize)
-        };
+        let handle_table_slice =
+            if handle_table.is_null() || handle_count <= 0 { &[] } else { slice::from_raw_parts(handle_table, handle_count as usize) };
         match play_record(hdc, record, handle_table_slice, context) {
             true => 1,
             false => 0,
@@ -154,12 +123,7 @@ struct EnumerationContext {
     base_matrix: XFORM,
 }
 
-unsafe fn play_record(
-    hdc: HDC,
-    record: *const ENHMETARECORD,
-    handle_table_slice: &[HANDLETABLE],
-    context: &mut EnumerationContext,
-) -> bool {
+unsafe fn play_record(hdc: HDC, record: *const ENHMETARECORD, handle_table_slice: &[HANDLETABLE], context: &mut EnumerationContext) -> bool {
     match (*record).iType {
         EMR_STRETCHDIBITS => {
             // EMRSTRETCHDIBITS is flexible in size, so we check the size with "<" operation.
@@ -174,12 +138,7 @@ unsafe fn play_record(
             }
             let set_world_transform = &*(record as *const EMRSETWORLDTRANSFORM);
             SetWorldTransform(hdc, ptr::addr_of!(context.base_matrix)).as_bool()
-                && ModifyWorldTransform(
-                    hdc,
-                    Some(ptr::addr_of!(set_world_transform.xform)),
-                    MWT_LEFTMULTIPLY,
-                )
-                .as_bool()
+                && ModifyWorldTransform(hdc, Some(ptr::addr_of!(set_world_transform.xform)), MWT_LEFTMULTIPLY).as_bool()
         }
         EMR_MODIFYWORLDTRANSFORM => {
             if (*record).nSize != (mem::size_of::<EMRMODIFYWORLDTRANSFORM>()) as u32 {
@@ -187,30 +146,13 @@ unsafe fn play_record(
             }
             let modify_world_transform = &*(record as *const EMRMODIFYWORLDTRANSFORM);
             match modify_world_transform.iMode {
-                MWT_IDENTITY => {
-                    SetWorldTransform(hdc, ptr::addr_of!(context.base_matrix)).as_bool()
-                }
-                MWT_LEFTMULTIPLY => ModifyWorldTransform(
-                    hdc,
-                    Some(ptr::addr_of!(modify_world_transform.xform)),
-                    MWT_LEFTMULTIPLY,
-                )
-                .as_bool(),
-                MWT_RIGHTMULTIPLY => ModifyWorldTransform(
-                    hdc,
-                    Some(ptr::addr_of!(modify_world_transform.xform)),
-                    MWT_RIGHTMULTIPLY,
-                )
-                .as_bool(),
+                MWT_IDENTITY => SetWorldTransform(hdc, ptr::addr_of!(context.base_matrix)).as_bool(),
+                MWT_LEFTMULTIPLY => ModifyWorldTransform(hdc, Some(ptr::addr_of!(modify_world_transform.xform)), MWT_LEFTMULTIPLY).as_bool(),
+                MWT_RIGHTMULTIPLY => ModifyWorldTransform(hdc, Some(ptr::addr_of!(modify_world_transform.xform)), MWT_RIGHTMULTIPLY).as_bool(),
                 // 4 = MWT_SET
                 MODIFY_WORLD_TRANSFORM_MODE(4) => {
                     SetWorldTransform(hdc, ptr::addr_of!(context.base_matrix)).as_bool()
-                        && ModifyWorldTransform(
-                            hdc,
-                            Some(ptr::addr_of!(modify_world_transform.xform)),
-                            MWT_LEFTMULTIPLY,
-                        )
-                        .as_bool()
+                        && ModifyWorldTransform(hdc, Some(ptr::addr_of!(modify_world_transform.xform)), MWT_LEFTMULTIPLY).as_bool()
                 }
                 _ => false,
             }
@@ -224,11 +166,7 @@ unsafe fn play_record(
     }
 }
 
-unsafe fn play_stretch_dibits_record(
-    hdc: HDC,
-    sdib_record: *const EMRSTRETCHDIBITS,
-    handle_table_slice: &[HANDLETABLE],
-) -> bool {
+unsafe fn play_stretch_dibits_record(hdc: HDC, sdib_record: *const EMRSTRETCHDIBITS, handle_table_slice: &[HANDLETABLE]) -> bool {
     let record_size = (*sdib_record).emr.nSize as usize;
     let bmi_offset = (*sdib_record).offBmiSrc as usize;
     let bmi_len = (*sdib_record).cbBmiSrc as usize;
@@ -256,10 +194,8 @@ unsafe fn play_stretch_dibits_record(
             slice::from_raw_parts(sdib_record.byte_add(bits_offset) as *const u8, bits_len)
         }
     };
-    if (bitmap_header.biCompression == BI_JPEG.0
-        && !dib_format_natively_supported(hdc, CHECKJPEGFORMAT, bits))
-        || (bitmap_header.biCompression == BI_PNG.0
-            && !dib_format_natively_supported(hdc, CHECKPNGFORMAT, bits))
+    if (bitmap_header.biCompression == BI_JPEG.0 && !dib_format_natively_supported(hdc, CHECKJPEGFORMAT, bits))
+        || (bitmap_header.biCompression == BI_PNG.0 && !dib_format_natively_supported(hdc, CHECKPNGFORMAT, bits))
     {
         // Decode compressed format in application and play with StretchDIBits, to avoid EMF playback failure.
         // Aligns with how Chromium plays EMF records with compressed DIBs:
@@ -292,13 +228,7 @@ unsafe fn play_stretch_dibits_record(
 fn dib_format_natively_supported(dc: HDC, escape: u32, bits: &[u8]) -> bool {
     let mut supported: [u8; 4] = [0, 0, 0, 0];
     unsafe {
-        if ExtEscape(
-            dc,
-            QUERYESCSUPPORT as _,
-            Some(escape.to_ne_bytes().as_slice()),
-            None,
-        ) > 0
-        {
+        if ExtEscape(dc, QUERYESCSUPPORT as _, Some(escape.to_ne_bytes().as_slice()), None) > 0 {
             ExtEscape(dc, escape as _, Some(bits), Some(supported.as_mut_slice()));
         }
     }
@@ -313,25 +243,13 @@ struct DecodedBitmap {
 impl DecodedBitmap {
     unsafe fn from_compressed(bytes: &[u8]) -> windows::core::Result<Self> {
         let _com = ComInitializer::new();
-        let factory: IWICImagingFactory2 =
-            CoCreateInstance(&CLSID_WICImagingFactory2, None, CLSCTX_ALL)?;
+        let factory: IWICImagingFactory2 = CoCreateInstance(&CLSID_WICImagingFactory2, None, CLSCTX_ALL)?;
         let stream = factory.CreateStream()?;
         stream.InitializeFromMemory(bytes)?;
-        let decoder = factory.CreateDecoderFromStream(
-            &stream,
-            ptr::null(),
-            WICDecodeMetadataCacheOnDemand,
-        )?;
+        let decoder = factory.CreateDecoderFromStream(&stream, ptr::null(), WICDecodeMetadataCacheOnDemand)?;
         let frame = decoder.GetFrame(0)?;
         let converter = factory.CreateFormatConverter()?;
-        converter.Initialize(
-            &frame,
-            &GUID_WICPixelFormat32bppBGRA,
-            WICBitmapDitherTypeNone,
-            None,
-            0.0,
-            WICBitmapPaletteTypeMedianCut,
-        )?;
+        converter.Initialize(&frame, &GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, None, 0.0, WICBitmapPaletteTypeMedianCut)?;
 
         let mut width = 0u32;
         let mut height = 0u32;

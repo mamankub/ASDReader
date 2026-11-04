@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ("ค้นหาและคัดลอกข้อความในเอกสารที่มี text layer", 19.0, 307.0),
             ("โหมดสว่างและโหมดมืดสำหรับการอ่าน", 20.0, 375.0),
             ("สร้างจาก ASDReader ด้วย Rust และ egui", 18.0, 474.0),
-            ("github.com/mamankub/ASDReader", 16.0, 757.0),
+            ("mamankub.github.io/asdreader-help", 16.0, 757.0),
         ],
     ];
     for (page, lines) in sections.iter().enumerate() {

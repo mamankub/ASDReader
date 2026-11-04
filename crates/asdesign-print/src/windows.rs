@@ -1,6 +1,6 @@
 //! The Windows spooler, in this process: no PowerShell, script or other program is started, so
 //! printing works where scripts are locked down (App Control for Business or AppLocker run
-//! PowerShell in Constrained Language Mode; upstream issue #1107).
+//! PowerShell in Constrained Language Mode).
 //!
 //! The printers come from `EnumPrinters` (local queues and the user's connections, such as
 //! `\\server\queue`), the default from `GetDefaultPrinter`, and whether each driver takes

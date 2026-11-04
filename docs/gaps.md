@@ -125,8 +125,7 @@ update the numbers.
   [#728](https://github.com/mamankub/ASDReader/issues/728),
   [#758](https://github.com/mamankub/ASDReader/issues/758),
   [#689](https://github.com/mamankub/ASDReader/issues/689) (Flatpak). asdesign-fonts has Noto Sans
-  CJK SC, but at 16.4 MB it is too large to embed whole; the interface needs a cut of it
-  (ASDesign libraries (crates/asdesign-*)#213).
+  CJK SC, but at 16.4 MB it is too large to embed whole; the interface needs a cut of it.
 - **Impact:** the second-largest language group sees a broken interface although the catalog is 97%
   translated.
 - **Estimate:** 6–12 h (cut CJK faces through asdesign-fonts-build plus the fallback chain). **Doc:**

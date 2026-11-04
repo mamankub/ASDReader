@@ -1,10 +1,7 @@
 use xml::name::OwnedName;
 
 use super::{
-    document::{
-        ParameterInit, PrintFeature, PrintFeatureOption, PrintTicketDocument, WithProperties,
-        NS_PSK,
-    },
+    document::{ParameterInit, PrintFeature, PrintFeatureOption, PrintTicketDocument, WithProperties, NS_PSK},
     PrintCapabilities, PrintTicket,
 };
 
@@ -38,22 +35,15 @@ pub trait FeatureOptionPack: Sized {
 
     /// Get display name of the page orientation.
     fn display_name(&self) -> Option<&str> {
-        self.option()
-            .get_property("DisplayName", Some(NS_PSK))
-            .and_then(|x| x.value.as_ref())
-            .and_then(|x| x.string())
+        self.option().get_property("DisplayName", Some(NS_PSK)).and_then(|x| x.value.as_ref()).and_then(|x| x.string())
     }
 
     /// List all possible options defined in the capabilities.
     fn list(capabilities: &PrintCapabilities) -> impl Iterator<Item = Self> + '_ {
-        capabilities
-            .options_for_feature(Self::feature_name())
-            .map(move |option| {
-                let default_parameters = capabilities
-                    .default_parameters_for(option.parameters_dependent().as_slice())
-                    .collect();
-                Self::new(option.clone(), default_parameters)
-            })
+        capabilities.options_for_feature(Self::feature_name()).map(move |option| {
+            let default_parameters = capabilities.default_parameters_for(option.parameters_dependent().as_slice()).collect();
+            Self::new(option.clone(), default_parameters)
+        })
     }
 }
 
@@ -66,12 +56,7 @@ where
         PrintTicketDocument {
             properties: vec![],
             parameter_inits: parameters,
-            features: vec![PrintFeature {
-                name: T::feature_name(),
-                properties: vec![],
-                options: vec![option],
-                features: vec![],
-            }],
+            features: vec![PrintFeature { name: T::feature_name(), properties: vec![], options: vec![option], features: vec![] }],
         }
         .into()
     }
@@ -85,10 +70,7 @@ pub trait FeatureOptionPackWithPredefined: FeatureOptionPack {
     /// Get the predefined name of the option.
     /// If the option is not predefined, `None` is returned.
     fn as_predefined_name(&self) -> Option<Self::PredefinedName> {
-        self.option()
-            .name
-            .as_ref()
-            .and_then(Self::PredefinedName::from_name)
+        self.option().name.as_ref().and_then(Self::PredefinedName::from_name)
     }
 }
 

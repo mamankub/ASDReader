@@ -141,9 +141,7 @@ impl ParameterDef {
     pub fn default_value(&self) -> Option<&PropertyValue> {
         self.properties
             .iter()
-            .find(|x| {
-                x.name.local_name == "DefaultValue" && x.name.namespace_ref() == Some(super::NS_PSF)
-            })
+            .find(|x| x.name.local_name == "DefaultValue" && x.name.namespace_ref() == Some(super::NS_PSF))
             .and_then(|x| x.value.as_ref())
     }
 }
@@ -153,9 +151,7 @@ impl PropertyValue {
     pub fn xsi_type(&self) -> OwnedName {
         match self {
             PropertyValue::String(_) => OwnedName::qualified("string", super::NS_XSD, Some("xsd")),
-            PropertyValue::Integer(_) => {
-                OwnedName::qualified("integer", super::NS_XSD, Some("xsd"))
-            }
+            PropertyValue::Integer(_) => OwnedName::qualified("integer", super::NS_XSD, Some("xsd")),
             PropertyValue::QName(_) => OwnedName::qualified("QName", super::NS_XSD, Some("xsd")),
             PropertyValue::Unknown(n, _) => n.clone(),
         }
@@ -210,10 +206,7 @@ impl ScoredProperty {
     /// Get the value of this scored-property, or the value of the parameter it references.
     pub fn value_with<'a>(&'a self, parameters: &'a [ParameterInit]) -> Option<&'a PropertyValue> {
         if let Some(ref parameter_ref) = self.parameter_ref {
-            parameters
-                .iter()
-                .find(|x| x.name == *parameter_ref)
-                .map(|x| &x.value)
+            parameters.iter().find(|x| x.name == *parameter_ref).map(|x| &x.value)
         } else {
             self.value.as_ref()
         }
@@ -239,11 +232,7 @@ pub trait WithScoredProperties {
 
     /// Get the scored-property with the given name and namespace.
     fn get_scored_property(&self, name: &str, namespace: Option<&str>) -> Option<&ScoredProperty> {
-        self.scored_properties().iter().find(|x| {
-            x.name.as_ref().map_or(false, |x| {
-                x.local_name == name && x.namespace_ref() == namespace
-            })
-        })
+        self.scored_properties().iter().find(|x| x.name.as_ref().map_or(false, |x| x.local_name == name && x.namespace_ref() == namespace))
     }
 }
 
@@ -266,9 +255,7 @@ pub trait WithProperties {
 
     /// Get the property with the given name and namespace.
     fn get_property(&self, name: &str, namespace: Option<&str>) -> Option<&Property> {
-        self.properties()
-            .iter()
-            .find(|x| x.name.local_name == name && x.name.namespace_ref() == namespace)
+        self.properties().iter().find(|x| x.name.local_name == name && x.name.namespace_ref() == namespace)
     }
 }
 
@@ -325,19 +312,12 @@ impl WithProperties for Property {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        PrintCapabilitiesDocument, PrintSchemaDocument, PrintTicketDocument, Property,
-        PropertyValue, WithProperties,
-    };
+    use super::{PrintCapabilitiesDocument, PrintSchemaDocument, PrintTicketDocument, Property, PropertyValue, WithProperties};
     use xml::name::OwnedName;
 
     fn new_test_properties() -> Vec<Property> {
         vec![
-            Property {
-                name: OwnedName::local("Property1"),
-                value: Some(PropertyValue::String("Value1".to_string())),
-                properties: vec![],
-            },
+            Property { name: OwnedName::local("Property1"), value: Some(PropertyValue::String("Value1".to_string())), properties: vec![] },
             Property {
                 name: OwnedName::qualified("Property2", "http://test.namespace/", Some("test")),
                 value: Some(PropertyValue::Integer(2)),
@@ -350,26 +330,12 @@ mod tests {
         assert_eq!(w.properties().len(), 2);
 
         // ensure we can get properties
-        assert_eq!(
-            w.get_property("Property1", None)
-                .and_then(|p| p.value.as_ref())
-                .and_then(|v| v.string()),
-            Some("Value1")
-        );
-        assert_eq!(
-            w.get_property("Property2", Some("http://test.namespace/"))
-                .and_then(|p| p.value.as_ref())
-                .and_then(|v| v.integer()),
-            Some(2)
-        );
+        assert_eq!(w.get_property("Property1", None).and_then(|p| p.value.as_ref()).and_then(|v| v.string()), Some("Value1"));
+        assert_eq!(w.get_property("Property2", Some("http://test.namespace/")).and_then(|p| p.value.as_ref()).and_then(|v| v.integer()), Some(2));
 
         // namespace is handled
-        assert!(w
-            .get_property("Property1", Some("http://wrong.namespace/"))
-            .is_none());
-        assert!(w
-            .get_property("Property2", Some("http://wrong.namespace/"))
-            .is_none());
+        assert!(w.get_property("Property1", Some("http://wrong.namespace/")).is_none());
+        assert!(w.get_property("Property2", Some("http://wrong.namespace/")).is_none());
         assert!(w.get_property("Property2", None).is_none());
 
         // ensure we can't get properties that don't exist
@@ -378,75 +344,46 @@ mod tests {
 
     #[test]
     fn get_properties_from_ticket() {
-        let document1: PrintSchemaDocument = PrintTicketDocument {
-            properties: new_test_properties(),
-            parameter_inits: vec![],
-            features: vec![],
-        }
-        .into();
+        let document1: PrintSchemaDocument =
+            PrintTicketDocument { properties: new_test_properties(), parameter_inits: vec![], features: vec![] }.into();
         check_test_properties(&document1);
     }
 
     #[test]
     fn get_properties_from_capabilities() {
-        let document1: PrintSchemaDocument = PrintCapabilitiesDocument {
-            properties: new_test_properties(),
-            parameter_defs: vec![],
-            features: vec![],
-        }
-        .into();
+        let document1: PrintSchemaDocument =
+            PrintCapabilitiesDocument { properties: new_test_properties(), parameter_defs: vec![], features: vec![] }.into();
         check_test_properties(&document1);
     }
 
     #[test]
     fn get_properties_from_parameter_def() {
-        let parameter_def = super::ParameterDef {
-            name: OwnedName::local("Test"),
-            properties: new_test_properties(),
-        };
+        let parameter_def = super::ParameterDef { name: OwnedName::local("Test"), properties: new_test_properties() };
         check_test_properties(&parameter_def);
     }
 
     #[test]
     fn get_properties_from_option() {
-        let option = super::PrintFeatureOption {
-            name: None,
-            scored_properties: vec![],
-            properties: new_test_properties(),
-        };
+        let option = super::PrintFeatureOption { name: None, scored_properties: vec![], properties: new_test_properties() };
         check_test_properties(&option);
     }
 
     #[test]
     fn get_properties_from_feature() {
-        let feature = super::PrintFeature {
-            name: OwnedName::local("Test"),
-            properties: new_test_properties(),
-            options: vec![],
-            features: vec![],
-        };
+        let feature = super::PrintFeature { name: OwnedName::local("Test"), properties: new_test_properties(), options: vec![], features: vec![] };
         check_test_properties(&feature);
     }
 
     #[test]
     fn get_properties_from_scored_property() {
-        let scored_property = super::ScoredProperty {
-            name: None,
-            parameter_ref: None,
-            value: None,
-            scored_properties: vec![],
-            properties: new_test_properties(),
-        };
+        let scored_property =
+            super::ScoredProperty { name: None, parameter_ref: None, value: None, scored_properties: vec![], properties: new_test_properties() };
         check_test_properties(&scored_property);
     }
 
     #[test]
     fn get_properties_from_property() {
-        let property = Property {
-            name: OwnedName::local("Test"),
-            value: None,
-            properties: new_test_properties(),
-        };
+        let property = Property { name: OwnedName::local("Test"), value: None, properties: new_test_properties() };
         check_test_properties(&property);
     }
 }

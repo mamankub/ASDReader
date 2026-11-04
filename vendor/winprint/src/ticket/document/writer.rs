@@ -1,9 +1,6 @@
 use super::{NS_PSF, NS_XSI};
 use std::{borrow::Cow, io::Write};
-use xml::{
-    attribute::Attribute, name::OwnedName, namespace::Namespace, writer::XmlEvent, EmitterConfig,
-    EventWriter,
-};
+use xml::{attribute::Attribute, name::OwnedName, namespace::Namespace, writer::XmlEvent, EmitterConfig, EventWriter};
 
 // mark document root
 impl XmlDocumentRoot for super::PrintCapabilitiesDocument {}
@@ -21,9 +18,7 @@ pub trait XmlSerializer {
 pub trait XmlDocumentRoot: XmlSerializer {
     /// Convert the struct to XML.
     fn to_xml(&self) -> Vec<u8> {
-        let mut writer = EmitterConfig::new()
-            .perform_indent(false)
-            .create_writer(Vec::new());
+        let mut writer = EmitterConfig::new().perform_indent(false).create_writer(Vec::new());
         let mut ns = Namespace::empty();
         self.collect_namespace(&mut ns);
         self.write_to(&mut writer).unwrap();
@@ -35,9 +30,7 @@ impl XmlSerializer for super::PrintCapabilitiesDocument {
     fn collect_namespace(&self, ns: &mut Namespace) {
         ns.put("psf", NS_PSF);
         self.properties.iter().for_each(|x| x.collect_namespace(ns));
-        self.parameter_defs
-            .iter()
-            .for_each(|x| x.collect_namespace(ns));
+        self.parameter_defs.iter().for_each(|x| x.collect_namespace(ns));
         self.features.iter().for_each(|x| x.collect_namespace(ns));
     }
 
@@ -52,12 +45,8 @@ impl XmlSerializer for super::PrintCapabilitiesDocument {
             };
             writer.write(event)?;
         }
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
-        self.parameter_defs
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
+        self.parameter_defs.iter().try_for_each(|x| x.write_to(writer))?;
         self.features.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
@@ -68,9 +57,7 @@ impl XmlSerializer for super::PrintTicketDocument {
     fn collect_namespace(&self, ns: &mut Namespace) {
         ns.put("psf", NS_PSF);
         self.properties.iter().for_each(|x| x.collect_namespace(ns));
-        self.parameter_inits
-            .iter()
-            .for_each(|x| x.collect_namespace(ns));
+        self.parameter_inits.iter().for_each(|x| x.collect_namespace(ns));
         self.features.iter().for_each(|x| x.collect_namespace(ns));
     }
 
@@ -85,12 +72,8 @@ impl XmlSerializer for super::PrintTicketDocument {
             };
             writer.write(event)?;
         }
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
-        self.parameter_inits
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
+        self.parameter_inits.iter().try_for_each(|x| x.write_to(writer))?;
         self.features.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
@@ -107,13 +90,9 @@ impl XmlSerializer for super::PrintFeature {
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
-        writer.write(
-            XmlEvent::start_element("psf:Feature").attr("name", format_name(&self.name).as_ref()),
-        )?;
+        writer.write(XmlEvent::start_element("psf:Feature").attr("name", format_name(&self.name).as_ref()))?;
         self.options.iter().try_for_each(|x| x.write_to(writer))?;
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
         self.features.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
@@ -128,10 +107,7 @@ impl XmlSerializer for super::ParameterInit {
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
-        writer.write(
-            XmlEvent::start_element("psf:ParameterInit")
-                .attr("name", format_name(&self.name).as_ref()),
-        )?;
+        writer.write(XmlEvent::start_element("psf:ParameterInit").attr("name", format_name(&self.name).as_ref()))?;
         self.value.write_to(writer)?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
@@ -148,10 +124,7 @@ impl XmlSerializer for super::ParameterDef {
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
-        writer.write(
-            XmlEvent::start_element("psf:ParameterDef")
-                .attr("name", format_name(&self.name).as_ref()),
-        )?;
+        writer.write(XmlEvent::start_element("psf:ParameterDef").attr("name", format_name(&self.name).as_ref()))?;
         for x in &self.properties {
             x.write_to(writer)?;
         }
@@ -166,20 +139,14 @@ impl XmlSerializer for super::PrintFeatureOption {
         if let Some(name) = &self.name {
             collect_namespace_from_name(name, ns);
         }
-        self.scored_properties
-            .iter()
-            .for_each(|x| x.collect_namespace(ns));
+        self.scored_properties.iter().for_each(|x| x.collect_namespace(ns));
         self.properties.iter().for_each(|x| x.collect_namespace(ns));
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
         start_element_with_optional_name(writer, "psf:Option", self.name.as_ref())?;
-        self.scored_properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.scored_properties.iter().try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
     }
@@ -197,30 +164,21 @@ impl XmlSerializer for super::ScoredProperty {
         if let Some(value) = &self.value {
             value.collect_namespace(ns);
         }
-        self.scored_properties
-            .iter()
-            .for_each(|x| x.collect_namespace(ns));
+        self.scored_properties.iter().for_each(|x| x.collect_namespace(ns));
         self.properties.iter().for_each(|x| x.collect_namespace(ns));
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
         start_element_with_optional_name(writer, "psf:ScoredProperty", self.name.as_ref())?;
         if let Some(parameter_ref) = &self.parameter_ref {
-            writer.write(
-                XmlEvent::start_element("psf:ParameterRef")
-                    .attr("name", format_name(parameter_ref).as_ref()),
-            )?;
+            writer.write(XmlEvent::start_element("psf:ParameterRef").attr("name", format_name(parameter_ref).as_ref()))?;
             writer.write(XmlEvent::end_element())?;
         }
         if let Some(value) = &self.value {
             value.write_to(writer)?;
         }
-        self.scored_properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.scored_properties.iter().try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
     }
@@ -237,15 +195,11 @@ impl XmlSerializer for super::Property {
     }
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
-        writer.write(
-            XmlEvent::start_element("psf:Property").attr("name", format_name(&self.name).as_ref()),
-        )?;
+        writer.write(XmlEvent::start_element("psf:Property").attr("name", format_name(&self.name).as_ref()))?;
         if let Some(value) = &self.value {
             value.write_to(writer)?;
         }
-        self.properties
-            .iter()
-            .try_for_each(|x| x.write_to(writer))?;
+        self.properties.iter().try_for_each(|x| x.write_to(writer))?;
         writer.write(XmlEvent::end_element())?;
         Ok(())
     }
@@ -260,9 +214,7 @@ impl XmlSerializer for super::PropertyValue {
 
     fn write_to<W: Write>(&self, writer: &mut EventWriter<W>) -> Result<(), xml::writer::Error> {
         let xsi_type = self.xsi_type();
-        writer.write(
-            XmlEvent::start_element("psf:Value").attr("xsi:type", format_name(&xsi_type).as_ref()),
-        )?;
+        writer.write(XmlEvent::start_element("psf:Value").attr("xsi:type", format_name(&xsi_type).as_ref()))?;
         match self {
             super::PropertyValue::String(s) => {
                 writer.write(XmlEvent::characters(s))?;
@@ -303,8 +255,7 @@ fn start_element_with_optional_name<W: Write>(
     name: Option<&OwnedName>,
 ) -> Result<(), xml::writer::Error> {
     if let Some(name) = name {
-        writer
-            .write(XmlEvent::start_element(elem_name).attr("name", format_name(name).as_ref()))?;
+        writer.write(XmlEvent::start_element(elem_name).attr("name", format_name(name).as_ref()))?;
     } else {
         writer.write(XmlEvent::start_element(elem_name))?;
     }
@@ -314,9 +265,7 @@ fn start_element_with_optional_name<W: Write>(
 #[cfg(test)]
 mod tests {
     use super::XmlDocumentRoot;
-    use crate::ticket::document::{
-        reader::ParsableXmlDocument, PrintCapabilitiesDocument, PrintTicketDocument,
-    };
+    use crate::ticket::document::{reader::ParsableXmlDocument, PrintCapabilitiesDocument, PrintTicketDocument};
 
     #[test]
     fn serialize_for_print_ticket() {

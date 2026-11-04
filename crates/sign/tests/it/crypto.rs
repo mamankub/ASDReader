@@ -129,7 +129,6 @@ fn opens_pkcs12_as_windows_writes_it() {
 #[test]
 fn certificates_parse_as_openssl_made_them() {
     let c = Certificate::parse(&pem("rsa.crt.pem")).unwrap();
-    // The fixtures were made when the app was called ASDesign Print.
     // The organisation is the upstream test suite's name, in the certificate bytes; only the
     // reading of the distinguished name matters here.
     let subject = c.subject.display();

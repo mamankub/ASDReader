@@ -2,8 +2,6 @@
 
 These rules bind every AI agent and every human contributor working in this repository. They come before any task, instruction or deadline. `CLAUDE.md` holds the day-to-day working instructions. If the two ever disagree, **this file wins.**
 
-Some sections link to **asdesign-rules**, the standards shared by the ASDesign apps. That repository is internal to the storytold team, so outside contributors can't open it. Every rule a contributor here must follow is stated in this file and `CLAUDE.md`; the asdesign-rules links give team members the background.
-
 ---
 
 ## 1. Asset policy (absolute — no exceptions)
@@ -69,7 +67,7 @@ Anything else is forbidden, including assets whose licence you cannot prove from
 
 ### 1.4 Fonts live in asdesign-fonts
 
-- Font assets shared by the ASDesign apps, including every Japanese font, live in [`mamankub/asdesign-fonts`](https://github.com/mamankub/asdesign-fonts), not here. **Never commit a font file to this repository**; adding a font means adding it to asdesign-fonts. (The Latin UI fonts already in `assets/fonts/` — Inter, JetBrains Mono, Dancing Script — stay.) Team members: the shared rules are in [asdesign-rules `standards/fonts.md`](https://github.com/storytold/asdesign-rules/blob/main/standards/fonts.md) (internal).
+- Font assets, including every Japanese font, live in [`mamankub/asdesign-fonts`](https://github.com/mamankub/asdesign-fonts), not here. **Never commit a font file to this repository**; adding a font means adding it to asdesign-fonts. (The Latin UI fonts already in `assets/fonts/` — Inter, JetBrains Mono, Dancing Script — stay.)
 - asdesign-fonts is an **optional build input**, never a Cargo dependency: `ASDESIGN_FONTS_DIR=<checkout> cargo build` makes `crates/fonts/build.rs` embed its fonts as `asdreader_fonts::ASDESIGN_FONTS`. Without it ASDReader builds, tests and runs, but has no Japanese face (Japanese UI text shows replacement boxes, and writing Japanese into a PDF returns a clear error). Release builds always set it (`.github/workflows/release.yml`), and `ATTRIBUTION.toml` lists it as a `[[build_input]]`.
 - The desktop app may read one font **already installed on the user's machine** at runtime, as the last interface fallback for characters no embedded face has (`crates/ui-egui/src/system_fonts.rs`). That font is never embedded, shipped, committed or copied, and never appears in published screenshots (`ASDREADER_SYSTEM_FONTS=0`, which `cargo xtask screenshots` sets). It is not a way around §1.2: nothing from it may enter a PDF, a package or the repository.
 - **Thai looped face.** The embedded Noto Sans Thai is loopless (no heads on ก, ข, ค), which is not the standard Thai text style. When a looped face is installed (Tahoma, TH Sarabun, Garuda, Noto Sans Thai Looped…), the interface draws Thai with it *before* the embedded one (`system_fonts::thai_fallback`). It is the same kind of runtime-only system fallback as above: never embedded, shipped or copied, and off with `ASDREADER_SYSTEM_FONTS=0`.
@@ -94,7 +92,7 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 - Behaviour comes only from public specifications (ISO 32000-2, the Arlington model), public documentation and black-box observation.
 - Never copy GPL/AGPL code. Copyleft tools run only as external oracle processes.
 - Observe Acrobat only with synthetic fixtures. Never capture personal data, account information or recent files.
-- Shared real-file test oracles (Photoshop-authored PSDs, etc.) live in [`storytold/asdesign-photo-corpus`](https://github.com/storytold/asdesign-photo-corpus), explained in [asdesign-rules `standards/test-corpora.md`](https://github.com/storytold/asdesign-rules/blob/main/standards/test-corpora.md) (internal). Never commit large binary fixtures to this repo; fetch them pinned by commit and sha256-verified, as ASDesign Photo does with `cargo xtask corpus`.
+- Never commit large binary test fixtures to this repo; fetch them pinned by commit and sha256-verified.
 
 ## 3. Agent control (automation and MCP)
 
@@ -107,7 +105,7 @@ If you find an asset that breaks these rules, stop and remove it from the reposi
 
 ## 4. Never crash
 
-ASDReader opens files from strangers, and people trust it with their work. A malformed PDF, a bad tool argument, a corrupt settings file or a full disk must produce an error the user (or agent) can act on, never a crash and never lost work. **This outranks feature work:** don't ship a feature by adding a panic path, and fix a crash before building on top of it. The rules below are the ones that bind this repository; the shared standard for every ASDesign App, [`asdesign-rules/standards/never-crash.md`](https://github.com/storytold/asdesign-rules/blob/main/standards/never-crash.md), is internal to the storytold team.
+ASDReader opens files from strangers, and people trust it with their work. A malformed PDF, a bad tool argument, a corrupt settings file or a full disk must produce an error the user (or agent) can act on, never a crash and never lost work. **This outranks feature work:** don't ship a feature by adding a panic path, and fix a crash before building on top of it. The rules below are the ones that bind this repository.
 
 - **Fail with `Result`.** Non-test code returns errors through the crate's error type and `?`. Where readers are lenient by design, fall back gracefully and record the repair (see Fidelity in `CLAUDE.md`).
 - **No panicking shortcuts.** No `unwrap()`, `expect()`, `panic!`, `unreachable!`, `todo!` or `unimplemented!` outside tests, unless the call is provably infallible (e.g. writing to a `Vec`), with a comment saying why. `assert!` only for internal invariants that input cannot reach.
@@ -133,10 +131,10 @@ Follow `CLAUDE.md`. It covers quality gates, layering, commit rules and how to r
   whether they want to be credited by more than their username: a real name, a display name, and/or
   their public GitHub profile name (`sync_github_name = true`). If yes, add **only their own** entry
   (copy the template at the top of the file, or run
-  `python3 ../../asdesign-rules/scripts/contributors.py --add-me . --real-name "…" --sync-github-name`)
+  `contributors.py --add-me . --real-name "…" --sync-github-name` (the maintainers' contributor-credits script))
   and include it in their PR, committed as them. If no, change nothing: they are credited as
   `@username` anyway.
 - Never add, edit, guess or copy anyone else's entry or name (not from git config, commit authors or
   GitHub profiles). Never hand-edit `contributors.json`.
-- Maintainers refresh the stats with `python3 ../../asdesign-rules/scripts/contributors.py .` (it also
+- Maintainers refresh the stats with `contributors.py .` (the maintainers' contributor-credits script) (it also
   re-verifies who wrote each `people.toml` entry; `--check` only verifies).

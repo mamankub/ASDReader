@@ -1,7 +1,7 @@
 //! `asdreader-cli mcp --automation-read-root <dir> --automation-write-root <dir>`: through the MCP
 //! protocol, files open and load only from inside the read root and are written only inside the
 //! write root. Paths that leave a root (`..`, another folder, a sibling with the same prefix, a
-//! link) are refused with the wording ASDesign Vector uses, nothing is read into the result and
+//! link) are refused, nothing is read into the result and
 //! nothing is written outside.
 #![cfg(feature = "mcp")]
 

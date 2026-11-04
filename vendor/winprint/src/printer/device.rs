@@ -37,42 +37,22 @@ impl PrinterDevice {
             let mut buffer_size: usize = 0;
 
             loop {
-                let slice = if buffer_size > 0 {
-                    Some(std::slice::from_raw_parts_mut(buffer, buffer_size))
-                } else {
-                    None
-                };
-                let result = EnumPrintersW(
-                    flags,
-                    name,
-                    level,
-                    slice,
-                    &mut bytes_needed,
-                    &mut count_returned,
-                );
+                let slice = if buffer_size > 0 { Some(std::slice::from_raw_parts_mut(buffer, buffer_size)) } else { None };
+                let result = EnumPrintersW(flags, name, level, slice, &mut bytes_needed, &mut count_returned);
                 match result {
                     Ok(()) => break,
                     Err(e) if e.code() == ERROR_INSUFFICIENT_BUFFER.to_hresult() => {
                         let new_size = bytes_needed as usize;
                         let align = mem::align_of::<PRINTER_INFO_4W>();
                         if buffer_size > 0 {
-                            dealloc(
-                                buffer,
-                                Layout::from_size_align_unchecked(buffer_size, align),
-                            );
+                            dealloc(buffer, Layout::from_size_align_unchecked(buffer_size, align));
                         }
                         buffer = alloc(Layout::from_size_align_unchecked(new_size, align));
                         buffer_size = new_size;
                     }
                     Err(e) => {
                         if buffer_size > 0 {
-                            dealloc(
-                                buffer,
-                                Layout::from_size_align_unchecked(
-                                    buffer_size,
-                                    mem::align_of::<PRINTER_INFO_4W>(),
-                                ),
-                            );
+                            dealloc(buffer, Layout::from_size_align_unchecked(buffer_size, mem::align_of::<PRINTER_INFO_4W>()));
                         }
                         return Err(EnumDeviceError::FailedToEnumPrinterDevice(e));
                     }
@@ -92,13 +72,7 @@ impl PrinterDevice {
             }
 
             if buffer_size > 0 {
-                dealloc(
-                    buffer,
-                    Layout::from_size_align_unchecked(
-                        buffer_size,
-                        mem::align_of::<PRINTER_INFO_4W>(),
-                    ),
-                );
+                dealloc(buffer, Layout::from_size_align_unchecked(buffer_size, mem::align_of::<PRINTER_INFO_4W>()));
             }
 
             Ok(result)

@@ -69,7 +69,7 @@ def write_tiff(svg, out):
         )
     two.encoderinfo = {"dpi": (144, 144)}  # the rest as the first page
     # Opaque 16-colour palette, Deflate: the artwork is three inks plus antialiasing, and a palette
-    # keeps the file small (RGB was ~230 KB; repository assets must stay small). As ASDesign Photo's.
+    # keeps the file small (RGB was ~230 KB; repository assets must stay small).
     one.save(
         out,
         "TIFF",

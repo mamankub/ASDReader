@@ -82,9 +82,6 @@ fn print_and_exit(text: &str) -> eframe::Result {
     Ok(())
 }
 
-/// The app was called ASDesign Print before; settings saved then are under this key.
-const LEGACY_STORAGE_KEY: &str = "asdesign-print-app";
-
 /// The preferences folder (`app.ron`, docs/development.md). In portable mode
 /// it is `ASDReaderData` beside the executable (#157). XDG desktops use the configuration base;
 /// other platforms retain eframe's ASDReader folder. Logs and recovery stay in the data folder.
@@ -101,35 +98,6 @@ fn settings_dir() -> Option<std::path::PathBuf> {
         Err(e) => {
             log::warn!("could not migrate preferences to the XDG configuration folder; using the original location: {e}");
             legacy
-        }
-    }
-}
-
-/// Move the settings and crash-recovery folders of the app's former name, ASDesign Print, to the new
-/// name once, so an upgrade keeps recent files, preferences and unsaved work. Best effort: a
-/// folder is left alone when the new one already exists or the move fails. A portable copy leaves
-/// the per-user folders alone.
-fn migrate_legacy_folders() {
-    if asdreader_ui_egui::portable::data_dir().is_some() {
-        return;
-    }
-    let mut moves = vec![(eframe::storage_dir("ASDesign Print"), eframe::storage_dir("ASDReader"))];
-    // Recovery lives in the settings folder except on Windows, where it is under %LOCALAPPDATA%.
-    if cfg!(windows) {
-        let local = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
-        moves.push((local.as_ref().map(|d| d.join("ASDesign Print")), local.map(|d| d.join("ASDReader"))));
-    }
-    for (old, new) in moves {
-        let (Some(old), Some(new)) = (old, new) else { continue };
-        if !old.is_dir() || new.exists() {
-            continue;
-        }
-        if let Some(parent) = new.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        match std::fs::rename(&old, &new) {
-            Ok(()) => log::info!("moved {} to {}", old.display(), new.display()),
-            Err(e) => log::warn!("moving {} to {}: {e}", old.display(), new.display()),
         }
     }
 }
@@ -239,9 +207,8 @@ fn main() -> eframe::Result {
     let integrated = cfg!(target_os = "macos");
     // GNOME on Wayland leaves the window frame to the app (src/decorations.rs).
     let window_controls = if cfg!(any(target_os = "macos", target_os = "windows")) { None } else { decorations::app_drawn() };
-    migrate_legacy_folders();
     // The log file stays in the data folder; opened after the arguments (so `--version` leaves
-    // no file behind) and after the ASDesign Print migration (which a fresh folder would block).
+    // no file behind).
     // Records logged until now are written to it first.
     if let (Some(logger), Some(dir)) =
         (logger, asdreader_ui_egui::portable::data_dir().map(std::path::Path::to_path_buf).or_else(|| eframe::storage_dir("ASDReader")))
@@ -403,7 +370,7 @@ fn app_creator<'a>(
         app.enable_desktop_theme();
         // The system's reopen-windows choice (macOS) starts the preference; a saved choice replaces it.
         app.reopen_last_session = reopen::system_default();
-        if let Some(json) = cc.storage.and_then(|s| s.get_string("asdreader").or_else(|| s.get_string(LEGACY_STORAGE_KEY))) {
+        if let Some(json) = cc.storage.and_then(|s| s.get_string("asdreader")) {
             app.restore(&json);
         }
         app.window_state = asdreader_ui_egui::window_state::WindowState::started_with(cc.storage);

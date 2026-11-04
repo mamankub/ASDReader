@@ -48,7 +48,7 @@ fn asdesign_fonts(dir: &std::path::Path) -> Result<String, String> {
             return Err(format!("malformed manifest line: {line}"));
         };
         // Whole CJK faces aren't embedded for size; interface CJK comes from cut faces once the app
-        // moves to asdesign-fonts-build (ASDesign libraries (crates/asdesign-*)#213).
+        // moves to asdesign-fonts-build.
         let cjk = scripts.split(',').any(cjk_scripts::is_cjk_script);
         if cjk
             && !cjk_scripts::WHOLE_CJK_FAMILIES.contains(family)

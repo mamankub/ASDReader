@@ -7,11 +7,9 @@ pub mod writer;
 pub use print_schema::*;
 
 /// The namespace URI for the Print Schema Framework.
-pub const NS_PSF: &str =
-    "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework";
+pub const NS_PSF: &str = "http://schemas.microsoft.com/windows/2003/08/printing/printschemaframework";
 /// The namespace URI for the Print Schema Keywords.
-pub const NS_PSK: &str =
-    "http://schemas.microsoft.com/windows/2003/08/printing/printschemakeywords";
+pub const NS_PSK: &str = "http://schemas.microsoft.com/windows/2003/08/printing/printschemakeywords";
 /// The namespace URI for the XML Schema.
 pub const NS_XSD: &str = "http://www.w3.org/2001/XMLSchema";
 /// The namespace URI for the XML Schema Instance.

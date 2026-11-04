@@ -18,9 +18,8 @@ use windows::{
     core::PCWSTR,
     Win32::{
         Graphics::Gdi::{
-            CreateDCW, DeleteDC, GetDeviceCaps, SetBrushOrgEx, SetGraphicsMode, SetStretchBltMode,
-            GET_DEVICE_CAPS_INDEX, GM_ADVANCED, HALFTONE, LOGPIXELSX, LOGPIXELSY, PHYSICALHEIGHT,
-            PHYSICALOFFSETX, PHYSICALOFFSETY, PHYSICALWIDTH,
+            CreateDCW, DeleteDC, GetDeviceCaps, SetBrushOrgEx, SetGraphicsMode, SetStretchBltMode, GET_DEVICE_CAPS_INDEX, GM_ADVANCED, HALFTONE,
+            LOGPIXELSX, LOGPIXELSY, PHYSICALHEIGHT, PHYSICALOFFSETX, PHYSICALOFFSETY, PHYSICALWIDTH,
         },
         Storage::Xps::{AbortDoc, EndDoc, EndPage, StartDocW, StartPage, DOCINFOW},
     },
@@ -73,27 +72,15 @@ impl PdfiumPrinter {
     }
 }
 
-const PRINT_DRIVER: PCWSTR = PCWSTR(
-    [
-        'W' as u16, 'I' as u16, 'N' as u16, 'S' as u16, 'P' as u16, 'O' as u16, 'O' as u16,
-        'L' as u16, 0,
-    ]
-    .as_ptr(),
-);
+const PRINT_DRIVER: PCWSTR = PCWSTR(['W' as u16, 'I' as u16, 'N' as u16, 'S' as u16, 'P' as u16, 'O' as u16, 'O' as u16, 'L' as u16, 0].as_ptr());
 
 impl FilePrinter for PdfiumPrinter {
     type Options = PrintTicket;
     type Error = PdfiumPrinterError;
 
-    fn print(
-        &self,
-        path: &Path,
-        options: PrintTicket,
-    ) -> std::result::Result<(), PdfiumPrinterError> {
+    fn print(&self, path: &Path, options: PrintTicket) -> std::result::Result<(), PdfiumPrinterError> {
         unsafe {
-            let dev_mode = options
-                .to_dev_mode(&self.printer)
-                .map_err(PdfiumPrinterError::PrintTicketError)?;
+            let dev_mode = options.to_dev_mode(&self.printer).map_err(PdfiumPrinterError::PrintTicketError)?;
             // According to https://learn.microsoft.com/en-us/windows/win32/printdocs/retrieving-a-printer-device-context:
             // > To render to a specific printer, you must specify "WINSPOOL" as the device.
             //
@@ -102,12 +89,8 @@ impl FilePrinter for PdfiumPrinter {
             //
             // We check the Chromium source code and it seems that they are using "WINSPOOL" as the driver name, so we will do the same.
             // https://github.com/chromium/chromium/blob/749ad837ac3e74e3988f4a079979e3ea7e926f25/printing/printing_context_win.cc#L489
-            let hdc_print = CreateDCW(
-                PRINT_DRIVER,
-                PCWSTR(wchar::to_wide_chars(self.printer.os_name()).as_ptr()),
-                None,
-                Some(dev_mode.as_ptr() as *const _),
-            );
+            let hdc_print =
+                CreateDCW(PRINT_DRIVER, PCWSTR(wchar::to_wide_chars(self.printer.os_name()).as_ptr()), None, Some(dev_mode.as_ptr() as *const _));
             if hdc_print.is_invalid() {
                 return Err(PdfiumPrinterError::FailedToOpenPrinter);
             }
@@ -145,8 +128,7 @@ impl FilePrinter for PdfiumPrinter {
 
             let _pdfium_guard = PdfiumGuard::guard();
             let mut file = File::open(path).map_err(PdfiumPrinterError::FileIOError)?;
-            let mut file_delegation =
-                PdfiumCustomDocument::new(&mut file).map_err(PdfiumPrinterError::FileIOError)?;
+            let mut file_delegation = PdfiumCustomDocument::new(&mut file).map_err(PdfiumPrinterError::FileIOError)?;
             let document = FPDF_LoadCustomDocument(file_delegation.as_mut(), ptr::null());
             if document.is_null() {
                 return Err(PdfiumPrinterError::PdfiumLoadFailed(FPDF_GetLastError()));
@@ -155,8 +137,7 @@ impl FilePrinter for PdfiumPrinter {
                 FPDF_CloseDocument(document);
             }
 
-            let get_attr =
-                |kind: GET_DEVICE_CAPS_INDEX| -> i32 { GetDeviceCaps(Some(hdc_print), kind) };
+            let get_attr = |kind: GET_DEVICE_CAPS_INDEX| -> i32 { GetDeviceCaps(Some(hdc_print), kind) };
             let page_count = FPDF_GetPageCount(document);
             for page_index in 0..page_count {
                 let page = FPDF_LoadPage(document, page_index);
@@ -166,10 +147,7 @@ impl FilePrinter for PdfiumPrinter {
 
                 let start_page_ret = StartPage(hdc_print);
                 if start_page_ret <= 0 {
-                    return Err(PdfiumPrinterError::StartPageFailed(
-                        page_index,
-                        start_page_ret,
-                    ));
+                    return Err(PdfiumPrinterError::StartPageFailed(page_index, start_page_ret));
                 }
                 let dpi_x = get_attr(LOGPIXELSX);
                 let dpi_y = get_attr(LOGPIXELSY);
@@ -183,16 +161,7 @@ impl FilePrinter for PdfiumPrinter {
                     (page_std_height * 2540.0 / 72.0).round() as i32,
                     |hdc_emf| {
                         SetGraphicsMode(hdc_emf, GM_ADVANCED);
-                        FPDF_RenderPage(
-                            hdc_emf,
-                            page,
-                            0,
-                            0,
-                            page_width,
-                            page_height,
-                            0,
-                            FPDF_PRINTING,
-                        );
+                        FPDF_RenderPage(hdc_emf, page, 0, 0, page_width, page_height, 0, FPDF_PRINTING);
                         true
                     },
                 )
@@ -200,23 +169,13 @@ impl FilePrinter for PdfiumPrinter {
 
                 let paper_width = get_attr(PHYSICALWIDTH);
                 let paper_height = get_attr(PHYSICALHEIGHT);
-                let scale = f64::min(
-                    paper_width as f64 / page_width as f64,
-                    paper_height as f64 / page_height as f64,
-                );
+                let scale = f64::min(paper_width as f64 / page_width as f64, paper_height as f64 / page_height as f64);
                 let actual_width = (page_width as f64 * scale).round() as i32;
                 let actual_height = (page_height as f64 * scale).round() as i32;
                 let left = -get_attr(PHYSICALOFFSETX) + (paper_width - actual_width) / 2;
                 let top = -get_attr(PHYSICALOFFSETY) + (paper_height - actual_height) / 2;
-                let target_rect = RECT {
-                    left,
-                    top,
-                    right: actual_width + left,
-                    bottom: actual_height + top,
-                };
-                let page_result = emf
-                    .playback(hdc_print, target_rect)
-                    .map_err(|_| PdfiumPrinterError::EmfPlaybackFailed(page_index));
+                let target_rect = RECT { left, top, right: actual_width + left, bottom: actual_height + top };
+                let page_result = emf.playback(hdc_print, target_rect).map_err(|_| PdfiumPrinterError::EmfPlaybackFailed(page_index));
                 let end_page_ret = EndPage(hdc_print);
                 page_result?;
                 if end_page_ret <= 0 {

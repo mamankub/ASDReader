@@ -33,7 +33,7 @@ chrono = { workspace = true }
 [target.'cfg(target_os = "macos")'.dependencies]
 # Finder double-click / Open With / Dock drops arrive as Apple events (#73); this small audited
 # crate registers the handler (Objective-C interop needs unsafe, which our workspace forbids)
-# behind a safe API. Same version as ASDesign Photo. Pinned exactly: review the diff before bumping.
+# behind a safe API. Pinned exactly: review the diff before bumping.
 fmv-macos-events = "=0.1.0"
 # ⌘Q asks about unsaved changes like the close button (#1136): an app menu whose Quit asks the
 # window to close instead of winit's, which ends the process without asking.

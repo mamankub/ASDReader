@@ -23,8 +23,7 @@ fn main() {
                 options,
                 Box::new(|cc| {
                     let mut app = ASDReaderApp::new();
-                    // "asdesign-print-app": settings saved under the app's former name, ASDesign Print.
-                    if let Some(json) = cc.storage.and_then(|s| s.get_string("asdreader").or_else(|| s.get_string("asdesign-print-app"))) {
+                    if let Some(json) = cc.storage.and_then(|s| s.get_string("asdreader")) {
                         app.restore(&json);
                     }
                     // `?file=<url>` opens a PDF from a URL (same-origin or CORS-enabled).

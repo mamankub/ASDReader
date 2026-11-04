@@ -13,10 +13,7 @@ use windows::{
             Gdi::{DM_IN_BUFFER, DM_OUT_BUFFER},
             Printing::{
                 ClosePrinter, DocumentPropertiesW, OpenPrinterW,
-                PrintTicket::{
-                    kPTJobScope, kUserDefaultDevmode, PTCloseProvider,
-                    PTConvertPrintTicketToDevMode, PTOpenProvider, PTReleaseMemory,
-                },
+                PrintTicket::{kPTJobScope, kUserDefaultDevmode, PTCloseProvider, PTConvertPrintTicketToDevMode, PTOpenProvider, PTReleaseMemory},
                 PRINTER_HANDLE,
             },
         },
@@ -32,9 +29,7 @@ pub struct PrintTicket {
 
 impl Default for PrintTicket {
     fn default() -> Self {
-        Self {
-            xml: DEFAULT_PRINT_TICKET_XML.into(),
-        }
+        Self { xml: DEFAULT_PRINT_TICKET_XML.into() }
     }
 }
 
@@ -81,15 +76,12 @@ impl PrintTicket {
     /// [`DEVMODE`]: https://learn.microsoft.com/en-us/windows/win32/api/wingdi/ns-wingdi-devmodew
     pub fn to_dev_mode(&self, device: &PrinterDevice) -> Result<Vec<u8>, ToDevModeError> {
         unsafe {
-            let provider =
-                PTOpenProvider(PCWSTR(wchar::to_wide_chars(device.os_name()).as_ptr()), 1)
-                    .map_err(ToDevModeError::OpenProviderFailed)?;
+            let provider = PTOpenProvider(PCWSTR(wchar::to_wide_chars(device.os_name()).as_ptr()), 1).map_err(ToDevModeError::OpenProviderFailed)?;
             defer! {
                 let _ = PTCloseProvider(provider);
             }
 
-            let stream = SHCreateMemStream(Some(self.get_xml()))
-                .ok_or(ToDevModeError::StreamNotAllocated)?;
+            let stream = SHCreateMemStream(Some(self.get_xml())).ok_or(ToDevModeError::StreamNotAllocated)?;
 
             let mut dev_mode_size = 0;
             let mut dev_mode_data = std::ptr::null_mut();
@@ -103,12 +95,7 @@ impl PrintTicket {
                 ptr::addr_of_mut!(dev_mode_data),
                 Some(&mut error_message),
             )
-            .map_err(|win32_error| {
-                ToDevModeError::ConvertPrintTicketToDevModeFailed(
-                    error_message.to_string(),
-                    win32_error,
-                )
-            })?;
+            .map_err(|win32_error| ToDevModeError::ConvertPrintTicketToDevModeFailed(error_message.to_string(), win32_error))?;
             defer! {
                 let _ = PTReleaseMemory(dev_mode_data as *mut _);
             }
@@ -116,26 +103,14 @@ impl PrintTicket {
             let printer_name = wchar::to_wide_chars(device.os_name());
             let printer_handle = {
                 let mut printer_handle = PRINTER_HANDLE::default();
-                OpenPrinterW(
-                    PCWSTR(printer_name.as_ptr()),
-                    ptr::addr_of_mut!(printer_handle),
-                    None,
-                )
-                .map_err(ToDevModeError::FailedToOpenPrinter)?;
+                OpenPrinterW(PCWSTR(printer_name.as_ptr()), ptr::addr_of_mut!(printer_handle), None).map_err(ToDevModeError::FailedToOpenPrinter)?;
                 printer_handle
             };
             defer! {
                 let _ = ClosePrinter(printer_handle);
             }
 
-            let mut buffer_size = DocumentPropertiesW(
-                None,
-                printer_handle,
-                PCWSTR(printer_name.as_ptr()),
-                None,
-                None,
-                0,
-            );
+            let mut buffer_size = DocumentPropertiesW(None, printer_handle, PCWSTR(printer_name.as_ptr()), None, None, 0);
 
             // Workaround for buggy printer drivers
             // See also: https://chromium.googlesource.com/chromium/src/+/refs/tags/124.0.6347.1/printing/backend/win_helper.cc#586
@@ -161,8 +136,6 @@ impl PrintTicket {
 
 impl From<PrintTicketDocument> for PrintTicket {
     fn from(value: PrintTicketDocument) -> Self {
-        Self {
-            xml: value.to_xml(),
-        }
+        Self { xml: value.to_xml() }
     }
 }

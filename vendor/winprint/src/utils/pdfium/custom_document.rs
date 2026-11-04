@@ -25,10 +25,7 @@ where
     pub fn new(inner: &'a mut T) -> io::Result<Self> {
         Ok(Self {
             access: FPDF_FILEACCESS {
-                m_FileLen: inner
-                    .seek(SeekFrom::End(0))?
-                    .try_into()
-                    .map_err(|x| io::Error::new(io::ErrorKind::Other, x))?,
+                m_FileLen: inner.seek(SeekFrom::End(0))?.try_into().map_err(|x| io::Error::new(io::ErrorKind::Other, x))?,
                 m_GetBlock: Some(Self::get_block),
                 m_Param: inner as *mut T as *mut c_void,
             },
@@ -36,18 +33,10 @@ where
         })
     }
 
-    unsafe extern "C" fn get_block(
-        param: *mut c_void,
-        position: c_ulong,
-        p_buf: *mut c_uchar,
-        size: c_ulong,
-    ) -> c_int {
+    unsafe extern "C" fn get_block(param: *mut c_void, position: c_ulong, p_buf: *mut c_uchar, size: c_ulong) -> c_int {
         let file = &mut *(param as *mut T);
         let buf = std::slice::from_raw_parts_mut(p_buf, size as usize);
-        file.seek(SeekFrom::Start(position.into()))
-            .and_then(|_| file.read_exact(buf))
-            .is_ok()
-            .into()
+        file.seek(SeekFrom::Start(position.into())).and_then(|_| file.read_exact(buf)).is_ok().into()
     }
 }
 

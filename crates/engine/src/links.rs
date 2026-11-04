@@ -4,14 +4,18 @@
 use icu_properties::props::Script;
 use std::path::{Path, PathBuf};
 
-/// The fork's GitHub repository name.
+/// The application's name.
 pub const APP: &str = "ASDReader";
 
+/// The public help site (Thai): manual, support and downloads, published with GitHub Pages from
+/// [`GITHUB`]. The source repository is private; everything a user follows from the app is here.
+pub const SITE: &str = "https://mamankub.github.io/asdreader-help";
 // Legacy constant and command IDs remain compatible with automation scripts.
-pub const DISCORD: &str = "https://github.com/mamankub/ASDReader/issues";
-pub const WEBSITE: &str = "https://github.com/mamankub/ASDReader/releases";
-pub const APP_PAGE: &str = "https://github.com/mamankub/ASDReader#readme";
-pub const GITHUB: &str = "https://github.com/mamankub/ASDReader";
+pub const DISCORD: &str = "https://mamankub.github.io/asdreader-help/support/";
+pub const WEBSITE: &str = "https://mamankub.github.io/asdreader-help/download/";
+pub const APP_PAGE: &str = "https://mamankub.github.io/asdreader-help/manual/";
+/// The public repository: the help site, its issues (questions and bug reports) and the releases.
+pub const GITHUB: &str = "https://github.com/mamankub/asdreader-help";
 
 /// A link and the registry command that opens it.
 #[derive(Clone, Copy, Debug)]
@@ -565,9 +569,12 @@ mod tests {
     }
 
     #[test]
-    fn urls_point_to_the_asdreader_fork() {
-        assert_eq!(super::APP_PAGE, format!("{}#readme", super::GITHUB));
-        assert_eq!(super::GITHUB, format!("https://github.com/mamankub/{}", super::APP));
+    fn urls_point_at_the_public_help_site() {
+        // The source repository is private: every link a user follows goes to the public site.
+        for page in [super::DISCORD, super::WEBSITE, super::APP_PAGE] {
+            assert!(page.starts_with(super::SITE) && page.ends_with('/'), "{page}");
+        }
+        assert_eq!(super::GITHUB, "https://github.com/mamankub/asdreader-help");
         for l in super::LINKS {
             assert!(l.url.starts_with("https://"), "{}", l.url);
             assert!(crate::commands::command(l.command).is_some(), "{} is a registered command", l.command);

@@ -12,7 +12,7 @@ use egui::{Align, Layout};
 use crate::{ASDReaderApp, theme, widgets};
 
 /// Where every ASDReader release is listed.
-pub const RELEASES_PAGE: &str = "https://github.com/mamankub/ASDReader/releases";
+pub const RELEASES_PAGE: &str = "https://github.com/mamankub/asdreader-help/releases";
 
 /// The latest published release.
 #[derive(Clone, Debug, PartialEq, Eq)]

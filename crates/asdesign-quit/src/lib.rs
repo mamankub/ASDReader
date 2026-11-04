@@ -60,7 +60,7 @@ pub use close::{QUIT_MENU_ID, on_close_request, on_menu_event};
 /// the root window a `ViewportCommand::Close` instead: the app's unsaved-changes check runs as it
 /// does for the close button, and [`on_close_request`] then quits. Call it once, from the eframe
 /// app creator: winit builds its default menu before that and would replace one installed
-/// earlier. `app_name` is shown in the menu ("Quit ASDesign Word").
+/// earlier. `app_name` is shown in the menu ("Quit ASDReader").
 ///
 /// For apps without an app menu of their own. It replaces the whole menu and sets muda's
 /// process-wide menu-event handler, so an app that builds its own muda menu should not call it:

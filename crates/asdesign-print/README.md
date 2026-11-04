@@ -1,6 +1,6 @@
 # asdesign-print
 
-Submit a print-ready PDF to the system spooler. Used by ASDReader and ASDesign Design;
+Submit a print-ready PDF to the system spooler. Used by ASDReader;
 there are no dependencies on either app or on a UI framework. Requires Rust 1.95.
 
 ```rust,no_run
@@ -24,7 +24,7 @@ opens Windows printer preferences and submits jobs with copies, collation, duple
   driver that would change the paper, orientation or scaling is refused before anything is
   sent. Paper is the driver's own option for the sheet's size (to 0.25 mm), preferring the one
   named like the standard size ("ARCH D" over a custom 24 × 36 in entry). This backend comes
-  from upstream issue #599 and #1132.
+  from earlier printer reports.
   A job has one ticket, so one paper and orientation. Sheets of the other orientation are
   turned back with `/Rotate`, so portrait and landscape sheets still print as one job. Exact
   size refuses sheets of different sizes and paper the driver lacks. Shrink-to-fit uses the
@@ -93,7 +93,7 @@ Windows discovery reports driver duplex support in `Printer::two_sided` (a two-s
 the driver's PrintCapabilities); CUPS leaves it unknown. Callers can warn when a Windows driver
 ignores the job’s duplex choice.
 
-Windows dependencies: the maintained [`winprint` fork](https://github.com/storytold/winprint.rs)
+Windows dependencies: the [`winprint`](../../vendor/winprint) crate, kept in `vendor/winprint`
 (BSD-3-Clause, pinned to an immutable Git revision, its PDFium-downloading `pdfium` feature off) and `winsafe` (MIT) hold every Win32 and WinRT call, so the crate keeps `unsafe` forbidden;
 `roxmltree` reads PrintTickets and `miniz_oxide` inflates PDF streams. `winprint` 0.2.1 lists
 reqwest (with rustls) and sigstore crates as non-optional build-dependencies, used only by its

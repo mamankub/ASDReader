@@ -37,14 +37,7 @@ impl MediaSizeTuple {
 
 impl fmt::Debug for MediaSizeTuple {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "MediaSizeTuple({}.{:0>4} cm × {}.{:0>4} cm)",
-            self.0 / 10000,
-            self.0 % 10000,
-            self.1 / 10000,
-            self.1 % 10000
-        )
+        write!(f, "MediaSizeTuple({}.{:0>4} cm × {}.{:0>4} cm)", self.0 / 10000, self.0 % 10000, self.1 / 10000, self.1 % 10000)
     }
 }
 
@@ -65,22 +58,13 @@ mod tests {
 
     #[test]
     fn test_debug_fmt() {
-        assert_eq!(
-            format!("{:?}", MediaSizeTuple::mm(210, 297)),
-            "MediaSizeTuple(21.0000 cm × 29.7000 cm)"
-        );
-        assert_eq!(
-            format!("{:?}", MediaSizeTuple::micron(210001, 297001)),
-            "MediaSizeTuple(21.0001 cm × 29.7001 cm)"
-        );
+        assert_eq!(format!("{:?}", MediaSizeTuple::mm(210, 297)), "MediaSizeTuple(21.0000 cm × 29.7000 cm)");
+        assert_eq!(format!("{:?}", MediaSizeTuple::micron(210001, 297001)), "MediaSizeTuple(21.0001 cm × 29.7001 cm)");
     }
 
     #[test]
     fn test_eq() {
-        assert_eq!(
-            MediaSizeTuple::micron(210000, 297000),
-            MediaSizeTuple::mm(210, 297)
-        );
+        assert_eq!(MediaSizeTuple::micron(210000, 297000), MediaSizeTuple::mm(210, 297));
     }
 
     #[test]

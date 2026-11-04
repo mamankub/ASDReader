@@ -35,9 +35,9 @@
          Add/Remove Programs show a blank icon (#57). -->
     <Icon Id="ASDReaderIcon.ico" SourceFile="$(var.IconPath)" />
     <Property Id="ARPPRODUCTICON" Value="ASDReaderIcon.ico" />
-    <Property Id="ARPURLINFOABOUT" Value="https://github.com/mamankub/ASDReader" />
-    <Property Id="ARPURLUPDATEINFO" Value="https://github.com/mamankub/ASDReader" />
-    <Property Id="ARPHELPLINK" Value="https://github.com/mamankub/ASDReader/issues" />
+    <Property Id="ARPURLINFOABOUT" Value="https://mamankub.github.io/asdreader-help/" />
+    <Property Id="ARPURLUPDATEINFO" Value="https://mamankub.github.io/asdreader-help/download/" />
+    <Property Id="ARPHELPLINK" Value="https://mamankub.github.io/asdreader-help/support/" />
     <!-- Desktop shortcut (#143): on by default for a first install, a checkbox in the full-UI
          welcome dialog, and INSTALLDESKTOPSHORTCUT=0 on the msiexec command line for unattended
          installs. Secure, so the choice made in the (unelevated) UI reaches the elevated install.
@@ -45,6 +45,8 @@
          updates with /passive and no properties, so deleting the shortcut is the only way its
          users can say no. A value given on the command line wins. -->
     <Property Id="INSTALLDESKTOPSHORTCUT" Secure="yes" />
+    <!-- The folder chosen in the (unelevated) UI must reach the elevated install too. -->
+    <Property Id="INSTALLFOLDER" Secure="yes" />
     <Property Id="EXISTINGDESKTOPSHORTCUT">
       <DirectorySearch Id="DesktopSearch" Path="[DesktopFolder]" Depth="0">
         <FileSearch Name="ASDReader.lnk" />

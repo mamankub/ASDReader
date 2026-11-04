@@ -1,5 +1,5 @@
 //! Vector icons: embedded Lucide SVGs, recoloured to white, rasterized by egui_extras at the exact
-//! on-screen pixel size, and tinted per use (ASDesign Photo lesson: never use Unicode glyphs as icons).
+//! on-screen pixel size, and tinted per use (never use Unicode glyphs as icons).
 
 use std::sync::OnceLock;
 

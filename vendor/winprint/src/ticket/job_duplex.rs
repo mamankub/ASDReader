@@ -5,8 +5,4 @@ use super::{
 };
 use xml::name::OwnedName;
 
-define_feature_option_pack!(
-    OwnedName::qualified("JobDuplexAllDocumentsContiguously", NS_PSK, Some("psk")),
-    JobDuplex,
-    PredefinedDuplexType
-);
+define_feature_option_pack!(OwnedName::qualified("JobDuplexAllDocumentsContiguously", NS_PSK, Some("psk")), JobDuplex, PredefinedDuplexType);

@@ -22,39 +22,21 @@ const VERIFIED_MARKER_FILE: &str = ".sigstore-verified";
 
 #[allow(dead_code)]
 fn try_link_pdfium() -> Result<(), Box<dyn Error>> {
-    let bin_ext = [
-        OsStr::new("dll"),
-        OsStr::new("lib"),
-        OsStr::new("so"),
-        OsStr::new("a"),
-    ];
-    let build_id = env::var("WINPRINT_PDFIUM_BUILD_ID")
-        .unwrap_or_else(|_| DEFAULT_PDFIUM_BUILD_ID.to_string());
+    let bin_ext = [OsStr::new("dll"), OsStr::new("lib"), OsStr::new("so"), OsStr::new("a")];
+    let build_id = env::var("WINPRINT_PDFIUM_BUILD_ID").unwrap_or_else(|_| DEFAULT_PDFIUM_BUILD_ID.to_string());
     let mut target_path = PathBuf::from(env::var("OUT_DIR")?);
     target_path.push(format!("pdfium_binaries_{}", build_id));
     fs::create_dir_all(target_path.as_path())?;
 
     let has_bin = fs::read_dir(target_path.as_path())?.any(|x| {
         bin_ext.iter().any(|s| {
-            x.as_ref()
-                .ok()
-                .and_then(|d| {
-                    if Path::new(d.file_name().as_os_str()).extension() == Some(s) {
-                        Some(())
-                    } else {
-                        None
-                    }
-                })
-                .is_some()
+            x.as_ref().ok().and_then(|d| if Path::new(d.file_name().as_os_str()).extension() == Some(s) { Some(()) } else { None }).is_some()
         })
     });
     let verified_marker = target_path.join(VERIFIED_MARKER_FILE);
 
     if !has_bin || !verified_marker.exists() {
-        let platform_name = match (
-            env::var("CARGO_CFG_TARGET_OS")?.as_str(),
-            env::var("CARGO_CFG_TARGET_ARCH")?.as_str(),
-        ) {
+        let platform_name = match (env::var("CARGO_CFG_TARGET_OS")?.as_str(), env::var("CARGO_CFG_TARGET_ARCH")?.as_str()) {
             ("windows", "x86") => "win-x86",
             ("windows", "x86_64") => "win-x64",
             ("windows", "aarch64") => "win-arm64",
@@ -73,28 +55,16 @@ fn try_link_pdfium() -> Result<(), Box<dyn Error>> {
         fs::remove_dir_all(target_path.as_path())?;
         fs::create_dir_all(target_path.as_path())?;
         unpack_pdfium_archive(binary_package.as_slice(), target_path.as_path(), &bin_ext)?;
-        fs::write(
-            verified_marker,
-            format!(
-                "Verified {} with {}\n",
-                binary_package_name, PDFIUM_ATTESTATION_NAME
-            ),
-        )?;
+        fs::write(verified_marker, format!("Verified {} with {}\n", binary_package_name, PDFIUM_ATTESTATION_NAME))?;
     }
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        target_path.to_str().unwrap()
-    );
+    println!("cargo:rustc-link-search=native={}", target_path.to_str().unwrap());
     println!("cargo:rustc-link-lib=dylib=pdfium");
     Ok(())
 }
 
 fn release_asset_url(build_id: &str, file_name: &str) -> String {
-    format!(
-        "https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/{}/{}",
-        build_id, file_name
-    )
+    format!("https://github.com/bblanchon/pdfium-binaries/releases/download/chromium/{}/{}", build_id, file_name)
 }
 
 fn download_asset(url: &str) -> Result<Vec<u8>, Box<dyn Error>> {
@@ -109,25 +79,17 @@ fn ensure_success(resp: Response, url: &str) -> Result<Vec<u8>, Box<dyn Error>> 
     Ok(resp.bytes()?.to_vec())
 }
 
-fn verify_pdfium_attestation(
-    binary_package: &[u8],
-    attestation_json: &[u8],
-) -> Result<(), Box<dyn Error>> {
+fn verify_pdfium_attestation(binary_package: &[u8], attestation_json: &[u8]) -> Result<(), Box<dyn Error>> {
     let bundle = Bundle::from_json(std::str::from_utf8(attestation_json)?)?;
     let trusted_root = TrustedRoot::from_json(SIGSTORE_PRODUCTION_TRUSTED_ROOT)?;
     let policy = VerificationPolicy::default().require_issuer(PDFIUM_CERTIFICATE_ISSUER);
 
-    verify(binary_package, &bundle, &policy, &trusted_root)
-        .map_err(|err| format!("Failed to verify PDFium Sigstore attestation: {err}"))?;
+    verify(binary_package, &bundle, &policy, &trusted_root).map_err(|err| format!("Failed to verify PDFium Sigstore attestation: {err}"))?;
 
     Ok(())
 }
 
-fn unpack_pdfium_archive(
-    archive_bytes: &[u8],
-    target_path: &Path,
-    bin_ext: &[&OsStr],
-) -> Result<(), Box<dyn Error>> {
+fn unpack_pdfium_archive(archive_bytes: &[u8], target_path: &Path, bin_ext: &[&OsStr]) -> Result<(), Box<dyn Error>> {
     let tar = GzDecoder::new(Cursor::new(archive_bytes));
     let mut archive = Archive::new(tar);
 

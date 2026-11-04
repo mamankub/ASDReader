@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       project-key:
-        description: "SonarCloud project key (defaults to storytold_<repo>)"
+        description: "SonarCloud project key (defaults to mamankub_<repo>)"
         type: string
         required: false
         default: ""
@@ -257,7 +257,7 @@ jobs:
         if: steps.token.outputs.available == 'true'
         shell: bash
         env:
-          PROJECT_KEY: ${{ inputs.project-key != '' && inputs.project-key || format('storytold_{0}', github.event.repository.name) }}
+          PROJECT_KEY: ${{ inputs.project-key != '' && inputs.project-key || format('mamankub_{0}', github.event.repository.name) }}
           LC_ALL: C
         run: |
           # The scan action splits args; reject characters that could introduce properties.
@@ -416,6 +416,6 @@ jobs:
         with:
           args: >
             "-Dsonar.projectKey=${{ steps.project.outputs.key }}"
-            -Dsonar.organization=storytold
+            -Dsonar.organization=mamankub
             -Dsonar.rust.lcov.reportPaths=lcov.info
             "-Dsonar.cpd.exclusions=**/i18n/**"

@@ -30,10 +30,7 @@ impl PdfiumGuard {
     }
     pub fn get() -> MutexGuard<'static, PdfiumGuard> {
         static PDFIUM_GUARD: OnceLock<Mutex<PdfiumGuard>> = OnceLock::new();
-        PDFIUM_GUARD
-            .get_or_init(|| Mutex::new(PdfiumGuard::new()))
-            .lock()
-            .unwrap()
+        PDFIUM_GUARD.get_or_init(|| Mutex::new(PdfiumGuard::new())).lock().unwrap()
     }
     pub fn guard() -> MutexGuard<'static, PdfiumGuard> {
         let mut x = Self::get();

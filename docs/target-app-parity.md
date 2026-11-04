@@ -225,8 +225,7 @@ with evidence when next touched.
 ## Stage
 
 **alpha.** Ready for real work, ≈ 50%, is inside the 40–75% band, and every one of Acrobat Pro's
-six everyday workflows can be completed end to end on macOS. Under the gate rule shared by all the
-ASDesign apps, a workflow blocks only when a typical user can't complete it at all; lossy exchange
+six everyday workflows can be completed end to end on macOS. Under the gate rule, a workflow blocks only when a typical user can't complete it at all; lossy exchange
 or a missing sub-case is a beta item. **Converting and sharing** is therefore partial, not
 blocking: PDFs we save open everywhere, password-protected ones included since #836 (#774), and
 export to Word, RTF, HTML, text and images works, but there is no in-app

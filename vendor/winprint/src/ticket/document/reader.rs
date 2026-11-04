@@ -1,7 +1,6 @@
 use super::{
-    ParameterDef, ParameterInit, PrintCapabilitiesDocument, PrintFeature, PrintFeatureOption,
-    PrintSchemaDocument, PrintTicketDocument, Property, PropertyValue, ScoredProperty, NS_PSF,
-    NS_XSD, NS_XSI,
+    ParameterDef, ParameterInit, PrintCapabilitiesDocument, PrintFeature, PrintFeatureOption, PrintSchemaDocument, PrintTicketDocument, Property,
+    PropertyValue, ScoredProperty, NS_PSF, NS_XSD, NS_XSI,
 };
 use std::{fmt::Debug, io::Cursor};
 use thiserror::Error;
@@ -59,39 +58,19 @@ fn parse_qname(namespace: &Namespace, value: &str) -> OwnedName {
     if let Some(prefix_index) = prefix_index {
         let (prefix, local_name) = value.split_at(prefix_index);
         let local_name = &local_name[1..];
-        OwnedName {
-            local_name: local_name.to_string(),
-            namespace: namespace.get(prefix).map(str::to_string),
-            prefix: Some(prefix.to_string()),
-        }
+        OwnedName { local_name: local_name.to_string(), namespace: namespace.get(prefix).map(str::to_string), prefix: Some(prefix.to_string()) }
     } else {
-        OwnedName {
-            local_name: value.to_string(),
-            namespace: None,
-            prefix: None,
-        }
+        OwnedName { local_name: value.to_string(), namespace: None, prefix: None }
     }
 }
 
-fn parse_name_attribute(
-    attributes: &[xml::attribute::OwnedAttribute],
-    namespace: &Namespace,
-) -> Option<OwnedName> {
-    let attribute_value = attributes
-        .iter()
-        .find(|x| x.name.local_name == "name" && x.name.namespace.is_none())
-        .map(|x| x.value.clone());
+fn parse_name_attribute(attributes: &[xml::attribute::OwnedAttribute], namespace: &Namespace) -> Option<OwnedName> {
+    let attribute_value = attributes.iter().find(|x| x.name.local_name == "name" && x.name.namespace.is_none()).map(|x| x.value.clone());
     attribute_value.map(|x| parse_qname(namespace, &x))
 }
 
-fn parse_type_attribute(
-    attributes: &[xml::attribute::OwnedAttribute],
-    namespace: &Namespace,
-) -> Option<OwnedName> {
-    let attribute_value = attributes
-        .iter()
-        .find(|x| x.name.local_name == "type" && x.name.namespace_ref() == Some(NS_XSI))
-        .map(|x| x.value.clone());
+fn parse_type_attribute(attributes: &[xml::attribute::OwnedAttribute], namespace: &Namespace) -> Option<OwnedName> {
+    let attribute_value = attributes.iter().find(|x| x.name.local_name == "type" && x.name.namespace_ref() == Some(NS_XSI)).map(|x| x.value.clone());
     attribute_value.map(|x| parse_qname(namespace, &x))
 }
 
@@ -108,19 +87,13 @@ impl PsfValueContext {
             match self.value_type.local_name.as_str() {
                 "string" => return Ok(PropertyValue::String(self.value)),
                 "integer" => {
-                    return self.value.parse().map(PropertyValue::Integer).map_err(|_| {
-                        ParsePrintSchemaError::InvalidPrintSchema {
-                            pos: self.pos,
-                            reason: "Invalid integer".to_string(),
-                        }
-                    })
+                    return self
+                        .value
+                        .parse()
+                        .map(PropertyValue::Integer)
+                        .map_err(|_| ParsePrintSchemaError::InvalidPrintSchema { pos: self.pos, reason: "Invalid integer".to_string() })
                 }
-                "QName" => {
-                    return Ok(PropertyValue::QName(parse_qname(
-                        &self.namespace,
-                        &self.value,
-                    )))
-                }
+                "QName" => return Ok(PropertyValue::QName(parse_qname(&self.namespace, &self.value))),
                 _ => {}
             };
         }
@@ -165,11 +138,7 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                 Err(e) => return Err(ParsePrintSchemaError::InvalidXml(e)),
             };
             match e {
-                XmlEvent::StartElement {
-                    name,
-                    attributes,
-                    namespace,
-                } => {
+                XmlEvent::StartElement { name, attributes, namespace } => {
                     depth += 1;
 
                     if name.namespace_ref() == Some(NS_PSF) {
@@ -178,8 +147,7 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 if depth > 1 {
                                     return Err(ParsePrintSchemaError::InvalidPrintSchema {
                                         pos: reader.position(),
-                                        reason: "PrintCapabilities should be root element"
-                                            .to_string(),
+                                        reason: "PrintCapabilities should be root element".to_string(),
                                     });
                                 }
                                 // root container
@@ -207,14 +175,9 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 parameter_init_name = parse_name_attribute(&attributes, &namespace);
                             }
                             "Feature" => {
-                                feature_name.push(
-                                    parse_name_attribute(&attributes, &namespace).ok_or_else(
-                                        || ParsePrintSchemaError::InvalidPrintSchema {
-                                            pos: reader.position(),
-                                            reason: "Feature name not found".to_string(),
-                                        },
-                                    )?,
-                                );
+                                feature_name.push(parse_name_attribute(&attributes, &namespace).ok_or_else(|| {
+                                    ParsePrintSchemaError::InvalidPrintSchema { pos: reader.position(), reason: "Feature name not found".to_string() }
+                                })?);
 
                                 // for sub-elements
                                 feature_containers.push(Vec::new());
@@ -230,8 +193,7 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 parameter_ref = parse_name_attribute(&attributes, &namespace);
                             }
                             "ScoredProperty" => {
-                                scored_property_name
-                                    .push(parse_name_attribute(&attributes, &namespace));
+                                scored_property_name.push(parse_name_attribute(&attributes, &namespace));
 
                                 // for sub-elements
                                 property_containers.push(Vec::new());
@@ -242,14 +204,12 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 parameter_ref.take();
                             }
                             "Property" => {
-                                property_name.push(
-                                    parse_name_attribute(&attributes, &namespace).ok_or_else(
-                                        || ParsePrintSchemaError::InvalidPrintSchema {
-                                            pos: reader.position(),
-                                            reason: "Property name not found".to_string(),
-                                        },
-                                    )?,
-                                );
+                                property_name.push(parse_name_attribute(&attributes, &namespace).ok_or_else(|| {
+                                    ParsePrintSchemaError::InvalidPrintSchema {
+                                        pos: reader.position(),
+                                        reason: "Property name not found".to_string(),
+                                    }
+                                })?);
 
                                 // for sub-elements
                                 property_containers.push(Vec::new());
@@ -258,15 +218,8 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 parsed_value.take();
                             }
                             "Value" => {
-                                if let Some(value_type) =
-                                    parse_type_attribute(&attributes, &namespace)
-                                {
-                                    value_context.replace(PsfValueContext {
-                                        pos: reader.position(),
-                                        value: String::new(),
-                                        value_type,
-                                        namespace,
-                                    });
+                                if let Some(value_type) = parse_type_attribute(&attributes, &namespace) {
+                                    value_context.replace(PsfValueContext { pos: reader.position(), value: String::new(), value_type, namespace });
                                 }
                             }
                             _ => {
@@ -304,16 +257,11 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 let parameter_def_name = parameter_def_name.take().unwrap();
                                 let properties = property_containers.pop().unwrap();
 
-                                let parent = parameter_def_container.as_mut().ok_or_else(|| {
-                                    ParsePrintSchemaError::InvalidPrintSchema {
-                                        pos: reader.position(),
-                                        reason: "ParameterDef cannot be here".to_string(),
-                                    }
+                                let parent = parameter_def_container.as_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "ParameterDef cannot be here".to_string(),
                                 })?;
-                                parent.push(ParameterDef {
-                                    name: parameter_def_name,
-                                    properties,
-                                });
+                                parent.push(ParameterDef { name: parameter_def_name, properties });
                             }
                             "ParameterInit" => {
                                 // element should be paired, so it's safe to unwrap
@@ -321,24 +269,16 @@ impl ParsableXmlDocument for PrintSchemaDocument {
 
                                 // value may not be found
                                 // check it, and if not found, return error
-                                let value = parsed_value.take().ok_or_else(|| {
-                                    ParsePrintSchemaError::InvalidPrintSchema {
-                                        pos: reader.position(),
-                                        reason: "ParameterInit value not found".to_string(),
-                                    }
+                                let value = parsed_value.take().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "ParameterInit value not found".to_string(),
                                 })?;
 
-                                let parent =
-                                    parameter_init_container.as_mut().ok_or_else(|| {
-                                        ParsePrintSchemaError::InvalidPrintSchema {
-                                            pos: reader.position(),
-                                            reason: "ParameterInit cannot be here".to_string(),
-                                        }
-                                    })?;
-                                parent.push(ParameterInit {
-                                    name: parameter_init_name,
-                                    value,
-                                });
+                                let parent = parameter_init_container.as_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "ParameterInit cannot be here".to_string(),
+                                })?;
+                                parent.push(ParameterInit { name: parameter_init_name, value });
                             }
                             "Feature" => {
                                 // element should be paired, so it's safe to unwrap
@@ -347,18 +287,11 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 let properties = property_containers.pop().unwrap();
                                 let options = option_containers.pop().unwrap();
 
-                                let parent = feature_containers.last_mut().ok_or_else(|| {
-                                    ParsePrintSchemaError::InvalidPrintSchema {
-                                        pos: reader.position(),
-                                        reason: "Feature cannot be here".to_string(),
-                                    }
+                                let parent = feature_containers.last_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "Feature cannot be here".to_string(),
                                 })?;
-                                parent.push(PrintFeature {
-                                    name: frature_name,
-                                    properties,
-                                    options,
-                                    features,
-                                });
+                                parent.push(PrintFeature { name: frature_name, properties, options, features });
                             }
                             "Option" => {
                                 // element should be paired, so it's safe to unwrap
@@ -366,17 +299,11 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 let properties = property_containers.pop().unwrap();
                                 let scored_properties = scored_property_containers.pop().unwrap();
 
-                                let parent = option_containers.last_mut().ok_or_else(|| {
-                                    ParsePrintSchemaError::InvalidPrintSchema {
-                                        pos: reader.position(),
-                                        reason: "Option cannot be here".to_string(),
-                                    }
+                                let parent = option_containers.last_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "Option cannot be here".to_string(),
                                 })?;
-                                parent.push(PrintFeatureOption {
-                                    name: option_name,
-                                    scored_properties,
-                                    properties,
-                                });
+                                parent.push(PrintFeatureOption { name: option_name, scored_properties, properties });
                             }
                             "ScoredProperty" => {
                                 // element should be paired, so it's safe to unwrap
@@ -384,13 +311,10 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 let properties = property_containers.pop().unwrap();
                                 let scored_properties = scored_property_containers.pop().unwrap();
 
-                                let parent =
-                                    scored_property_containers.last_mut().ok_or_else(|| {
-                                        ParsePrintSchemaError::InvalidPrintSchema {
-                                            pos: reader.position(),
-                                            reason: "ScoredProperty cannot be here".to_string(),
-                                        }
-                                    })?;
+                                let parent = scored_property_containers.last_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "ScoredProperty cannot be here".to_string(),
+                                })?;
                                 parent.push(ScoredProperty {
                                     name: scored_property_name,
                                     parameter_ref: parameter_ref.take(),
@@ -404,17 +328,11 @@ impl ParsableXmlDocument for PrintSchemaDocument {
                                 let property_name = property_name.pop().unwrap();
                                 let properties = property_containers.pop().unwrap();
 
-                                let parent = property_containers.last_mut().ok_or_else(|| {
-                                    ParsePrintSchemaError::InvalidPrintSchema {
-                                        pos: reader.position(),
-                                        reason: "Property cannot be here".to_string(),
-                                    }
+                                let parent = property_containers.last_mut().ok_or_else(|| ParsePrintSchemaError::InvalidPrintSchema {
+                                    pos: reader.position(),
+                                    reason: "Property cannot be here".to_string(),
                                 })?;
-                                parent.push(Property {
-                                    name: property_name,
-                                    value: parsed_value.take(),
-                                    properties,
-                                });
+                                parent.push(Property { name: property_name, value: parsed_value.take(), properties });
                             }
                             "Value" => {
                                 if let Some(value_context) = value_context.take() {
@@ -445,10 +363,7 @@ impl ParsableXmlDocument for PrintSchemaDocument {
             }
         }
 
-        Err(ParsePrintSchemaError::InvalidPrintSchema {
-            pos: reader.position(),
-            reason: "No valid root element found".to_string(),
-        })
+        Err(ParsePrintSchemaError::InvalidPrintSchema { pos: reader.position(), reason: "No valid root element found".to_string() })
     }
 }
 
@@ -460,10 +375,9 @@ impl ParsableXmlDocument for PrintCapabilitiesDocument {
     {
         PrintSchemaDocument::parse(reader).and_then(|x| match x {
             PrintSchemaDocument::PrintCapabilities(document) => Ok(document),
-            PrintSchemaDocument::PrintTicket(_) => Err(ParsePrintSchemaError::WrongDocumentType {
-                expected: "PrintCapabilities",
-                found: "PrintTicket",
-            }),
+            PrintSchemaDocument::PrintTicket(_) => {
+                Err(ParsePrintSchemaError::WrongDocumentType { expected: "PrintCapabilities", found: "PrintTicket" })
+            }
         })
     }
 }
@@ -477,10 +391,7 @@ impl ParsableXmlDocument for PrintTicketDocument {
         PrintSchemaDocument::parse(reader).and_then(|x| match x {
             PrintSchemaDocument::PrintTicket(document) => Ok(document),
             PrintSchemaDocument::PrintCapabilities(_) => {
-                Err(ParsePrintSchemaError::WrongDocumentType {
-                    expected: "PrintTicket",
-                    found: "PrintCapabilities",
-                })
+                Err(ParsePrintSchemaError::WrongDocumentType { expected: "PrintTicket", found: "PrintCapabilities" })
             }
         })
     }
@@ -489,25 +400,17 @@ impl ParsableXmlDocument for PrintTicketDocument {
 #[cfg(test)]
 mod tests {
     use super::{ParsableXmlDocument, ParsePrintSchemaError};
-    use crate::ticket::document::{
-        PrintCapabilitiesDocument, PrintSchemaDocument, PrintTicketDocument,
-    };
+    use crate::ticket::document::{PrintCapabilitiesDocument, PrintSchemaDocument, PrintTicketDocument};
 
     #[test]
     fn wrong_type_should_return_error() {
         let xml = include_bytes!("../../../test_data/print_ticket.xml");
         let result = PrintCapabilitiesDocument::parse_from_bytes(xml);
-        assert!(matches!(
-            result,
-            Err(ParsePrintSchemaError::WrongDocumentType { .. })
-        ));
+        assert!(matches!(result, Err(ParsePrintSchemaError::WrongDocumentType { .. })));
 
         let xml = include_bytes!("../../../test_data/print_capabilities.xml");
         let result = PrintTicketDocument::parse_from_bytes(xml);
-        assert!(matches!(
-            result,
-            Err(ParsePrintSchemaError::WrongDocumentType { .. })
-        ));
+        assert!(matches!(result, Err(ParsePrintSchemaError::WrongDocumentType { .. })));
     }
 
     #[test]
@@ -544,10 +447,7 @@ mod tests {
     </psf:ParameterDef>
 </psf:PrintTicket>"#;
         let result = PrintSchemaDocument::parse_from_bytes(xml);
-        assert!(matches!(
-            result,
-            Err(ParsePrintSchemaError::InvalidPrintSchema { .. })
-        ));
+        assert!(matches!(result, Err(ParsePrintSchemaError::InvalidPrintSchema { .. })));
     }
 
     #[test]
@@ -562,10 +462,7 @@ mod tests {
     </psf:ParameterInit>
 </psf:PrintCapabilities>"#;
         let result = PrintSchemaDocument::parse_from_bytes(xml);
-        assert!(matches!(
-            result,
-            Err(ParsePrintSchemaError::InvalidPrintSchema { .. })
-        ));
+        assert!(matches!(result, Err(ParsePrintSchemaError::InvalidPrintSchema { .. })));
     }
 
     #[test]

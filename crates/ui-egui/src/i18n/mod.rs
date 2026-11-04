@@ -4,7 +4,7 @@
 //! so agents and scripts are unaffected. A string without a translation is shown in English, so
 //! coverage can grow incrementally.
 //!
-//! The system is the one ASDesign Photo uses (`asdesign-photo/crates/ui-egui/src/i18n`), so catalogs and
+//! Catalogs and
 //! habits carry over between the two apps.
 //!
 //! # Adding a language
@@ -468,7 +468,7 @@ fn detect_system_lang() -> Lang {
 }
 
 thread_local! {
-    // Per thread, as in ASDesign Photo: independent app and test threads (kittest harnesses run in
+    // Per thread, independent app and test threads (kittest harnesses run in
     // parallel) must not change each other's drawing language.
     static CURRENT: Cell<Lang> = const { Cell::new(Lang::EN) };
 }

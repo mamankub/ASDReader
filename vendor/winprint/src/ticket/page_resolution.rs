@@ -4,10 +4,7 @@ use super::{
 };
 use xml::name::OwnedName;
 
-define_feature_option_pack!(
-    OwnedName::qualified("PageResolution", NS_PSK, Some("psk")),
-    PageResolution
-);
+define_feature_option_pack!(OwnedName::qualified("PageResolution", NS_PSK, Some("psk")), PageResolution);
 
 impl PageResolution {
     /// Get the resolution of the page in DPI.

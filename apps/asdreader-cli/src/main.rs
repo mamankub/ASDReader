@@ -80,7 +80,7 @@ asdreader-cli run    --script steps.json [--root DIR] [--report]
     "\
 asdreader-cli ui     --control FILE <method> [key=value …] [--out shot.png]
                                                            drive a running app started with --control FILE
-help and feedback: https://github.com/mamankub/ASDReader/issues"
+help and feedback: https://mamankub.github.io/asdreader-help/support/"
 );
 
 fn main() -> ExitCode {

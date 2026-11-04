@@ -55,23 +55,13 @@ impl WinPdfPrinter {
     /// Counts describe pages processed, not physical output or terminal spooler success.
     /// The final result still reports cancellation/failure even after every page was accepted.
     /// The callback runs synchronously on the calling thread; it does not require `Send`.
-    pub fn print_with_progress(
-        &self,
-        path: &Path,
-        options: PrintTicket,
-        mut progress: impl FnMut(u32, u32),
-    ) -> Result<(), WinPdfPrinterError> {
-        let context = DxgiPrintContext::new(
-            &self.printer,
-            &options,
-            path.file_name().unwrap_or(path.as_ref()),
-        )?;
+    pub fn print_with_progress(&self, path: &Path, options: PrintTicket, mut progress: impl FnMut(u32, u32)) -> Result<(), WinPdfPrinterError> {
+        let context = DxgiPrintContext::new(&self.printer, &options, path.file_name().unwrap_or(path.as_ref()))?;
         let dxgi_device = &context.dxgi_device;
         let print_control = &context.print_control;
         let d2d_context = &context.d2d_context;
         unsafe {
-            let absolute_path =
-                std::path::absolute(path).map_err(WinPdfPrinterError::InvalidPath)?;
+            let absolute_path = std::path::absolute(path).map_err(WinPdfPrinterError::InvalidPath)?;
             let file = StorageFile::GetFileFromPathAsync(&HSTRING::from(absolute_path.as_path()))
                 .map_err(WinPdfPrinterError::FailedToOpenDocument)?
                 .join()
@@ -81,44 +71,23 @@ impl WinPdfPrinter {
                 .join()
                 .map_err(WinPdfPrinterError::FailedToOpenDocument)?;
 
-            let pdf_renderer =
-                PdfCreateRenderer(dxgi_device).map_err(WinPdfPrinterError::RenderError)?;
-            let pdf_render_options = PDF_RENDER_PARAMS {
-                IgnoreHighContrast: true.into(),
-                ..Default::default()
-            };
-            let page_count = pdf_document
-                .PageCount()
-                .map_err(WinPdfPrinterError::RenderError)?;
+            let pdf_renderer = PdfCreateRenderer(dxgi_device).map_err(WinPdfPrinterError::RenderError)?;
+            let pdf_render_options = PDF_RENDER_PARAMS { IgnoreHighContrast: true.into(), ..Default::default() };
+            let page_count = pdf_document.PageCount().map_err(WinPdfPrinterError::RenderError)?;
             progress(0, page_count);
             for i in 0..page_count {
-                let pdf_page = pdf_document
-                    .GetPage(i)
-                    .map_err(WinPdfPrinterError::RenderError)?;
+                let pdf_page = pdf_document.GetPage(i).map_err(WinPdfPrinterError::RenderError)?;
 
-                let command_list = d2d_context
-                    .CreateCommandList()
-                    .map_err(WinPdfPrinterError::RenderError)?;
+                let command_list = d2d_context.CreateCommandList().map_err(WinPdfPrinterError::RenderError)?;
                 d2d_context.SetTarget(&command_list);
                 d2d_context.BeginDraw();
-                pdf_renderer
-                    .RenderPageToDeviceContext(&pdf_page, d2d_context, Some(&pdf_render_options))
-                    .map_err(WinPdfPrinterError::RenderError)?;
-                d2d_context
-                    .EndDraw(None, None)
-                    .map_err(WinPdfPrinterError::RenderError)?;
-                command_list
-                    .Close()
-                    .map_err(WinPdfPrinterError::RenderError)?;
+                pdf_renderer.RenderPageToDeviceContext(&pdf_page, d2d_context, Some(&pdf_render_options)).map_err(WinPdfPrinterError::RenderError)?;
+                d2d_context.EndDraw(None, None).map_err(WinPdfPrinterError::RenderError)?;
+                command_list.Close().map_err(WinPdfPrinterError::RenderError)?;
 
                 let pdf_size = pdf_page.Size().map_err(WinPdfPrinterError::RenderError)?;
-                let dx_size = D2D_SIZE_F {
-                    width: pdf_size.Width as f32,
-                    height: pdf_size.Height as f32,
-                };
-                print_control
-                    .AddPage(&command_list, dx_size, None, None, None)
-                    .map_err(WinPdfPrinterError::RenderError)?;
+                let dx_size = D2D_SIZE_F { width: pdf_size.Width as f32, height: pdf_size.Height as f32 };
+                print_control.AddPage(&command_list, dx_size, None, None, None).map_err(WinPdfPrinterError::RenderError)?;
                 progress(i + 1, page_count);
             }
         }

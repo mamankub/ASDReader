@@ -145,7 +145,7 @@ target/debug/examples/shot docs/images/asdreader-home.png --language th --size 1
 
 ## สิทธิ์และเครดิต
 
-ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของ ASDesign Team, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
+ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของผู้เขียนโค้ดต้นทาง, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
 
 logo/icon ของ ASDReader เป็นรูปทรงต้นฉบับสีแดงนีออน `#FF1744` และขาว `#FFFFFF` ส่วน wordmark ใช้เส้นอักษรจาก Inter ที่มีสิทธิ์ OFL ฟอนต์ Lucide icons และ asset อื่นคงสิทธิ์ของเจ้าของตาม [ATTRIBUTION.md](ATTRIBUTION.md) ฟอนต์จาก build input มีรายละเอียดใน [asdesign-fonts attribution](https://github.com/mamankub/asdesign-fonts/blob/c76dcbc93b13d3b6981c12602bc545ea7ec3e67a/ATTRIBUTION.md)
 

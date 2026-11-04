@@ -52,10 +52,7 @@ fn run_powershell(context: &str, script: &str) -> io::Result<()> {
         .args(["-NoProfile", "-Command", script])
         .status()?;
     if !status.success() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("powershell failed during {context}: exit status {status:?}"),
-        ));
+        return Err(io::Error::new(io::ErrorKind::Other, format!("powershell failed during {context}: exit status {status:?}")));
     }
     Ok(())
 }
@@ -63,20 +60,13 @@ fn run_powershell(context: &str, script: &str) -> io::Result<()> {
 fn printer_name_for(port_path: &str) -> String {
     // printer name = file-device-{pid}-{bs58(sha256(port_path))}
     let hash = Sha256::digest(port_path.as_bytes());
-    format!(
-        "file-device-{}-{}",
-        std::process::id(),
-        bs58::encode(hash).into_string()
-    )
+    format!("file-device-{}-{}", std::process::id(), bs58::encode(hash).into_string())
 }
 
 fn make_temp_port_path() -> io::Result<PathBuf> {
     let uuid = Uuid::new_v4();
     let mut p = std::env::temp_dir().canonicalize()?;
-    p.push(format!(
-        "winprint-file-device-{}.prn",
-        uuid.as_simple().to_string()
-    ));
+    p.push(format!("winprint-file-device-{}.prn", uuid.as_simple().to_string()));
     Ok(p)
 }
 
@@ -222,9 +212,7 @@ impl<T: FilePrinterProvider> FilePrinterDevice<T> {
         ensure_driver_and_cleanup(driver)?;
 
         let port_path = make_temp_port_path()?;
-        let port_str = port_path
-            .to_str()
-            .ok_or(io::Error::other("contains non-Unicode chars in path"))?;
+        let port_str = port_path.to_str().ok_or(io::Error::other("contains non-Unicode chars in path"))?;
         let printer_name = printer_name_for(&port_str);
 
         let script = format!(
@@ -249,17 +237,11 @@ Add-Printer -Name {name_q} -PortName {port_q} -DriverName {driver_q}
             .ok_or_else(|| {
                 io::Error::new(
                     io::ErrorKind::NotFound,
-                    format!(
-                        "virtual printer '{printer_name}' not found after creation (port='{port_str}', driver='{driver}')"
-                    ),
+                    format!("virtual printer '{printer_name}' not found after creation (port='{port_str}', driver='{driver}')"),
                 )
             })?;
 
-        Ok(FilePrinterDevice {
-            device,
-            port_path,
-            _phantom: PhantomData,
-        })
+        Ok(FilePrinterDevice { device, port_path, _phantom: PhantomData })
     }
 
     /// Returns the underlying [`PrinterDevice`].
@@ -304,10 +286,7 @@ mod tests {
     use crate::printer::PrinterDevice;
 
     fn printer_exists(name: &str) -> bool {
-        PrinterDevice::all()
-            .unwrap()
-            .into_iter()
-            .any(|p| p.name() == name)
+        PrinterDevice::all().unwrap().into_iter().any(|p| p.name() == name)
     }
 
     #[test]
@@ -321,15 +300,8 @@ mod tests {
             assert!(name.starts_with("file-device-"), "unexpected name: {name}");
             assert!(printer_exists(&name), "printer {name} was not created");
         }
-        assert!(
-            !printer_exists(&name),
-            "printer {name} still present after drop"
-        );
-        assert!(
-            !path.exists(),
-            "backing file {} still present after drop",
-            path.display()
-        );
+        assert!(!printer_exists(&name), "printer {name} still present after drop");
+        assert!(!path.exists(), "backing file {} still present after drop", path.display());
     }
 
     #[test]
@@ -340,10 +312,7 @@ mod tests {
             name = dev.device().name().to_string();
             assert!(printer_exists(&name), "printer {name} was not created");
         }
-        assert!(
-            !printer_exists(&name),
-            "printer {name} still present after drop"
-        );
+        assert!(!printer_exists(&name), "printer {name} still present after drop");
     }
 
     #[test]

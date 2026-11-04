@@ -117,7 +117,7 @@ On first launch after upgrading, existing `app.ron` preferences are copied from 
 data folder without replacing an existing configuration file. The old copy is retained;
 logs, crash recovery and digital IDs stay in their data locations. If migration fails,
 the app logs the failure and continues using the original preferences folder.
-The existing ASDesign Print-to-ASDReader migration runs first. macOS, Windows and portable
+macOS, Windows and portable
 copies retain their current preferences locations.
 
 ## Environment variables

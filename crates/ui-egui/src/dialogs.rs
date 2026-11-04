@@ -1159,7 +1159,7 @@ fn dialogs(app: &mut ASDReaderApp, ctx: &egui::Context) {
                 });
             }
             Dialog::About => {
-                // Tabs About · Contributors · Models (asdesign-rules standards/contributors.md).
+                // Tabs About · Contributors · Models (docs/contributors.md).
                 let tab_id = egui::Id::new("about_tab");
                 let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(0);
                 ui.horizontal_wrapped(|ui| {

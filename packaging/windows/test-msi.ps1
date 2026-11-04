@@ -134,6 +134,27 @@ function Assert-KeptOnUpdate([string] $Property, [string] $Release, [string] $Fo
 Assert-KeptOnUpdate 'INSTALLDESKTOPSHORTCUT' 'WIX_UPGRADE_DETECTED' 'EXISTINGDESKTOPSHORTCUT' 'C:\Users\Public\Desktop\ASDReader.lnk' 'ASDReaderDesktopShortcut' 'Desktop shortcut'
 $secure = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''SecureCustomProperties''' 1
 if (($secure[0] -split ';') -notcontains 'INSTALLDESKTOPSHORTCUT') { throw "INSTALLDESKTOPSHORTCUT is not secure: '$($secure[0])'" }
+# The install folder page: Welcome's Next opens it, its PathEdit and Browse edit INSTALLFOLDER (under
+# Program Files by default), and Install applies the folder before setup runs.
+if (($secure[0] -split ';') -notcontains 'INSTALLFOLDER') { throw "INSTALLFOLDER is not secure: '$($secure[0])'" }
+$next = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallWelcome'' AND `Control_` = ''Next'' AND `Event` = ''NewDialog''' 1
+Assert-Equal $next[0] 'InstallFolder' 'Welcome Next opens the folder page'
+$folder = Read-Row 'SELECT `Type`, `Property`, `Attributes` FROM `Control` WHERE `Dialog_` = ''InstallFolder'' AND `Control` = ''Folder''' 3
+Assert-Equal $folder[0] 'PathEdit' 'Install folder field'
+Assert-Equal $folder[1] '_BrowseProperty' 'Install folder field property'
+if (([int] $folder[2] -band 0x400000) -eq 0) { throw "the install folder field is not indirect: $($folder[2])" }
+$browse = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Browse'' AND `Event` = ''SpawnDialog''' 1
+Assert-Equal $browse[0] 'BrowseFolder' 'Browse opens the folder chooser'
+$target = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Install'' AND `Event` = ''SetTargetPath''' 1
+Assert-Equal $target[0] '[_BrowseProperty]' 'Install applies the chosen folder'
+$indirect = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''_BrowseProperty''' 1
+Assert-Equal $indirect[0] 'INSTALLFOLDER' 'The folder controls edit INSTALLFOLDER'
+foreach ($control in 'LookIn', 'Folders', 'Path') {
+  $c = Read-Row ('SELECT `Property` FROM `Control` WHERE `Dialog_` = ''BrowseFolder'' AND `Control` = ''' + $control + '''') 1
+  Assert-Equal $c[0] '_BrowseProperty' "Browse dialog $control"
+}
+$installDir = Read-Row 'SELECT `Directory_Parent`, `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''' 2
+if ($installDir[0] -notmatch '^ProgramFiles(64)?Folder$' -or $installDir[1] -notmatch 'ASDReader$') { throw "default install folder: $($installDir -join ' ')" }
 $checkbox = Read-Row 'SELECT `Type`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''DesktopShortcut''' 3
 Assert-Equal $checkbox[0] 'CheckBox' 'Welcome desktop-shortcut control'
 Assert-Equal $checkbox[1] 'INSTALLDESKTOPSHORTCUT' 'Welcome checkbox property'

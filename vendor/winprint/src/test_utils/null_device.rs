@@ -32,15 +32,11 @@ impl NullPrinterDevice {
         let id = DEVICE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         let exe_path = std::env::current_exe().unwrap().canonicalize().unwrap();
-        let exe_id =
-            bs58::encode(Sha256::digest(exe_path.to_string_lossy().as_bytes())).into_string();
+        let exe_id = bs58::encode(Sha256::digest(exe_path.to_string_lossy().as_bytes())).into_string();
 
         let printer_name = format!("null-device-{}-{}", exe_id, id);
 
-        let printer = PrinterDevice::all()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.name() == printer_name);
+        let printer = PrinterDevice::all().unwrap().into_iter().find(|p| p.name() == printer_name);
         if let Some(printer) = printer {
             return NullPrinterDevice { printer };
         }
@@ -49,23 +45,13 @@ impl NullPrinterDevice {
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .args([
-                "-Command",
-                &format!(
-                    "Add-Printer -Name '{}' -PortName 'nul:' -DriverName 'Generic / Text Only'",
-                    printer_name
-                ),
-            ])
+            .args(["-Command", &format!("Add-Printer -Name '{}' -PortName 'nul:' -DriverName 'Generic / Text Only'", printer_name)])
             .spawn()
             .unwrap()
             .wait()
             .unwrap();
 
-        let printer = PrinterDevice::all()
-            .unwrap()
-            .into_iter()
-            .find(|p| p.name() == printer_name)
-            .unwrap();
+        let printer = PrinterDevice::all().unwrap().into_iter().find(|p| p.name() == printer_name).unwrap();
         NullPrinterDevice { printer }
     }
 }
@@ -76,10 +62,7 @@ impl Drop for NullPrinterDevice {
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
-            .args([
-                "-Command",
-                &format!("Remove-Printer -Name '{}'", self.printer.name()),
-            ])
+            .args(["-Command", &format!("Remove-Printer -Name '{}'", self.printer.name())])
             .spawn()
             .unwrap()
             .wait()

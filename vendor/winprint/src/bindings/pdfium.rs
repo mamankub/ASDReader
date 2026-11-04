@@ -300,9 +300,8 @@ extern "C" {
 extern "C" {
     pub fn FPDF_SetSandBoxPolicy(policy: FPDF_DWORD, enable: FPDF_BOOL);
 }
-pub type PDFiumEnsureTypefaceCharactersAccessible = ::core::option::Option<
-    unsafe extern "C" fn(font: *const LOGFONT, text: *const wchar_t, text_length: usize),
->;
+pub type PDFiumEnsureTypefaceCharactersAccessible =
+    ::core::option::Option<unsafe extern "C" fn(font: *const LOGFONT, text: *const wchar_t, text_length: usize)>;
 extern "C" {
     pub fn FPDF_SetTypefaceAccessibleFunc(func: PDFiumEnsureTypefaceCharactersAccessible);
 }
@@ -316,18 +315,10 @@ extern "C" {
     pub fn FPDF_LoadDocument(file_path: FPDF_STRING, password: FPDF_BYTESTRING) -> FPDF_DOCUMENT;
 }
 extern "C" {
-    pub fn FPDF_LoadMemDocument(
-        data_buf: *const ::core::ffi::c_void,
-        size: ::std::os::raw::c_int,
-        password: FPDF_BYTESTRING,
-    ) -> FPDF_DOCUMENT;
+    pub fn FPDF_LoadMemDocument(data_buf: *const ::core::ffi::c_void, size: ::std::os::raw::c_int, password: FPDF_BYTESTRING) -> FPDF_DOCUMENT;
 }
 extern "C" {
-    pub fn FPDF_LoadMemDocument64(
-        data_buf: *const ::core::ffi::c_void,
-        size: usize,
-        password: FPDF_BYTESTRING,
-    ) -> FPDF_DOCUMENT;
+    pub fn FPDF_LoadMemDocument64(data_buf: *const ::core::ffi::c_void, size: usize, password: FPDF_BYTESTRING) -> FPDF_DOCUMENT;
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -348,9 +339,7 @@ pub struct FPDF_FILEACCESS {
 pub struct FPDF_FILEHANDLER_ {
     pub clientData: *mut ::core::ffi::c_void,
     pub Release: ::core::option::Option<unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void)>,
-    pub GetSize: ::core::option::Option<
-        unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void) -> FPDF_DWORD,
-    >,
+    pub GetSize: ::core::option::Option<unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void) -> FPDF_DWORD>,
     pub ReadBlock: ::core::option::Option<
         unsafe extern "C" fn(
             clientData: *mut ::core::ffi::c_void,
@@ -367,25 +356,15 @@ pub struct FPDF_FILEHANDLER_ {
             size: FPDF_DWORD,
         ) -> FPDF_RESULT,
     >,
-    pub Flush: ::core::option::Option<
-        unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void) -> FPDF_RESULT,
-    >,
-    pub Truncate: ::core::option::Option<
-        unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void, size: FPDF_DWORD) -> FPDF_RESULT,
-    >,
+    pub Flush: ::core::option::Option<unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void) -> FPDF_RESULT>,
+    pub Truncate: ::core::option::Option<unsafe extern "C" fn(clientData: *mut ::core::ffi::c_void, size: FPDF_DWORD) -> FPDF_RESULT>,
 }
 pub type FPDF_FILEHANDLER = FPDF_FILEHANDLER_;
 extern "C" {
-    pub fn FPDF_LoadCustomDocument(
-        pFileAccess: *mut FPDF_FILEACCESS,
-        password: FPDF_BYTESTRING,
-    ) -> FPDF_DOCUMENT;
+    pub fn FPDF_LoadCustomDocument(pFileAccess: *mut FPDF_FILEACCESS, password: FPDF_BYTESTRING) -> FPDF_DOCUMENT;
 }
 extern "C" {
-    pub fn FPDF_GetFileVersion(
-        doc: FPDF_DOCUMENT,
-        fileVersion: *mut ::std::os::raw::c_int,
-    ) -> FPDF_BOOL;
+    pub fn FPDF_GetFileVersion(doc: FPDF_DOCUMENT, fileVersion: *mut ::std::os::raw::c_int) -> FPDF_BOOL;
 }
 extern "C" {
     pub fn FPDF_GetLastError() -> ::std::os::raw::c_ulong;
@@ -428,11 +407,7 @@ extern "C" {
     pub fn FPDF_GetPageBoundingBox(page: FPDF_PAGE, rect: *mut FS_RECTF) -> FPDF_BOOL;
 }
 extern "C" {
-    pub fn FPDF_GetPageSizeByIndexF(
-        document: FPDF_DOCUMENT,
-        page_index: ::std::os::raw::c_int,
-        size: *mut FS_SIZEF,
-    ) -> FPDF_BOOL;
+    pub fn FPDF_GetPageSizeByIndexF(document: FPDF_DOCUMENT, page_index: ::std::os::raw::c_int, size: *mut FS_SIZEF) -> FPDF_BOOL;
 }
 extern "C" {
     pub fn FPDF_GetPageSizeByIndex(
@@ -519,11 +494,7 @@ extern "C" {
     ) -> FPDF_BOOL;
 }
 extern "C" {
-    pub fn FPDFBitmap_Create(
-        width: ::std::os::raw::c_int,
-        height: ::std::os::raw::c_int,
-        alpha: ::std::os::raw::c_int,
-    ) -> FPDF_BITMAP;
+    pub fn FPDFBitmap_Create(width: ::std::os::raw::c_int, height: ::std::os::raw::c_int, alpha: ::std::os::raw::c_int) -> FPDF_BITMAP;
 }
 extern "C" {
     pub fn FPDFBitmap_CreateEx(
@@ -575,10 +546,7 @@ extern "C" {
     pub fn FPDF_VIEWERREF_GetPrintPageRangeCount(pagerange: FPDF_PAGERANGE) -> usize;
 }
 extern "C" {
-    pub fn FPDF_VIEWERREF_GetPrintPageRangeElement(
-        pagerange: FPDF_PAGERANGE,
-        index: usize,
-    ) -> ::std::os::raw::c_int;
+    pub fn FPDF_VIEWERREF_GetPrintPageRangeElement(pagerange: FPDF_PAGERANGE, index: usize) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn FPDF_VIEWERREF_GetDuplex(document: FPDF_DOCUMENT) -> FPDF_DUPLEXTYPE;

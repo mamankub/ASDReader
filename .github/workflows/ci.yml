@@ -21,10 +21,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The shared gate doesn't check where git dependencies come from; release.yml runs the same job.
+  # The gate doesn't check where dependencies come from: none may be a git source.
   git-sources:
     if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
-    name: Git dependencies come from storytold
+    name: No git dependencies
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,7 +32,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Git dependencies come from storytold
+      - name: No git dependencies
         run: |
           set -euo pipefail
           test -f Cargo.lock || { echo "Cargo.lock is missing"; exit 1; }
@@ -57,10 +57,9 @@ jobs:
           import sys, tomllib
           lock = tomllib.load(open("Cargo.lock", "rb"))
           bad = sorted({p["source"] for p in lock.get("package", [])
-                        if p.get("source", "").startswith("git+")
-                        and not p["source"].startswith("git+https://github.com/storytold/")})
+                        if p.get("source", "").startswith("git+")})
           if bad:
-              print("Git dependencies outside github.com/storytold:", *bad, sep="\n")
+              print("Git dependencies (every dependency must come from crates.io or this repository):", *bad, sep="\n")
               sys.exit(1)
           PY
 

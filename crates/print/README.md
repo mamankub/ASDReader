@@ -61,7 +61,7 @@ defaults as before. CUPS jobs already use the queue's defaults and the user's `l
 image keeps the dots per inch the Print dialog asks for. This needs checking on a real printer.
 
 The shared dependency requires Rust 1.95. Transport and native Windows regression tests
-live in asdesign-libs; local tests retain composition, facade, engine, automation and UI coverage.
+live in crates/asdesign-print; local tests retain composition, facade, engine, automation and UI coverage.
 The desktop UI discovers printers and submits jobs on workers, so neither operation blocks
 the dialog; the Windows backend starts without a console window. Physical printer output
 still needs hardware validation.

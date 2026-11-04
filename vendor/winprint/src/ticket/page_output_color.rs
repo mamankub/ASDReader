@@ -5,8 +5,4 @@ use super::{
 };
 use xml::name::OwnedName;
 
-define_feature_option_pack!(
-    OwnedName::qualified("PageOutputColor", NS_PSK, Some("psk")),
-    PageOutputColor,
-    PredefinedPageOutputColor
-);
+define_feature_option_pack!(OwnedName::qualified("PageOutputColor", NS_PSK, Some("psk")), PageOutputColor, PredefinedPageOutputColor);

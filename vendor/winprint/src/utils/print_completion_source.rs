@@ -4,10 +4,7 @@ use std::time::Duration;
 use windows::core::w;
 use windows::core::BSTR;
 use windows::core::HRESULT;
-use windows::Win32::Foundation::{
-    DISP_E_BADPARAMCOUNT, DISP_E_EXCEPTION, DISP_E_MEMBERNOTFOUND, DISP_E_TYPEMISMATCH,
-    DISP_E_UNKNOWNNAME,
-};
+use windows::Win32::Foundation::{DISP_E_BADPARAMCOUNT, DISP_E_EXCEPTION, DISP_E_MEMBERNOTFOUND, DISP_E_TYPEMISMATCH, DISP_E_UNKNOWNNAME};
 use windows::Win32::Foundation::{E_FAIL, E_INVALIDARG, E_UNEXPECTED};
 use windows::Win32::Storage::Xps::Printing::PrintDocumentPackageCompletion_Canceled;
 use windows::Win32::Storage::Xps::Printing::PrintDocumentPackageCompletion_Completed;
@@ -17,10 +14,7 @@ use windows::Win32::System::Ole::DISPID_UNKNOWN;
 use windows::Win32::System::Variant::{VARIANT, VT_BYREF};
 use windows::Win32::{
     Foundation::E_NOTIMPL,
-    Storage::Xps::Printing::{
-        IPrintDocumentPackageStatusEvent, IPrintDocumentPackageStatusEvent_Impl,
-        PrintDocumentPackageStatus,
-    },
+    Storage::Xps::Printing::{IPrintDocumentPackageStatusEvent, IPrintDocumentPackageStatusEvent_Impl, PrintDocumentPackageStatus},
     System::Com::{IDispatch, IDispatch_Impl, ITypeInfo, DISPATCH_FLAGS, DISPPARAMS, EXCEPINFO},
 };
 use windows_implement::implement;
@@ -38,42 +32,28 @@ pub struct PrintCompletionSource {
 
 impl PrintCompletionSource {
     pub fn new() -> windows::core::Result<Self> {
-        Ok(Self {
-            state: Arc::new((Mutex::new(None), Condvar::new())),
-        })
+        Ok(Self { state: Arc::new((Mutex::new(None), Condvar::new())) })
     }
     pub fn waiter(&self) -> PrintCompletionWaiter {
-        PrintCompletionWaiter {
-            state: self.state.clone(),
-        }
+        PrintCompletionWaiter { state: self.state.clone() }
     }
     fn record(&self, status: &PrintDocumentPackageStatus) -> windows::core::Result<()> {
         let result = match status.Completion {
             #[allow(non_upper_case_globals)]
             PrintDocumentPackageCompletion_Completed => status.PackageStatus.ok(),
             #[allow(non_upper_case_globals)]
-            PrintDocumentPackageCompletion_Canceled => Err(windows::core::Error::from_hresult(
-                if status.PackageStatus.is_err() {
-                    status.PackageStatus
-                } else {
-                    CANCELED
-                },
-            )),
+            PrintDocumentPackageCompletion_Canceled => {
+                Err(windows::core::Error::from_hresult(if status.PackageStatus.is_err() { status.PackageStatus } else { CANCELED }))
+            }
             #[allow(non_upper_case_globals)]
-            PrintDocumentPackageCompletion_Failed => Err(windows::core::Error::from_hresult(
-                if status.PackageStatus.is_err() {
-                    status.PackageStatus
-                } else {
-                    E_FAIL
-                },
-            )),
+            PrintDocumentPackageCompletion_Failed => {
+                Err(windows::core::Error::from_hresult(if status.PackageStatus.is_err() { status.PackageStatus } else { E_FAIL }))
+            }
             _ => return Ok(()),
         }
         .map_err(|e| e.code());
         let (state, ready) = &*self.state;
-        let mut terminal = state
-            .lock()
-            .map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
+        let mut terminal = state.lock().map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
         // Terminal state is immutable even if a driver sends repeated notifications.
         if terminal.is_none() {
             *terminal = Some(result);
@@ -93,12 +73,9 @@ impl PrintCompletionWaiter {
     }
     fn wait_for(&self, timeout: Duration) -> windows::core::Result<()> {
         let (state, ready) = &*self.state;
-        let terminal = state
-            .lock()
-            .map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
-        let (terminal, _) = ready
-            .wait_timeout_while(terminal, timeout, |s| s.is_none())
-            .map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
+        let terminal = state.lock().map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
+        let (terminal, _) =
+            ready.wait_timeout_while(terminal, timeout, |s| s.is_none()).map_err(|_| windows::core::Error::from_hresult(E_UNEXPECTED))?;
         match *terminal {
             Some(Ok(())) => Ok(()),
             Some(Err(code)) => Err(windows::core::Error::from_hresult(code)),
@@ -108,13 +85,9 @@ impl PrintCompletionWaiter {
 }
 
 impl IPrintDocumentPackageStatusEvent_Impl for PrintCompletionSource_Impl {
-    fn PackageStatusUpdated(
-        &self,
-        packagestatus: *const PrintDocumentPackageStatus,
-    ) -> windows::core::Result<()> {
+    fn PackageStatusUpdated(&self, packagestatus: *const PrintDocumentPackageStatus) -> windows::core::Result<()> {
         // COM guarantees this pointer remains valid for the duration of the callback.
-        let status = unsafe { packagestatus.as_ref() }
-            .ok_or_else(|| windows::core::Error::from_hresult(E_INVALIDARG))?;
+        let status = unsafe { packagestatus.as_ref() }.ok_or_else(|| windows::core::Error::from_hresult(E_INVALIDARG))?;
         self.record(status)
     }
 }
@@ -182,8 +155,7 @@ impl IDispatch_Impl for PrintCompletionSource_Impl {
                 }
                 return Err(windows::core::Error::from_hresult(DISP_E_TYPEMISMATCH));
             }
-            let status = unsafe { arg.Anonymous.Anonymous.Anonymous.byref }
-                as *const PrintDocumentPackageStatus;
+            let status = unsafe { arg.Anonymous.Anonymous.Anonymous.byref } as *const PrintDocumentPackageStatus;
             if let Err(e) = self.PackageStatusUpdated(status) {
                 if !pexcepinfo.is_null() {
                     unsafe {
@@ -210,15 +182,8 @@ mod completion_tests {
     use super::*;
     use windows::Win32::Storage::Xps::Printing::PrintDocumentPackageCompletion_InProgress;
 
-    fn status(
-        completion: windows::Win32::Storage::Xps::Printing::PrintDocumentPackageCompletion,
-        code: HRESULT,
-    ) -> PrintDocumentPackageStatus {
-        PrintDocumentPackageStatus {
-            Completion: completion,
-            PackageStatus: code,
-            ..Default::default()
-        }
+    fn status(completion: windows::Win32::Storage::Xps::Printing::PrintDocumentPackageCompletion, code: HRESULT) -> PrintDocumentPackageStatus {
+        PrintDocumentPackageStatus { Completion: completion, PackageStatus: code, ..Default::default() }
     }
 
     #[test]
@@ -226,18 +191,11 @@ mod completion_tests {
         let source = PrintCompletionSource::new().unwrap();
         let waiter = source.waiter();
         let code = HRESULT(0x80070005_u32 as i32);
-        source
-            .record(&status(
-                PrintDocumentPackageCompletion_InProgress,
-                HRESULT(0),
-            ))
-            .unwrap();
+        source.record(&status(PrintDocumentPackageCompletion_InProgress, HRESULT(0))).unwrap();
         std::thread::scope(|s| {
             s.spawn(|| {
                 std::thread::sleep(Duration::from_millis(10));
-                source
-                    .record(&status(PrintDocumentPackageCompletion_Failed, code))
-                    .unwrap();
+                source.record(&status(PrintDocumentPackageCompletion_Failed, code)).unwrap();
             });
             assert_eq!(waiter.wait().unwrap_err().code(), code);
         });
@@ -245,18 +203,10 @@ mod completion_tests {
 
     #[test]
     fn canceled_and_failed_without_hresult_are_errors() {
-        for (completion, expected) in [
-            (PrintDocumentPackageCompletion_Canceled, CANCELED),
-            (PrintDocumentPackageCompletion_Failed, E_FAIL),
-        ] {
+        for (completion, expected) in [(PrintDocumentPackageCompletion_Canceled, CANCELED), (PrintDocumentPackageCompletion_Failed, E_FAIL)] {
             let source = PrintCompletionSource::new().unwrap();
             source.record(&status(completion, HRESULT(0))).unwrap();
-            source
-                .record(&status(
-                    PrintDocumentPackageCompletion_Completed,
-                    HRESULT(0),
-                ))
-                .unwrap();
+            source.record(&status(PrintDocumentPackageCompletion_Completed, HRESULT(0))).unwrap();
             assert_eq!(source.waiter().wait().unwrap_err().code(), expected);
         }
     }
@@ -266,26 +216,15 @@ mod completion_tests {
         let source = PrintCompletionSource::new().unwrap();
         let waiter = source.waiter();
         drop(source);
-        assert_eq!(
-            waiter
-                .wait_for(Duration::from_millis(1))
-                .unwrap_err()
-                .code(),
-            TIMED_OUT
-        );
+        assert_eq!(waiter.wait_for(Duration::from_millis(1)).unwrap_err().code(), TIMED_OUT);
     }
 
     #[test]
     fn completed_checks_hresult_instead_of_blind_success() {
         for code in [HRESULT(0), E_FAIL] {
             let source = PrintCompletionSource::new().unwrap();
-            source
-                .record(&status(PrintDocumentPackageCompletion_Completed, code))
-                .unwrap();
-            assert_eq!(
-                source.waiter().wait().map_err(|e| e.code()),
-                code.ok().map_err(|e| e.code())
-            );
+            source.record(&status(PrintDocumentPackageCompletion_Completed, code)).unwrap();
+            assert_eq!(source.waiter().wait().map_err(|e| e.code()), code.ok().map_err(|e| e.code()));
         }
     }
 }

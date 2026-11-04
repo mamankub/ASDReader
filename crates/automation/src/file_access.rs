@@ -1,7 +1,7 @@
 //! The folders automation may read and write.
 //!
 //! `asdreader-cli mcp --automation-read-root <dir> --automation-write-root <dir>` confines the
-//! files an agent's tools reach, with the names and wording ASDesign Vector uses. [`AutomationRoots`]
+//! files an agent's tools reach. [`AutomationRoots`]
 //! holds the two folders. Every path a tool reads is checked with [`Access::Read`] and every path
 //! it writes with [`Access::Write`], in `Automation::resolve`, which all of them go through:
 //!

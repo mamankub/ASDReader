@@ -36,11 +36,7 @@ pub enum PageImageableSizeError {
     },
 }
 
-fn get_u32_property(
-    properties: &impl WithProperties,
-    name: &'static str,
-    ns: Option<&str>,
-) -> Result<u32, PageImageableSizeError> {
+fn get_u32_property(properties: &impl WithProperties, name: &'static str, ns: Option<&str>) -> Result<u32, PageImageableSizeError> {
     properties
         .get_property(name, ns)
         .and_then(|x| x.value.as_ref())
@@ -51,25 +47,16 @@ fn get_u32_property(
 
 impl PageImageableSize {
     /// Try to fetch the imageable size for the given printer device and media size.
-    pub fn try_fetch(
-        device: &PrinterDevice,
-        media: PageMediaSize,
-    ) -> Result<Self, PageImageableSizeError> {
+    pub fn try_fetch(device: &PrinterDevice, media: PageMediaSize) -> Result<Self, PageImageableSizeError> {
         let ticket = PrintTicket::from(media);
         let caps_xml = PrintCapabilities::fetch_xml_for_ticket(device, Some(&ticket))?;
         let caps = PrintCapabilitiesDocument::parse_from_bytes(&caps_xml)?;
-        let imageable_size = caps.get_property("PageImageableSize", Some(NS_PSK)).ok_or(
-            PageImageableSizeError::FieldError {
-                field: "PageImageableSize",
-            },
-        )?;
+        let imageable_size =
+            caps.get_property("PageImageableSize", Some(NS_PSK)).ok_or(PageImageableSizeError::FieldError { field: "PageImageableSize" })?;
         let size_w = get_u32_property(imageable_size, "ImageableSizeWidth", Some(NS_PSK))?;
         let size_h = get_u32_property(imageable_size, "ImageableSizeHeight", Some(NS_PSK))?;
-        let imageable_area = imageable_size
-            .get_property("ImageableArea", Some(NS_PSK))
-            .ok_or(PageImageableSizeError::FieldError {
-                field: "ImageableArea",
-            })?;
+        let imageable_area =
+            imageable_size.get_property("ImageableArea", Some(NS_PSK)).ok_or(PageImageableSizeError::FieldError { field: "ImageableArea" })?;
         let origin_w = get_u32_property(imageable_area, "OriginWidth", Some(NS_PSK))?;
         let origin_h = get_u32_property(imageable_area, "OriginHeight", Some(NS_PSK))?;
         let extent_w = get_u32_property(imageable_area, "ExtentWidth", Some(NS_PSK))?;

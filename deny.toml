@@ -32,9 +32,8 @@ allow-wildcard-paths = true
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# Shared UI components and spooler; Cargo.toml pins the immutable revision. asdesign-print pins
-# storytold's winprint fork (Windows printing, #1107) to an immutable revision of its own.
-allow-git = ["crates/asdesign-", "https://github.com/storytold/winprint.rs"]
+# Every dependency comes from crates.io or this repository (crates/, vendor/): no git sources.
+allow-git = []
 
 [advisories]
 yanked = "warn"

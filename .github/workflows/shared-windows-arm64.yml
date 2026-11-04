@@ -5,11 +5,11 @@ on:
   workflow_call:
     inputs:
       app-name:
-        description: "Application name (e.g. asdesign-photo, asdesign-launcher)"
+        description: "Application name (e.g. asdreader)"
         type: string
         required: true
       app-dir:
-        description: "Installation folder name inside ProgramFiles or LocalAppData (e.g. ASDesign Photo)"
+        description: "Installation folder name inside ProgramFiles or LocalAppData (e.g. ASDReader)"
         type: string
         required: true
       install-relative-path:
