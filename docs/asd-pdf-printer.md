@@ -1,8 +1,8 @@
 # ASD PDF Printer
 
 A print queue named **ASD PDF Printer** that the Windows installer adds beside ASDReader. A program
-prints to it like to any printer, and the result is a PDF in `Documents\ASDReader Printed` with its
-Thai text intact, opened in ASDReader.
+prints to it like to any printer; a Save dialog asks where the PDF goes, and the PDF, with its Thai
+text intact, opens in ASDReader.
 
 ## How it works
 
@@ -10,7 +10,7 @@ Thai text intact, opened in ASDReader.
 any program ──print──▶ "ASD PDF Printer" queue ──PDF over TCP──▶ ASDReader --printer-listener
    (Windows spooler,                                     127.0.0.1:19100        │
     "Microsoft Print To PDF" driver)                                             ▼
-                                              repair Thai text layer, save, open in ASDReader
+                                     repair Thai text layer, ask where to save (Save dialog), open
 ```
 
 - **The queue** is made by `packaging/windows/asd-pdf-printer.ps1`: a TCP/IP port `ASDPDF:` at
@@ -19,7 +19,15 @@ any program ──print──▶ "ASD PDF Printer" queue ──PDF over TCP─�
 - **The receiver** is `asdreader.exe --printer-listener` (`apps/asdreader/src/printer_listener.rs`).
   It has no window, starts at sign-in (a `Run` entry the installer writes) and whenever ASDReader is
   opened, and exits quietly when another copy has the port. It takes a PDF from this computer only
-  (at most 1 GiB, header checked), names the file itself and hands it to the running ASDReader.
+  (at most 1 GiB, header checked) and hands the saved file to the running ASDReader.
+- **The Save dialog** opens for each job, in front of the program that printed (as Microsoft Print
+  to PDF's does): it starts in the last folder chosen (kept in ASDReader's data folder as
+  `printer-folder.txt`; `Documents` the first time) with the document's title, else
+  `Printed yyyy-mm-dd hh.mm.ss`, as the name. Cancel drops the job. The receiver runs in the
+  background, which Windows keeps from taking the focus; a helper thread joins the foreground
+  window's input for a moment to make the dialog active, and keeps it on top while it is open.
+  `--out-dir <folder>` saves each job there as `Printed yyyy-mm-dd hh.mm.ss.pdf` without asking
+  (the end-to-end test uses it).
 - **The installer** shows a checkbox ("Install the ASD PDF Printer", on by default).
   `msiexec /i … INSTALLPDFPRINTER=0` leaves it out; uninstall removes the queue and the port.
 
@@ -48,7 +56,8 @@ MSI itself is checked by `test-msi.ps1`.
 
 - Windows 10 or later, one signed-in user at a time: the receiver of the first user to sign in has
   the port.
-- Any program on the computer can send a PDF to the port; the file lands in the receiving user's
-  folder and is opened by ASDReader's hardened reader.
+- Any program on the computer can send a PDF to the port; it brings up the receiving user's Save
+  dialog, and a file saved is opened by ASDReader's hardened reader.
+- One job at a time: a second job waits while the Save dialog of the first is open.
 - The look of the printed page, fonts and print quality are the driver's; only the text layer is
   repaired.
