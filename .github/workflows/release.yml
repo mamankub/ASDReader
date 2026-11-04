@@ -95,10 +95,33 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: dotnet tool install --global wix --version 5.0.2
-      - name: Build Windows installer wizard (MSI) and portable archive (unsigned)
+      - name: Build Windows installer wizard (MSI) and portable archive
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          # The private ASDReader code-signing certificate (packaging/windows/trust/README-TH.md). Without
+          # it the files are left unsigned (sign.ps1 warns).
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: ./packaging/windows/package.ps1 -Arch x64
+      - name: Check the Windows signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          HAVE_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+          # SHA-1 thumbprint of the code-signing certificate issued by the ASDReader Root CA.
+          EXPECTED_SIGNER: 0015645D64A0B4295350C920BCC9CBF6A032DBCE
+        run: |
+          if ($env:HAVE_CERT -ne 'true') { Write-Output '::warning::no signing certificate: the Windows files are unsigned'; exit 0 }
+          $files = @(Get-ChildItem dist/release -Filter *.msi) + @(Get-Item target/windows-package/x64/ASDReader.exe, target/windows-package/x64/asdreader-cli.exe)
+          foreach ($f in $files) {
+            $sig = Get-AuthenticodeSignature $f.FullName
+            # The runner does not trust the private root, so the status is UnknownError/NotTrusted
+            # there; what must hold is a signature made by our certificate, with a timestamp.
+            if (-not $sig.SignerCertificate -or $sig.SignerCertificate.Thumbprint -ne $env:EXPECTED_SIGNER) { throw "$($f.Name) is not signed by the ASDReader certificate: $($sig.Status) $($sig.SignerCertificate.Thumbprint)" }
+            if (-not $sig.TimeStamperCertificate) { throw "$($f.Name) has no timestamp" }
+            Write-Output "signed ok: $($f.Name) by $($sig.SignerCertificate.Subject), status $($sig.Status)"
+          }
       - name: Thai regression and asset checks
         if: runner.os == 'Linux'
         env:

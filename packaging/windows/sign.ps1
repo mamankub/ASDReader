@@ -55,7 +55,7 @@ if (-not $haveCert -and -not $haveAzure) {
 }
 
 $script:SignTool = Find-SignTool
-$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'ASDReader', '/du', 'https://github.com/mamankub/ASDReader')
+$common = @('sign', '/v', '/fd', 'SHA256', '/td', 'SHA256', '/d', 'ASDReader', '/du', 'https://mamankub.github.io/asdreader-help/')
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "asdreader-sign-$([IO.Path]::GetRandomFileName())"
 New-Item -ItemType Directory -Path $tmp | Out-Null
 
