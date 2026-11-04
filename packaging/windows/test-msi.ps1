@@ -164,8 +164,16 @@ Assert-Equal $printerBox[0] 'CheckBox' 'Welcome ASD PDF Printer checkbox'
 Assert-Equal $printerBox[1] 'INSTALLPDFPRINTER' 'Welcome ASD PDF Printer property'
 $printerDefault = Read-Row 'SELECT `Value` FROM `CheckBox` WHERE `Property` = ''INSTALLPDFPRINTER''' 1
 Assert-Equal $printerDefault[0] '1' 'ASD PDF Printer checkbox value'
-$printerFile = Read-Row 'SELECT `Component_` FROM `File` WHERE `FileName` LIKE ''%asd-pdf-printer.ps1''' 1
-Assert-Equal $printerFile[0] 'ASDReaderPrinter' 'The printer script component'
+# MSI SQL has no LIKE: walk the File table (the name column is "short|long").
+$printerFileComponent = $null
+$view = $Database.OpenView('SELECT `FileName`, `Component_` FROM `File`')
+try {
+  [void] $view.Execute()
+  while ($record = $view.Fetch()) {
+    if ($record.StringData(1) -match 'asd-pdf-printer\.ps1$') { $printerFileComponent = $record.StringData(2) }
+  }
+} finally { [void] $view.Close() }
+Assert-Equal $printerFileComponent 'ASDReaderPrinter' 'The printer script component'
 $printerCondition = Read-Row 'SELECT `Condition` FROM `Component` WHERE `Component` = ''ASDReaderPrinter''' 1
 Assert-Equal $printerCondition[0] 'INSTALLPDFPRINTER = 1' 'The printer component condition'
 $runEntry = Read-Row 'SELECT `Name`, `Value` FROM `Registry` WHERE `Component_` = ''ASDReaderPrinter''' 2
