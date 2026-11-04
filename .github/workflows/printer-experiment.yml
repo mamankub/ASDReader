@@ -4,6 +4,9 @@ name: Printer experiment
 # Thai page printed through it come out as Thai text? Manual runs only.
 on:
   workflow_dispatch:
+  push:
+    branches: [feat/asdreader-installer-release]
+    paths: ['.github/workflows/printer-experiment.yml']
 
 permissions:
   contents: read
