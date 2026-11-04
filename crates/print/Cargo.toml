@@ -1,5 +1,5 @@
 [package]
-name = "pdfcraft-print"
+name = "asdreader-print"
 description = "Printing: page selection, sizing (fit, actual, shrink, custom), multiple pages per sheet, booklets, posters, comments & forms; print-ready PDF and the system spooler"
 version.workspace = true
 edition.workspace = true
@@ -9,11 +9,11 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-craft-print = { workspace = true }
-pdfcraft-cos = { workspace = true }
-pdfcraft-content = { workspace = true }
-pdfcraft-model = { workspace = true }
+asdesign-print = { workspace = true }
+asdreader-cos = { workspace = true }
+asdreader-content = { workspace = true }
+asdreader-model = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
-pdfcraft-render = { workspace = true }
+asdreader-render = { workspace = true }

@@ -1,0 +1,155 @@
+name: FreeBSD Cargo cache
+description: Cache Cargo data across the host/guest boundary after the FreeBSD VM starts
+inputs:
+  phase:
+    description: restore, package (checkpoint debug and load release), or save
+    default: restore
+  profile:
+    description: Initial Cargo profile directory (debug or release)
+    default: debug
+  configuration:
+    description: Serialized caller inputs affecting the build
+    required: true
+  source-hash:
+    description: Hash of manifests, lockfiles, Cargo config and build scripts
+    required: true
+  key:
+    description: Primary key returned by the restore invocation (package/save)
+    default: ""
+outputs:
+  key:
+    description: Primary cache key for the subsequent save invocation
+    value: ${{ steps.identity.outputs.key }}
+  cache-hit:
+    description: Whether this exact revision already has a cache
+    value: ${{ steps.restore.outputs.cache-hit }}
+runs:
+  using: composite
+  steps:
+    - name: Identify the guest toolchain and build configuration
+      if: inputs.phase == 'restore'
+      id: identity
+      shell: bash
+      env:
+        CACHE_CONFIGURATION: ${{ inputs.configuration }}
+        CACHE_SOURCE_HASH: ${{ inputs.source-hash }}
+        CACHE_PROFILE: ${{ inputs.profile }}
+      run: |
+        set -euo pipefail
+        # Read the actual guest, including native-library versions. Host Rust and
+        # runner.os do not describe the compiler/ABI used for these artifacts.
+        guest=$(ssh freebsd 'sh -eu' <<'GUEST'
+        [ ! -f "$HOME/.cargo/env" ] || . "$HOME/.cargo/env"
+        # Honor the application's rust-toolchain override, just as the build does.
+        cd "$GITHUB_WORKSPACE"
+        rustc -vV
+        freebsd-version -ku
+        uname -m
+        pkg info -qa | sort
+        GUEST
+        )
+        # Which artifacts may be reused depends on the guest toolchain, the
+        # build configuration and the profile. Which revision produced them
+        # only pins an exact match. Keying every entry on the source hash too
+        # left every release (the manifests carry the version) and every PR
+        # that touches a manifest with nothing to restore, so the fallback
+        # prefix below deliberately omits it and lets Cargo invalidate the
+        # stale parts. See issues #33 and #39.
+        compatible=$(printf '%s\n' "$guest" "$CACHE_CONFIGURATION" "$CACHE_PROFILE" | sha256sum | cut -d ' ' -f 1)
+        fingerprint=$(printf '%s\n' "$compatible" "$CACHE_SOURCE_HASH" | sha256sum | cut -d ' ' -f 1)
+        fallback_prefix="freebsd-cargo-v3-$compatible-"
+        prefix="$fallback_prefix$fingerprint-"
+        echo "prefix=$prefix" >> "$GITHUB_OUTPUT"
+        echo "fallback-prefix=$fallback_prefix" >> "$GITHUB_OUTPUT"
+        echo "key=$prefix$GITHUB_SHA" >> "$GITHUB_OUTPUT"
+    - name: Restore guest Cargo data on the host
+      if: inputs.phase == 'restore'
+      id: restore
+      uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ~/.cache/asdesign-freebsd-cargo
+        key: ${{ steps.identity.outputs.key }}
+        restore-keys: |
+          ${{ steps.identity.outputs.prefix }}
+          ${{ steps.identity.outputs.fallback-prefix }}
+    - name: Transfer Cargo data across the VM boundary
+      shell: bash
+      env:
+        CACHE_PHASE: ${{ inputs.phase }}
+        CACHE_PROFILE: ${{ inputs.profile }}
+        # PRs may restore their base branch's cache, but never write it.
+        CACHE_CAN_SAVE: ${{ github.event_name != 'pull_request' && github.event_name != 'pull_request_target' }}
+      run: |
+        set -euo pipefail
+        # The VM shell rsyncs all of ~/work, including RUNNER_TEMP. Keep the
+        # host archive outside that tree to avoid a second copy inside the VM.
+        cache="$HOME/.cache/asdesign-freebsd-cargo"
+        case "$CACHE_PROFILE" in debug|release) ;; *) echo 'invalid cache profile' >&2; exit 1 ;; esac
+        ssh_args='ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=60 -o ConnectTimeout=120'
+        remote_rsync='env PATH=/usr/local/bin:/usr/bin:/bin rsync'
+        push() {
+          mkdir -p "$cache/$1"
+          rsync -a --delete --timeout=1800 -e "$ssh_args" --rsync-path="$remote_rsync" \
+            "$cache/$1/" "freebsd:$2/"
+        }
+        pull() {
+          # Cargo may leave a profile/source directory missing or empty. Keep
+          # any previously restored host copy when there is nothing to export.
+          # The guest login shell may be csh, so interpret the probe in sh.
+          local has_data
+          # Expand the emptiness probe in the guest, not on the host.
+          # shellcheck disable=SC2016
+          has_data=$(printf 'if [ -d "%s" ] && [ -n "$(ls -A "%s")" ]; then echo true; else echo false; fi\n' "$2" "$2" | ssh freebsd 'sh -eu')
+          case "$has_data" in true) ;; false) return 0 ;; *) return 1 ;; esac
+          rm -rf "${cache:?}/$1"
+          mkdir -p "$cache/$1"
+          local options=(--timeout=1800)
+          # Dependency source directories named incremental must survive intact.
+          case "$1" in target/*) options+=(--exclude /incremental) ;; esac
+          if rsync -a --delete "${options[@]}" -e "$ssh_args" --rsync-path="$remote_rsync" \
+            "freebsd:$2/" "$cache/$1/"; then
+            return 0
+          else
+            local status=$?
+            rm -rf "${cache:?}/$1"
+            return "$status"
+          fi
+        }
+        mkdir -p "$cache"
+        case "$CACHE_PHASE" in
+          restore)
+            ssh freebsd 'mkdir -p /var/tmp/asdesign-cargo/registry /var/tmp/asdesign-cargo/git /var/tmp/asdesign-target/debug /var/tmp/asdesign-target/release'
+            push registry /var/tmp/asdesign-cargo/registry
+            push git /var/tmp/asdesign-cargo/git
+            # Do not load both profiles into the space-constrained VM at once.
+            push "target/$CACHE_PROFILE" "/var/tmp/asdesign-target/$CACHE_PROFILE"
+            ;;
+          package)
+            if [ "$CACHE_CAN_SAVE" = true ]; then
+              pull target/debug /var/tmp/asdesign-target/debug
+            fi
+            ssh freebsd 'rm -rf /var/tmp/asdesign-target/debug; mkdir -p /var/tmp/asdesign-target/release'
+            push target/release /var/tmp/asdesign-target/release
+            ;;
+          save)
+            if [ "$CACHE_CAN_SAVE" != true ]; then exit 0; fi
+            # Never copy all of CARGO_HOME: credentials/config and toolchains are
+            # excluded. Keep the debug checkpoint when packaging removed it.
+            pull registry /var/tmp/asdesign-cargo/registry
+            pull git /var/tmp/asdesign-cargo/git
+            for profile in debug release; do
+              # profile is one of the two literal directory names above.
+              # shellcheck disable=SC2029
+              if ssh freebsd "test -d /var/tmp/asdesign-target/$profile"; then
+                pull "target/$profile" "/var/tmp/asdesign-target/$profile"
+              fi
+            done
+            ;;
+          *) echo 'invalid cache phase' >&2; exit 1 ;;
+        esac
+    - name: Save guest Cargo data from the host
+      if: inputs.phase == 'save' && github.event_name != 'pull_request' && github.event_name != 'pull_request_target'
+      uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+      with:
+        path: ~/.cache/asdesign-freebsd-cargo
+        key: ${{ inputs.key }}

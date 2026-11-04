@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use pdfcraft_cos::Document;
+use asdreader_cos::Document;
 
 use crate::{AuditFinding, FindingKind, audit_redactions};
 
@@ -569,17 +569,17 @@ fn comment_across_streams_neither_invents_text_nor_a_cover() {
     let doc = open(two_streams(b"BT /F1 24 Tf 72 700 Td (Visible text) Tj ET % note", b"0 g 70 690 200 40 re f"));
     assert!(audit_redactions(&doc).unwrap().is_empty(), "commented cover must not be reported");
     let doc = open(two_streams(b"BT /F1 24 Tf 72 700 Td (Before comment) Tj ET % note", b"BT /F1 24 Tf 72 650 Td (After comment) Tj ET"));
-    let text: String = pdfcraft_edit::text_lines(&doc, 0).unwrap().into_iter().map(|line| line.text).collect();
+    let text: String = asdreader_edit::text_lines(&doc, 0).unwrap().into_iter().map(|line| line.text).collect();
     assert!(!text.contains("After comment"), "editor exposed phantom text: {text}");
 }
 
 #[test]
 fn reading_blocks_respect_stream_comments_and_split_operands() {
     let doc = open(two_streams(b"BT /F1 24 Tf 72 700 Td (Before comment) Tj ET % note", b"BT /F1 24 Tf 72 650 Td (After comment) Tj ET"));
-    let text: String = pdfcraft_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
+    let text: String = asdreader_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
     assert_eq!(text, "Before comment");
     let doc = open(two_streams(b"BT /F1 24 Tf 72 700 Td (Split operand)", b"Tj ET"));
-    let text: String = pdfcraft_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
+    let text: String = asdreader_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
     assert_eq!(text, "Split operand");
     // Marked content opened in one stream applies to text in the next: its /ActualText replaces
     // the glyphs, as when the streams are read joined.
@@ -588,7 +588,7 @@ fn reading_blocks_respect_stream_comments_and_split_operands() {
         (b"BT /F1 24 Tf 72 700 Td /Span <</ActualText (Replacement text)>> BDC", b"(Glyphs) Tj EMC ET"),
     ] {
         let doc = open(two_streams(s1, s2));
-        let text: String = pdfcraft_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
+        let text: String = asdreader_edit::reading_blocks(&doc, 0).unwrap().into_iter().map(|block| block.editor_text).collect();
         assert_eq!(text, "Replacement text", "{}", String::from_utf8_lossy(s1));
     }
 }
@@ -638,7 +638,7 @@ fn indirect_subtype_is_resolved() {
 fn later_text_on_the_line_does_not_clear_an_earlier_cover() {
     let content = b"0 g\nBT /F1 24 Tf 100 700 Td (SECRET) Tj ET\n98 688 94 32 re f\nBT /F1 24 Tf 200 700 Td (tail) Tj ET\n";
     let doc = open(one_page(content, ""));
-    let lines = pdfcraft_edit::text_lines(&doc, 0).expect("text");
+    let lines = asdreader_edit::text_lines(&doc, 0).expect("text");
     assert_eq!(lines.len(), 1, "the runs join one line: {:?}", lines.iter().map(|l| &l.text).collect::<Vec<_>>());
     let findings = audit_redactions(&doc).expect("audit must run");
     assert_eq!(findings.len(), 1, "{findings:?}");
@@ -683,8 +683,8 @@ fn cover_and_line_comparisons_are_bounded() {
 fn copy_restricted_documents_withhold_covered_text() {
     let content = b"BT /F1 24 Tf 100 700 Td (SECRET DATA 123) Tj ET\n0 g\n100 688 220 32 re f\n";
     let mut doc = open(one_page(content, ""));
-    doc.set_encryption(&pdfcraft_cos::NewEncryption {
-        algorithm: pdfcraft_cos::Algorithm::Aes256,
+    doc.set_encryption(&asdreader_cos::NewEncryption {
+        algorithm: asdreader_cos::Algorithm::Aes256,
         user_password: "",
         owner_password: "owner",
         permissions: -1 ^ 0b1_0000,
@@ -692,7 +692,7 @@ fn copy_restricted_documents_withhold_covered_text() {
         seed: [7; 32],
     })
     .expect("encrypt");
-    let bytes = Arc::new(pdfcraft_cos::write_full(&doc, &Default::default()).expect("save"));
+    let bytes = Arc::new(asdreader_cos::write_full(&doc, &Default::default()).expect("save"));
     let user = Document::open_with_password(bytes.clone(), None).expect("open");
     let findings = audit_redactions(&user).expect("audit must run");
     assert_eq!(findings.len(), 1, "the cover is still reported: {findings:?}");
@@ -715,7 +715,7 @@ fn copy_restricted_documents_withhold_covered_text() {
 #[test]
 fn withheld_covered_text_is_not_assembled() {
     let doc = open(one_page(b"BT /F1 24 Tf 100 700 Td (SECRET DATA 123) Tj ET\n", ""));
-    let lines = pdfcraft_edit::text_lines(&doc, 0).expect("text");
+    let lines = asdreader_edit::text_lines(&doc, 0).expect("text");
     let mut budget = crate::Budget { limits: crate::Limits::DEFAULT, comparisons: 0, page_cost: 0, covered_text: 0 };
     budget.start_page(&lines);
     let withheld = budget.hidden_text(&lines, false, |_| true).expect("within the budget");
@@ -740,7 +740,7 @@ fn a_cover_over_text_with_empty_or_substitute_actual_text_is_found() {
 
 #[test]
 fn repeated_stream_references_share_one_decode_budget() {
-    use pdfcraft_cos::{Dict, Document, Object, Stream};
+    use asdreader_cos::{Dict, Document, Object, Stream};
     // One 1 MiB stream of spaces (a kilobyte on disk), named 300 times: by the page's /Contents,
     // and by 300 draws of a form holding it.
     let mut doc = Document::new_empty();
@@ -759,12 +759,12 @@ fn repeated_stream_references_share_one_decode_budget() {
 
 #[test]
 fn form_entries_past_the_page_allowance_fail_the_audit() {
-    use pdfcraft_cos::{Dict, Document, Object, Stream};
+    use asdreader_cos::{Dict, Document, Object, Stream};
     // An empty form decodes to no bytes, so only the count of entries bounds drawing it again.
     let mut doc = Document::new_empty();
     let form_dict: Dict = [(b"Subtype".to_vec(), Object::Name(b"Form".to_vec()))].into_iter().collect();
     let form = doc.add(Stream::from_raw(form_dict, Vec::new()));
-    let draws = doc.add(Stream::from_raw(Dict::new(), "/X Do ".repeat(pdfcraft_cos::MAX_PAGE_FORMS + 1).into_bytes()));
+    let draws = doc.add(Stream::from_raw(Dict::new(), "/X Do ".repeat(asdreader_cos::MAX_PAGE_FORMS + 1).into_bytes()));
     let xobjects: Dict = [(b"X".to_vec(), Object::Ref(form))].into_iter().collect();
     let resources: Dict = [(b"XObject".to_vec(), Object::Dict(xobjects))].into_iter().collect();
     let page: Dict = [(b"Contents".to_vec(), Object::Ref(draws)), (b"Resources".to_vec(), Object::Dict(resources))].into_iter().collect();

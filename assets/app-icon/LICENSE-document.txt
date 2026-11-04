@@ -1,4 +1,8 @@
-PdfCraft PDF document icon (pdfcraft-document.svg and pdfcraft-document.ico).
+ASDReader replacement artwork (2026): original document/A geometry by ASDReader contributors, MIT OR Apache-2.0.
+
+Historical artwork notices, retained verbatim:
+
+ASDReader PDF document icon (asdreader-document.svg and asdreader-document.ico).
 SPDX-License-Identifier: ISC AND (MIT OR Apache-2.0)
 
 The document outline and fold are adapted from Lucide file-text (lucide-static 1.49.0):
@@ -22,7 +26,7 @@ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 The badge, outlined PDF lettering, colours and composition are original work
-by the PdfCraft contributors. Copyright (c) 2026 PdfCraft contributors.
+by the ASDReader contributors. Copyright (c) 2026 ASDReader contributors.
 Licensed under either the MIT License or the Apache License, Version 2.0,
 at your option. Full texts are LICENSE-MIT and LICENSE-APACHE at the
 repository root, and beside this file in Windows distributions.

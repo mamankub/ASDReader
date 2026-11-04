@@ -1,11 +1,11 @@
 //! Standards ▸ PDF/A: what the document declares, verifying it against PDF/A-2b or 3b, and
 //! fixing what can be fixed (Save as PDF/A).
 
+use asdreader_engine::pdfa::{Issue, Level};
 use egui::{Align, Layout};
-use pdfcraft_engine::pdfa::{Issue, Level};
 
 use crate::theme::{self, Tokens};
-use crate::{PdfCraftApp, widgets};
+use crate::{ASDReaderApp, widgets};
 
 /// The dialog's state: the chosen level and the last result.
 #[derive(Clone, Debug, PartialEq)]
@@ -21,7 +21,7 @@ impl Default for PdfaState {
     }
 }
 
-impl PdfCraftApp {
+impl ASDReaderApp {
     pub fn pdfa_verify(&mut self) {
         let Some((_, id)) = self.active_ids() else { return };
         let level = self.pdfa.level;
@@ -31,7 +31,7 @@ impl PdfCraftApp {
 
     pub fn pdfa_convert(&mut self) {
         let level = self.pdfa.level;
-        if self.apply_edit(pdfcraft_engine::Edit::ConvertPdfA { level }) {
+        if self.apply_edit(asdreader_engine::Edit::ConvertPdfA { level }) {
             self.pdfa_verify();
             let left = self.pdfa.issues.as_ref().map_or(0, Vec::len);
             self.notify(if left == 0 {
@@ -46,14 +46,14 @@ impl PdfCraftApp {
 }
 
 /// Returns `true` to close.
-pub(crate) fn body(ui: &mut egui::Ui, app: &mut PdfCraftApp, t: &Tokens) -> bool {
+pub(crate) fn body(ui: &mut egui::Ui, app: &mut ASDReaderApp, t: &Tokens) -> bool {
     ui.label(egui::RichText::new("PDF/A").font(theme::semibold(18.0)));
     ui.add_space(6.0);
     let declared = app.active_ids().and_then(|(_, id)| app.session.get(id)).map(|d| d.standards()).unwrap_or_default();
     let mut standards: Vec<String> = declared.pdfa.iter().map(|(p, c)| format!("PDF/A-{p}{}", c.to_lowercase())).collect();
     standards.extend(declared.pdfua.map(|p| format!("PDF/UA-{p}")));
     let shown = if standards.is_empty() { tl!("none").to_string() } else { standards.join(", ") };
-    let removal = pdfcraft_engine::Edit::RemoveStandardId { standard: pdfcraft_engine::Standard::PdfA };
+    let removal = asdreader_engine::Edit::RemoveStandardId { standard: asdreader_engine::Standard::PdfA };
     let mut remove = false;
     ui.horizontal(|ui| {
         ui.label(crate::i18n::fmt(tl!("Declared conformance: {shown}"), &[("shown", &shown)]));

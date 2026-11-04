@@ -22,7 +22,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, OnceLock};
 
-use crate::PdfCraftApp;
+use crate::ASDReaderApp;
 
 /// How often unsaved changes are written to the recovery folder.
 pub const AUTOSAVE_SECS: f64 = 60.0;
@@ -164,20 +164,20 @@ impl RecoveryStore {
     }
 
     /// `Recovery` in the portable data folder in portable mode ([`crate::portable`]), otherwise
-    /// the platform's per-user data folder: `~/Library/Application Support/PdfCraft/Recovery`
-    /// (macOS), `%LOCALAPPDATA%\PdfCraft\Recovery` (Windows), or
-    /// `$XDG_DATA_HOME/pdfcraft/recovery` / `~/.local/share/pdfcraft/recovery` (others).
+    /// the platform's per-user data folder: `~/Library/Application Support/ASDReader/Recovery`
+    /// (macOS), `%LOCALAPPDATA%\ASDReader\Recovery` (Windows), or
+    /// `$XDG_DATA_HOME/asdreader/recovery` / `~/.local/share/asdreader/recovery` (others).
     pub fn default_dir() -> Option<PathBuf> {
         if let Some(dir) = crate::portable::data_dir() {
             return Some(dir.join("Recovery"));
         }
         let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
         if cfg!(target_os = "macos") {
-            env("HOME").map(|h| h.join("Library/Application Support/PdfCraft/Recovery"))
+            env("HOME").map(|h| h.join("Library/Application Support/ASDReader/Recovery"))
         } else if cfg!(windows) {
-            env("LOCALAPPDATA").map(|d| d.join("PdfCraft").join("Recovery"))
+            env("LOCALAPPDATA").map(|d| d.join("ASDReader").join("Recovery"))
         } else {
-            env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share"))).map(|d| d.join("pdfcraft/recovery"))
+            env("XDG_DATA_HOME").or_else(|| env("HOME").map(|h| h.join(".local/share"))).map(|d| d.join("asdreader/recovery"))
         }
     }
 
@@ -280,7 +280,7 @@ fn now_secs() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
 }
 
-impl PdfCraftApp {
+impl ASDReaderApp {
     /// Turn on autosave into `store`, and look for documents a previous session left behind.
     pub fn enable_recovery(&mut self, store: RecoveryStore) {
         store.claim();
@@ -305,7 +305,7 @@ impl PdfCraftApp {
     }
 
     /// Drop a document's recovery entry (it was saved, discarded or closed).
-    pub(crate) fn forget_recovery(&mut self, doc: pdfcraft_engine::DocId) {
+    pub(crate) fn forget_recovery(&mut self, doc: asdreader_engine::DocId) {
         if let (Some(store), Some(key)) = (&self.recovery, self.recovery_keys.remove(&doc)) {
             store.remove(&key);
         }
@@ -426,7 +426,7 @@ mod idle_tests {
     impl TestDir {
         fn new() -> Self {
             let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-            let path = std::env::temp_dir().join(format!("pdfcraft-idle-recovery-{}-{nonce}", std::process::id()));
+            let path = std::env::temp_dir().join(format!("asdreader-idle-recovery-{}-{nonce}", std::process::id()));
             std::fs::create_dir(&path).unwrap();
             Self(path)
         }
@@ -441,7 +441,7 @@ mod idle_tests {
         }
     }
 
-    fn frame(app: &mut PdfCraftApp, ctx: &egui::Context, now: f64) -> Duration {
+    fn frame(app: &mut ASDReaderApp, ctx: &egui::Context, now: f64) -> Duration {
         let mut out = ctx.run_ui(egui::RawInput { time: Some(now), ..Default::default() }, |ui| {
             app.autosave_tick(ui.ctx(), now);
         });
@@ -454,7 +454,7 @@ mod idle_tests {
     fn idle_dirty_document_requests_its_deadline_and_writes_without_input() {
         let dir = TestDir::new();
         let store = RecoveryStore::new(dir.path());
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.enable_recovery(store.clone());
         let bytes = app.session.create_blank(200.0, 300.0, 1).unwrap();
         let id = app.session.open_new("Untitled.pdf", bytes).unwrap();
@@ -479,7 +479,7 @@ mod idle_tests {
     fn second_edit_after_autosave_schedules_next_deadline_and_updates_snapshot() {
         let dir = TestDir::new();
         let store = RecoveryStore::new(dir.path());
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.enable_recovery(store.clone());
         let bytes = app.session.create_blank(200.0, 300.0, 1).unwrap();
         let id = app.session.open_new("Untitled.pdf", bytes).unwrap();
@@ -496,7 +496,7 @@ mod idle_tests {
         }
         assert_eq!(delay, Duration::MAX);
 
-        app.session.apply(id, pdfcraft_engine::Edit::SetInfo { key: "Title".into(), value: "Second edit".into() }).unwrap();
+        app.session.apply(id, asdreader_engine::Edit::SetInfo { key: "Title".into(), value: "Second edit".into() }).unwrap();
         assert!(app.session.has_pending_autosave());
         for _ in 0..4 {
             delay = frame(&mut app, &ctx, 75.0);
@@ -511,7 +511,7 @@ mod idle_tests {
         assert_eq!(entries[0].key, key);
         let second = store.read(&key).unwrap();
         assert_ne!(second, first);
-        let mut recovered = pdfcraft_engine::Session::new();
+        let mut recovered = asdreader_engine::Session::new();
         let restored = recovered.open("Snapshot.pdf", None, second.into(), None).unwrap();
         assert_eq!(recovered.get(restored).unwrap().info_value("Title"), Some("Second edit".into()));
         assert!(app.session.get(id).unwrap().dirty);
@@ -526,7 +526,7 @@ mod idle_tests {
     fn clean_documents_and_disabled_recovery_do_not_schedule_autosave() {
         for recovery_enabled in [false, true] {
             let dir = TestDir::new();
-            let mut app = PdfCraftApp::new();
+            let mut app = ASDReaderApp::new();
             if recovery_enabled {
                 app.enable_recovery(RecoveryStore::new(dir.path()));
             }

@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use pdfcraft_cos::Document;
-use pdfcraft_measure::snap::{self, Geometry, SnapOptions};
+use asdreader_cos::Document;
+use asdreader_measure::snap::{self, Geometry, SnapOptions};
 
 const CASES: usize = 1_000;
 const SEED: u64 = 1;

@@ -1,5 +1,5 @@
 [package]
-name = "pdfcraft-preflight"
+name = "asdreader-preflight"
 description = "Standards: verify PDF/A (ISO 19005) conformance and convert documents to PDF/A-2b or 3b"
 version.workspace = true
 edition.workspace = true
@@ -11,9 +11,9 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-pdfcraft-content = { workspace = true }
-pdfcraft-cos = { workspace = true }
-pdfcraft-model = { workspace = true }
+asdreader-content = { workspace = true }
+asdreader-cos = { workspace = true }
+asdreader-model = { workspace = true }
 roxmltree = "0.20"
 
 [dev-dependencies]

@@ -1,4 +1,4 @@
-//! pdfcraft-ocr — Scan & OCR ▸ Recognize text (L4).
+//! asdreader-ocr — Scan & OCR ▸ Recognize text (L4).
 //!
 //! Recognition runs the ocrs engine (MIT/Apache-2.0) with its pre-trained models (CC-BY-SA-4.0,
 //! fetched by `cargo xtask models`; see ATTRIBUTION.toml). The caller renders a page to pixels;
@@ -12,11 +12,14 @@
 
 use std::path::{Path, PathBuf};
 
-pub use pdfcraft_fonts::helvetica_width;
+pub use asdreader_fonts::helvetica_width;
 
-/// The model files, as named in ATTRIBUTION.toml.
+/// Legacy model filenames, retained for existing installations.
 pub const DETECTION_MODEL: &str = "text-detection.rten";
 pub const RECOGNITION_MODEL: &str = "text-recognition.rten";
+/// The supported model files fetched by ATTRIBUTION.toml.
+pub const DETECTION_ONNX_MODEL: &str = "text-detection.onnx";
+pub const RECOGNITION_ONNX_MODEL: &str = "text-recognition.onnx";
 
 /// The recognition model's alphabet, as it was trained (ocrs-models' `DEFAULT_ALPHABET`): its
 /// output classes follow this order. The ocrs crate's own copy has an `E` where the training had
@@ -30,7 +33,7 @@ pub const LANGUAGES: &[(&str, &str)] = &[("en", "English")];
 pub enum OcrError {
     /// Shown to end users (release packages ship the models; a source build fetches them with
     /// `cargo xtask models`). The UI catalogs key this exact text.
-    #[error("the text recognition models are not installed (reinstall PdfCraft, or set PDFCRAFT_MODELS to the folder that holds them)")]
+    #[error("the text recognition models are not installed (reinstall ASDReader, or set ASDREADER_MODELS to the folder that holds them)")]
     NoModels,
     #[error("loading {0}: {1}")]
     Load(String, String),
@@ -48,13 +51,16 @@ pub struct Models {
 }
 
 impl Models {
-    /// The models in `dir`, if both files are there.
+    /// Prefer a complete ONNX pair, then a complete legacy RTEN pair in the same directory.
+    /// Never combine formats or files from different model directories.
     pub fn in_dir(dir: &Path) -> Option<Models> {
-        let m = Models { detection: dir.join(DETECTION_MODEL), recognition: dir.join(RECOGNITION_MODEL) };
-        (m.detection.is_file() && m.recognition.is_file()).then_some(m)
+        [(DETECTION_ONNX_MODEL, RECOGNITION_ONNX_MODEL), (DETECTION_MODEL, RECOGNITION_MODEL)].into_iter().find_map(|(detection, recognition)| {
+            let m = Models { detection: dir.join(detection), recognition: dir.join(recognition) };
+            (m.detection.is_file() && m.recognition.is_file()).then_some(m)
+        })
     }
 
-    /// Look for the models: `$PDFCRAFT_MODELS`, then where the release packages install them
+    /// Look for the models: `$ASDREADER_MODELS`, then where the release packages install them
     /// beside the executable ([`Models::dirs_beside_exe`]), then the source tree's `assets/models/`.
     pub fn find() -> Option<Models> {
         Self::search_dirs().iter().find_map(|d| Self::in_dir(d))
@@ -63,7 +69,7 @@ impl Models {
     /// The directories [`Models::find`] looks in, in order.
     pub fn search_dirs() -> Vec<PathBuf> {
         let mut dirs = Vec::new();
-        if let Some(d) = std::env::var_os("PDFCRAFT_MODELS") {
+        if let Some(d) = std::env::var_os("ASDREADER_MODELS") {
             dirs.push(PathBuf::from(d));
         }
         if let Some(exe) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
@@ -77,10 +83,10 @@ impl Models {
     /// executable (packaging/*):
     /// - `models/` beside it: the Windows MSI and portable zip;
     /// - `../Resources/models`: the macOS app bundle (`Contents/MacOS` → `Contents/Resources`);
-    /// - `../share/pdfcraft/models`: the FHS-style trees (`bin/` → `share/`) of the Linux
+    /// - `../share/asdreader/models`: the FHS-style trees (`bin/` → `share/`) of the Linux
     ///   deb/rpm/tar.gz/AppImage/Flatpak and the FreeBSD tarball, wherever they are installed.
     pub fn dirs_beside_exe(exe_dir: &Path) -> Vec<PathBuf> {
-        vec![exe_dir.join("models"), exe_dir.join("../Resources/models"), exe_dir.join("../share/pdfcraft/models")]
+        vec![exe_dir.join("models"), exe_dir.join("../Resources/models"), exe_dir.join("../share/asdreader/models")]
     }
 }
 
@@ -235,7 +241,7 @@ pub fn text_layer(words: &[PlacedWord]) -> Vec<u8> {
         let nums: Vec<String> = m.iter().map(|v| num(*v)).collect();
         out.extend_from_slice(nums.join(" ").as_bytes());
         out.extend_from_slice(b" Tm ");
-        out.extend(pdfcraft_fonts::literal(&pdfcraft_fonts::win_ansi(&w.text)));
+        out.extend(asdreader_fonts::literal(&asdreader_fonts::win_ansi(&w.text)));
         out.extend_from_slice(b" Tj\n");
     }
     out.extend_from_slice(b"ET\nQ\nEMC\n");
@@ -261,7 +267,7 @@ mod tests {
     /// alphabet (Chinese, for example) needs a text layer in another font first.
     #[test]
     fn the_model_alphabet_fits_the_text_layer_font() {
-        assert_eq!(pdfcraft_fonts::first_undrawable(ALPHABET), None);
+        assert_eq!(asdreader_fonts::first_undrawable(ALPHABET), None);
     }
 
     #[test]
@@ -321,19 +327,44 @@ mod tests {
         assert_eq!(w.up, [-10.0, 0.0]);
     }
 
+    #[test]
+    fn prefers_complete_onnx_pairs_and_keeps_legacy_models() {
+        let root = std::env::temp_dir().join(format!("asdreader-ocr-formats-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let write = |name: &str| std::fs::write(root.join(name), b"model").unwrap();
+        assert_eq!(Models::in_dir(&root), None);
+        write("text-detection.onnx");
+        write(RECOGNITION_MODEL);
+        assert_eq!(Models::in_dir(&root), None, "never mix formats");
+        write(DETECTION_MODEL);
+        let legacy = Models::in_dir(&root).unwrap();
+        assert_eq!(legacy.detection, root.join(DETECTION_MODEL));
+        write("text-recognition.onnx");
+        let onnx = Models::in_dir(&root).unwrap();
+        assert_eq!(onnx.detection, root.join("text-detection.onnx"));
+        assert_eq!(onnx.recognition, root.join("text-recognition.onnx"));
+        std::fs::remove_file(root.join(DETECTION_MODEL)).unwrap();
+        std::fs::remove_file(root.join(RECOGNITION_MODEL)).unwrap();
+        assert_eq!(Models::in_dir(&root), Some(onnx));
+        std::fs::remove_file(root.join("text-recognition.onnx")).unwrap();
+        assert_eq!(Models::in_dir(&root), None, "an incomplete pair is unavailable");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
     /// #103: every release package's layout puts the models where the installed app looks.
     /// Mirrors packaging/{windows/package.ps1,macos/package.sh,linux/package.sh,freebsd/package.sh}.
     #[test]
     fn finds_the_models_in_every_release_package_layout() {
-        let base = std::env::temp_dir().join(format!("pdfcraft-ocr-layouts-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("asdreader-ocr-layouts-{}", std::process::id()));
         let layouts = [
-            ("windows", "PdfCraft", "PdfCraft/models"),
-            ("macos", "PdfCraft.app/Contents/MacOS", "PdfCraft.app/Contents/Resources/models"),
-            ("linux-deb-rpm", "usr/bin", "usr/share/pdfcraft/models"),
-            ("linux-tar", "pdfcraft-1.0.0-linux-x86_64/bin", "pdfcraft-1.0.0-linux-x86_64/share/pdfcraft/models"),
-            ("appimage", "PdfCraft.AppDir/usr/bin", "PdfCraft.AppDir/usr/share/pdfcraft/models"),
-            ("flatpak", "app/bin", "app/share/pdfcraft/models"),
-            ("freebsd", "usr/local/bin", "usr/local/share/pdfcraft/models"),
+            ("windows", "ASDReader", "ASDReader/models"),
+            ("macos", "ASDReader.app/Contents/MacOS", "ASDReader.app/Contents/Resources/models"),
+            ("linux-deb-rpm", "usr/bin", "usr/share/asdreader/models"),
+            ("linux-tar", "asdreader-1.0.0-linux-x86_64/bin", "asdreader-1.0.0-linux-x86_64/share/asdreader/models"),
+            ("appimage", "ASDReader.AppDir/usr/bin", "ASDReader.AppDir/usr/share/asdreader/models"),
+            ("flatpak", "app/bin", "app/share/asdreader/models"),
+            ("freebsd", "usr/local/bin", "usr/local/share/asdreader/models"),
         ];
         for (name, exe_dir, models_dir) in layouts {
             let root = base.join(name);
@@ -364,7 +395,7 @@ mod tests {
     #[test]
     fn missing_models_message_is_for_end_users() {
         let message = OcrError::NoModels.to_string();
-        assert!(!message.contains("cargo") && message.contains("PDFCRAFT_MODELS"), "{message}");
+        assert!(!message.contains("cargo") && message.contains("ASDREADER_MODELS"), "{message}");
     }
 
     /// End to end on rendered text, when the models are installed (`cargo xtask models`).

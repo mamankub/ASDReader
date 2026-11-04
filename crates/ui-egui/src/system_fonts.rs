@@ -1,12 +1,15 @@
 //! The last-resort interface font: one face already installed on this machine.
 //!
-//! The embedded faces (Inter, egui's defaults, craft-fonts) come first in every family; this one
+//! The embedded faces (Inter, egui's defaults, asdesign-fonts) come first in every family; this one
 //! only draws characters none of them has, such as an Arabic file name in a build without
-//! craft-fonts, or the Simplified Chinese interface in a build without a `Hans` face (#826). A
+//! asdesign-fonts, or the Simplified Chinese interface in a build without a `Hans` face (#826). A
 //! few more installed faces, [`devanagari_fallback`], [`telugu_fallback`], [`sinhala_fallback`],
 //! [`tamil_fallback`], [`hebrew_fallback`] and [`hangul_fallback`], draw Hindi, Telugu, Sinhala,
-//! Tamil, Hebrew and Korean when one is installed. It is read at runtime and never embedded or
-//! shipped (AGENTS.md §1.4), and `PDFCRAFT_SYSTEM_FONTS=0` turns it off (published screenshots do).
+//! Tamil, Hebrew and Korean when one is installed. [`thai_fallback`] is the exception in order: the
+//! embedded Noto Sans Thai is loopless (no heads on ก, ข, ค…), which Thai readers do not take for the
+//! standard text face, so an installed looped face (Tahoma, Sarabun, Garuda…) is drawn before it.
+//! It is read at runtime and never embedded or
+//! shipped (AGENTS.md §1.4), and `ASDREADER_SYSTEM_FONTS=0` turns it off (published screenshots do).
 
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -34,18 +37,20 @@ const SINHALA_PROBE: char = '\u{0D9A}';
 const TAMIL_PROBE: char = '\u{0B95}';
 /// Hebrew letter alef: the face must have it to cover Hebrew.
 const HEBREW_PROBE: char = '\u{05D0}';
+/// Thai letter ko kai (ก): the face must have it to cover Thai.
+const THAI_PROBE: char = '\u{0E01}';
 /// Hangul syllable hih (힣, U+D7A3), the last of the 11,172 modern syllables: a face with it has
 /// the whole block. Droid Sans Fallback, for one, has 가 but few other syllables.
 const HANGUL_PROBE: char = '\u{D7A3}';
-/// 欢 (U+6B22): Simplified only, absent from the Japanese craft-fonts faces.
+/// 欢 (U+6B22): Simplified only, absent from the Japanese asdesign-fonts faces.
 const HANS_PROBE: char = '\u{6B22}';
-/// 說 (U+8AAA): Traditional only, absent from the Japanese craft-fonts faces.
+/// 說 (U+8AAA): Traditional only, absent from the Japanese asdesign-fonts faces.
 const HANT_PROBE: char = '\u{8AAA}';
 
 /// What the installed face is wanted for, from the interface language.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum Need {
-    /// Scripts no embedded face has (Arabic in a build without craft-fonts).
+    /// Scripts no embedded face has (Arabic in a build without asdesign-fonts).
     #[default]
     Other,
     /// Simplified Chinese interface text.
@@ -69,7 +74,7 @@ pub fn fallback(need: Need) -> Option<Arc<FontData>> {
 }
 
 fn load(need: Need) -> Option<Arc<FontData>> {
-    if std::env::var_os("PDFCRAFT_SYSTEM_FONTS").is_some_and(|v| v == "0") {
+    if std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0") {
         return None;
     }
     let (probe, max) = match need {
@@ -122,8 +127,17 @@ pub fn hangul_fallback() -> Option<Arc<FontData>> {
     CACHE.get_or_init(|| script_fallback(&hangul_candidates(), HANGUL_PROBE)).clone()
 }
 
+/// The installed looped ("with heads") Thai face, read once: the standard Thai text style that
+/// Tahoma, TH Sarabun, Garuda and Noto Sans Thai Looped share. `None` when it is turned off or no
+/// candidate is installed; the interface then draws Thai with the embedded loopless face, if the
+/// build has one.
+pub fn thai_fallback() -> Option<Arc<FontData>> {
+    static CACHE: OnceLock<Option<Arc<FontData>>> = OnceLock::new();
+    CACHE.get_or_init(|| script_fallback(&thai_candidates(), THAI_PROBE)).clone()
+}
+
 fn script_fallback(candidates: &[PathBuf], probe: char) -> Option<Arc<FontData>> {
-    if std::env::var_os("PDFCRAFT_SYSTEM_FONTS").is_some_and(|v| v == "0") {
+    if std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0") {
         return None;
     }
     candidates.iter().find_map(|path| read(path, probe, MAX_BYTES))
@@ -385,6 +399,51 @@ fn hangul_candidates() -> Vec<PathBuf> {
     }
 }
 
+/// Well-known locations of looped Thai faces, best first. Loopless faces (Leelawadee UI, Thonburi,
+/// Loma, Waree, Umpush) are left out on purpose: the embedded Noto Sans Thai already is one, and the
+/// reason for this list is a face with heads.
+fn thai_candidates() -> Vec<PathBuf> {
+    if cfg!(windows) {
+        let mut list: Vec<PathBuf> = ["tahoma.ttf", "THSarabunNew.ttf", "cordia.ttf", "browa.ttf", "angsa.ttf", "leelawad.ttf"]
+            .iter()
+            .map(|f| windows_fonts().join(f))
+            .collect();
+        // Fonts installed for one user only (Settings ▸ Fonts) live outside %WINDIR%.
+        if let Some(local) = std::env::var_os("LOCALAPPDATA") {
+            list.push(PathBuf::from(local).join("Microsoft/Windows/Fonts/THSarabunNew.ttf"));
+        }
+        list
+    } else if cfg!(target_os = "macos") {
+        [
+            "/System/Library/Fonts/Supplemental/Tahoma.ttf",
+            "/Library/Fonts/Tahoma.ttf",
+            "/System/Library/Fonts/Supplemental/Ayuthaya.ttf",
+            "/System/Library/Fonts/Supplemental/Krungthep.ttf",
+            "/System/Library/Fonts/Supplemental/Sathu.ttf",
+            "/System/Library/Fonts/Supplemental/Silom.ttf",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect()
+    } else {
+        unix_fonts(&[
+            "truetype/noto/NotoSansThaiLooped-Regular.ttf",
+            "google-noto/NotoSansThaiLooped-Regular.ttf",
+            "noto/NotoSansThaiLooped-Regular.ttf",
+            "truetype/tlwg/Garuda.ttf",
+            "truetype/thai-tlwg/Garuda.ttf",
+            "thai-scalable/Garuda.otf",
+            "thai-scalable/Garuda.ttf",
+            "tlwg/Garuda.ttf",
+            "truetype/google-fonts/Sarabun-Regular.ttf",
+            "truetype/sarabun/Sarabun-Regular.ttf",
+            "google-sarabun/Sarabun-Regular.ttf",
+            "truetype/tlwg/Sawasdee.ttf",
+            "thai-scalable/Sawasdee.ttf",
+        ])
+    }
+}
+
 fn windows_fonts() -> PathBuf {
     let dir = std::env::var_os("WINDIR").or_else(|| std::env::var_os("SystemRoot")).map_or_else(|| PathBuf::from(r"C:\Windows"), PathBuf::from);
     dir.join("Fonts")
@@ -397,7 +456,7 @@ fn unix_fonts(files: &'static [&'static str]) -> Vec<PathBuf> {
     // Read once per process, and not at all when installed fonts are turned off.
     let installed = INSTALLED
         .get_or_init(|| {
-            if std::env::var_os("PDFCRAFT_SYSTEM_FONTS").is_some_and(|v| v == "0") {
+            if std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0") {
                 return Vec::new();
             }
             fontconfig::font_files(&fontconfig::config_path())
@@ -500,7 +559,7 @@ mod tests {
     /// it is off, the way `tests/it/fonts.rs` skips for the same reason. Without this the suite goes red in exactly the
     /// mode `cargo xtask screenshots` uses.
     fn installed_faces_switched_off() -> bool {
-        std::env::var_os("PDFCRAFT_SYSTEM_FONTS").is_some_and(|v| v == "0")
+        std::env::var_os("ASDREADER_SYSTEM_FONTS").is_some_and(|v| v == "0")
     }
 
     #[test]
@@ -509,7 +568,7 @@ mod tests {
         // different face and nobody would notice. Two bundled faces both cover 'A' and differ in
         // size, so the winner is identifiable by length alone.
         if installed_faces_switched_off() {
-            eprintln!("skipping: PDFCRAFT_SYSTEM_FONTS=0 turns the loader off before order matters");
+            eprintln!("skipping: ASDREADER_SYSTEM_FONTS=0 turns the loader off before order matters");
             return;
         }
         let dir = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts"));
@@ -527,7 +586,7 @@ mod tests {
         // This one calls `script_fallback` too, so it fails under the documented switch that
         // published screenshots use — skip with a reason, as tests/it/fonts.rs does.
         if installed_faces_switched_off() {
-            eprintln!("skipping: PDFCRAFT_SYSTEM_FONTS=0 turns the loader off");
+            eprintln!("skipping: ASDREADER_SYSTEM_FONTS=0 turns the loader off");
             return;
         }
         let inter = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/fonts/Inter-Regular.ttf"));
@@ -561,6 +620,23 @@ mod tests {
         // Inter has no Hangul.
         let inter = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
         assert_eq!(face_with(inter, HANGUL_PROBE), None);
+    }
+
+    #[test]
+    fn thai_candidates_are_looped_font_files() {
+        let list = thai_candidates();
+        assert!(!list.is_empty());
+        for path in &list {
+            assert!(path.extension().is_some_and(|e| e == "ttf" || e == "otf"), "{path:?}");
+            // The reason for this list is a face with heads: none of the loopless families.
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or_default().to_ascii_lowercase();
+            for loopless in ["leelawui", "thonburi", "loma", "waree", "umpush", "notosansthai-"] {
+                assert!(!name.contains(loopless), "{path:?} is a loopless face");
+            }
+        }
+        // Inter has no Thai.
+        let inter = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+        assert_eq!(face_with(inter, THAI_PROBE), None);
     }
 
     /// Retune tripwires, deliberately separate from `the_macos_devanagari_list_is_apples_layout` below: these assert that three
@@ -605,7 +681,7 @@ mod tests {
     #[test]
     fn a_family_whose_name_has_spaces_is_still_found() {
         let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
-        let root = std::env::temp_dir().join(format!("pdfcraft-macos-fonts-{}-{nanos}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("asdreader-macos-fonts-{}-{nanos}", std::process::id()));
         let supplemental = root.join("Supplemental");
         std::fs::create_dir_all(&supplemental).expect("build a temp macOS-shaped font tree");
         let dirs = [root.to_string_lossy().to_string(), supplemental.to_string_lossy().to_string()];
@@ -633,7 +709,7 @@ mod tests {
     #[test]
     fn every_installed_devanagari_face_is_reachable_on_this_mac() {
         if installed_faces_switched_off() {
-            eprintln!("skipping on this machine: PDFCRAFT_SYSTEM_FONTS=0 turns installed faces off");
+            eprintln!("skipping on this machine: ASDREADER_SYSTEM_FONTS=0 turns installed faces off");
             return;
         }
         let list = devanagari_candidates();

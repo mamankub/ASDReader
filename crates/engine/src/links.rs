@@ -1,16 +1,21 @@
-//! Where PdfCraft and the ArtCraft community live on the web. One table, so the Help menu, the
+//! Where ASDReader lives on the web. One table, so the Help menu, the
 //! About dialog, the home screen, the CLI and the README agree.
 
 use icu_properties::props::Script;
 use std::path::{Path, PathBuf};
 
-/// The app's name in ArtCraft URLs (`getartcraft.com/apps/{APP}`, `github.com/storytold/{APP}`).
-pub const APP: &str = "pdfcraft";
+/// The application's name.
+pub const APP: &str = "ASDReader";
 
-pub const DISCORD: &str = "https://discord.gg/artcraft";
-pub const WEBSITE: &str = "https://getartcraft.com";
-pub const APP_PAGE: &str = "https://getartcraft.com/apps/pdfcraft";
-pub const GITHUB: &str = "https://github.com/storytold/pdfcraft";
+/// The public help site (Thai): manual, support and downloads, published with GitHub Pages from
+/// [`GITHUB`]. The source repository is private; everything a user follows from the app is here.
+pub const SITE: &str = "https://mamankub.github.io/asdreader-help";
+// Legacy constant and command IDs remain compatible with automation scripts.
+pub const DISCORD: &str = "https://mamankub.github.io/asdreader-help/support/";
+pub const WEBSITE: &str = "https://mamankub.github.io/asdreader-help/download/";
+pub const APP_PAGE: &str = "https://mamankub.github.io/asdreader-help/manual/";
+/// The public repository: the help site, its issues (questions and bug reports) and the releases.
+pub const GITHUB: &str = "https://github.com/mamankub/asdreader-help";
 
 /// A link and the registry command that opens it.
 #[derive(Clone, Copy, Debug)]
@@ -22,19 +27,19 @@ pub struct Link {
     pub icon: &'static str,
 }
 
-/// In the order they are shown. Discord comes first: it is where people get help fastest.
+/// In display order, with ASDReader issue reporting first. Legacy command IDs stay stable.
 pub const LINKS: &[Link] = &[
-    Link { command: "help.discord", label: "Join the ArtCraft Discord", url: DISCORD, icon: "messages-square" },
-    Link { command: "help.app_page", label: "PdfCraft web page", url: APP_PAGE, icon: "globe" },
-    Link { command: "help.github", label: "PdfCraft on GitHub", url: GITHUB, icon: "code-xml" },
-    Link { command: "help.website", label: "ArtCraft website", url: WEBSITE, icon: "external-link" },
+    Link { command: "help.discord", label: "ASDReader support", url: DISCORD, icon: "messages-square" },
+    Link { command: "help.app_page", label: "ASDReader documentation", url: APP_PAGE, icon: "globe" },
+    Link { command: "help.github", label: "ASDReader on GitHub", url: GITHUB, icon: "code-xml" },
+    Link { command: "help.website", label: "ASDReader releases", url: WEBSITE, icon: "external-link" },
 ];
 
 pub fn for_command(id: &str) -> Option<&'static Link> {
     LINKS.iter().find(|l| l.command == id)
 }
 
-/// The kinds of address a document may ask PdfCraft to open: web pages and email. Anything
+/// The kinds of address a document may ask ASDReader to open: web pages and email. Anything
 /// else (`file:`, `javascript:`, `data:`, `smb:`, app handlers such as `ms-settings:`) is refused,
 /// because the operating system would hand it to whichever program claims it (#90, #91).
 pub const DOCUMENT_SCHEMES: &[&str] = &["https", "http", "mailto"];
@@ -88,8 +93,8 @@ fn hides_text(c: char) -> bool {
 }
 
 /// Check an address that came from a document (a link, a button's URI action or a script's
-/// `app.launchURL`) before PdfCraft offers to open it. Returns the address trimmed of
-/// surrounding whitespace. PdfCraft's own links (Help, About, updates) don't come through here.
+/// `app.launchURL`) before ASDReader offers to open it. Returns the address trimmed of
+/// surrounding whitespace. ASDReader's own links (Help, About, updates) don't come through here.
 pub fn document_url(raw: &str) -> Result<String, BlockedLink> {
     let url = raw.trim();
     if url.is_empty() {
@@ -138,7 +143,7 @@ pub enum RemoteDocumentPathError {
     TooLong,
     Hidden,
     /// A URL, a network or device path, or a path that climbs above its root.
-    NotLocal(craft_docpath::Refused),
+    NotLocal(asdesign_docpath::Refused),
     MissingSourcePath,
     /// The target doesn't end in `.pdf`.
     NotPdf,
@@ -176,7 +181,7 @@ pub fn remote_document_path_is_absolute(raw: &str) -> bool {
 /// Resolve a PDF remote-Go-To file specification to a local path without opening it.
 /// Relative paths are based on the source document, which should be an absolute path; an
 /// in-memory source has no fallback to CWD. URLs (including `file:`), network and device paths are
-/// refused ([`craft_docpath::resolve_absolute`]).
+/// refused ([`asdesign_docpath::resolve_absolute`]).
 pub fn resolve_remote_document_path(source: Option<&Path>, raw: &str) -> Result<PathBuf, RemoteDocumentPathError> {
     if raw.is_empty() || raw.trim().is_empty() {
         return Err(RemoteDocumentPathError::Empty);
@@ -194,13 +199,13 @@ pub fn resolve_remote_document_path(source: Option<&Path>, raw: &str) -> Result<
             && scheme.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
             && scheme.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
         if is_scheme {
-            return Err(RemoteDocumentPathError::NotLocal(craft_docpath::Refused::Url));
+            return Err(RemoteDocumentPathError::NotLocal(asdesign_docpath::Refused::Url));
         }
     }
-    craft_docpath::resolve_absolute(raw, source).map_err(|r| match r {
+    asdesign_docpath::resolve_absolute(raw, source).map_err(|r| match r {
         // A path that resolves but not to an absolute one needed a source with an absolute path. With
         // such a source, it is a path this platform cannot open (`C:\x.pdf` on Unix).
-        craft_docpath::Refused::Invalid if !source.is_some_and(Path::is_absolute) && craft_docpath::resolve(raw, source).is_ok() => {
+        asdesign_docpath::Refused::Invalid if !source.is_some_and(Path::is_absolute) && asdesign_docpath::resolve(raw, source).is_ok() => {
             RemoteDocumentPathError::MissingSourcePath
         }
         r => RemoteDocumentPathError::NotLocal(r),
@@ -257,7 +262,7 @@ const MAIL_DECODE_LAYERS: usize = 8;
 /// argument). The check is repeated after each layer of percent-decoding (KMail decodes names, so
 /// `%61ttach` is `attach`). A word without `=` (`Please attach the invoice`) is fine.
 ///
-/// The address is refused, not stripped of the parameter: PdfCraft never rewrites what a document
+/// The address is refused, not stripped of the parameter: ASDReader never rewrites what a document
 /// asks to open, and a stripped address could still be read differently by some email app.
 fn check_mail_parameters(rest: &str) -> Result<(), BlockedLink> {
     let mut text = rest.to_string();
@@ -450,7 +455,7 @@ mod tests {
     #[test]
     fn remote_documents_must_be_regular_pdf_files() {
         use super::{RemoteDocumentPathError as E, read_remote_document as read};
-        let dir = std::env::temp_dir().join(format!("pdfcraft-gotor-read-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("asdreader-gotor-read-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("folder.pdf")).unwrap();
         std::fs::write(dir.join("doc.PDF"), b"%PDF-1.7\n").unwrap();
@@ -515,7 +520,11 @@ mod tests {
         assert_eq!(resolve(None, "target.pdf"), Err(E::MissingSourcePath));
         assert_eq!(resolve(Some(Path::new("source.pdf")), "target.pdf"), Err(E::MissingSourcePath), "a relative source is not used");
         #[cfg(unix)]
-        assert_eq!(resolve(Some(source), "C:\\x.pdf"), Err(E::NotLocal(craft_docpath::Refused::Invalid)), "a Windows path on Unix needs no source");
+        assert_eq!(
+            resolve(Some(source), "C:\\x.pdf"),
+            Err(E::NotLocal(asdesign_docpath::Refused::Invalid)),
+            "a Windows path on Unix needs no source"
+        );
         assert_eq!(resolve(Some(source), ""), Err(E::Empty));
         assert_eq!(resolve(Some(source), "   "), Err(E::Empty));
         for url in
@@ -525,7 +534,7 @@ mod tests {
         }
         assert_eq!(resolve(Some(source), "folder/hidden\u{200B}.pdf"), Err(E::Hidden));
         #[cfg(windows)]
-        assert_eq!(resolve(Some(source), "folder/a:b.pdf"), Err(E::NotLocal(craft_docpath::Refused::Invalid)));
+        assert_eq!(resolve(Some(source), "folder/a:b.pdf"), Err(E::NotLocal(asdesign_docpath::Refused::Invalid)));
         assert_eq!(resolve(Some(source), &"a".repeat(super::MAX_REMOTE_DOCUMENT_PATH_BYTES + 1)), Err(E::TooLong));
     }
 
@@ -560,9 +569,12 @@ mod tests {
     }
 
     #[test]
-    fn urls_follow_the_artcraft_scheme() {
-        assert_eq!(super::APP_PAGE, format!("{}/apps/{}", super::WEBSITE, super::APP));
-        assert_eq!(super::GITHUB, format!("https://github.com/storytold/{}", super::APP));
+    fn urls_point_at_the_public_help_site() {
+        // The source repository is private: every link a user follows goes to the public site.
+        for page in [super::DISCORD, super::WEBSITE, super::APP_PAGE] {
+            assert!(page.starts_with(super::SITE) && page.ends_with('/'), "{page}");
+        }
+        assert_eq!(super::GITHUB, "https://github.com/mamankub/asdreader-help");
         for l in super::LINKS {
             assert!(l.url.starts_with("https://"), "{}", l.url);
             assert!(crate::commands::command(l.command).is_some(), "{} is a registered command", l.command);

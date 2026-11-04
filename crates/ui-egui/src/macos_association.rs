@@ -1,4 +1,4 @@
-//! Best-effort recovery of an existing per-file PDFCraft binding after a successful open/save.
+//! Best-effort recovery of an existing per-file ASDReader binding after a successful open/save.
 //! Quarantined documents with redirected bindings can be refused by LaunchServices before the
 //! app receives an open event (Apple feedback FB19468486). In-app Open remains reachable.
 //! Never remove quarantine, set type-wide defaults, or create a new preference on an open.
@@ -7,7 +7,7 @@ use std::{io, path::Path};
 
 const OPEN_WITH: &str = "com.apple.LaunchServices.OpenWith";
 const QUARANTINE: &str = "com.apple.quarantine";
-const BUNDLE_ID: &str = "ai.storyteller.pdfcraft";
+const BUNDLE_ID: &str = "io.github.mamankub.asdreader";
 const MAX_ATTRIBUTE: usize = 64 * 1024;
 
 /// A bounded snapshot used only to decide whether native association recovery is eligible.
@@ -116,7 +116,7 @@ pub(crate) fn repair(path: &Path) {
         let (tx, rx) = mpsc::sync_channel::<RepairJob>(32);
         let pending = Arc::new(Mutex::new(HashSet::new()));
         std::thread::Builder::new()
-            .name("pdfcraft-association".into())
+            .name("asdreader-association".into())
             .spawn(move || {
                 for job in rx {
                     if std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| objc2::rc::autoreleasepool(|_| repair_job(job)))).is_err() {
@@ -202,7 +202,7 @@ mod tests {
 
     /// Create an isolated scratch directory for parallel metadata tests.
     fn directory() -> std::path::PathBuf {
-        let p = std::env::temp_dir().join(format!("pdfcraft-association-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        let p = std::env::temp_dir().join(format!("asdreader-association-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
         std::fs::create_dir(&p).unwrap();
         p
     }
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn untrusted_bundle_aliases_are_skipped_without_resolving_them() {
         let dir = directory();
-        let app = dir.join("PdfCraft.app");
+        let app = dir.join("ASDReader.app");
         std::fs::create_dir(&app).unwrap();
         let alias = dir.join("alias.app");
         std::os::unix::fs::symlink(&app, &alias).unwrap();
@@ -353,7 +353,7 @@ mod tests {
         let hex = "62706c6973743030d30102030405065776657273696f6e54706174685f101062756e646c656964656e74696669657210005f101a2f4170706c69636174696f6e732f50646643726166742e6170705f101761692e73746f727974656c6c65722e7064666372616674080f171c2f314e0000000000000101000000000000000700000000000000000000000000000068";
         let captured: Vec<u8> =
             hex.as_bytes().as_chunks::<2>().0.iter().map(|pair| u8::from_str_radix(std::str::from_utf8(pair).unwrap(), 16).unwrap()).collect();
-        assert!(points_to_this_app(&captured, Path::new("/Applications/PdfCraft.app")));
+        assert!(points_to_this_app(&captured, Path::new("/Applications/ASDReader.app")));
         let package = plist::from_bytes::<plist::Value>(include_bytes!("../../../packaging/macos/Info.plist.in")).unwrap();
         assert_eq!(package.as_dictionary().unwrap().get("CFBundleIdentifier").unwrap().as_string(), Some(BUNDLE_ID));
     }
@@ -361,7 +361,7 @@ mod tests {
     /// Exercise arbitrary and damaged metadata through the strict native parser.
     #[test]
     fn malformed_plists_and_truncated_native_schemas_do_not_panic() {
-        let app = Path::new("/Applications/PdfCraft.app");
+        let app = Path::new("/Applications/ASDReader.app");
         for binary in [false, true] {
             let native = binding(app, BUNDLE_ID, 0, binary);
             for end in 0..native.len() {

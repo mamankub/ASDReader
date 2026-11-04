@@ -1,6 +1,6 @@
 [package]
-name = "pdfcraft-engine"
-description = "PdfCraft engine façade: session, documents, command/tool catalogue"
+name = "asdreader-engine"
+description = "ASDReader engine façade: session, documents, command/tool catalogue"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,35 +9,35 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-craft-docpath = { workspace = true }
-pdfcraft-measure = { workspace = true }
+asdesign-docpath = { workspace = true }
+asdreader-measure = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff"] }
-pdfcraft-render = { workspace = true }
-pdfcraft-cos = { workspace = true }
-pdfcraft-organize = { workspace = true }
-pdfcraft-annot = { workspace = true }
-pdfcraft-forms = { workspace = true }
-pdfcraft-xfa = { workspace = true }
-pdfcraft-edit = { workspace = true }
-pdfcraft-audit = { workspace = true }
-pdfcraft-redact = { workspace = true }
-pdfcraft-print = { workspace = true }
-pdfcraft-xfdf = { workspace = true }
-pdfcraft-sign = { workspace = true }
-pdfcraft-optimize = { workspace = true }
-pdfcraft-a11y = { workspace = true }
-pdfcraft-ocr = { workspace = true }
-pdfcraft-js = { workspace = true }
-pdfcraft-compare = { workspace = true }
-pdfcraft-preflight = { workspace = true }
-pdfcraft-export = { workspace = true }
-pdfcraft-fonts = { workspace = true }
-pdfcraft-create = { workspace = true }
-pdfcraft-model = { workspace = true }
-pdfcraft-geom = { workspace = true }
+asdreader-render = { workspace = true }
+asdreader-cos = { workspace = true }
+asdreader-organize = { workspace = true }
+asdreader-annot = { workspace = true }
+asdreader-forms = { workspace = true }
+asdreader-xfa = { workspace = true }
+asdreader-edit = { workspace = true }
+asdreader-audit = { workspace = true }
+asdreader-redact = { workspace = true }
+asdreader-print = { workspace = true }
+asdreader-xfdf = { workspace = true }
+asdreader-sign = { workspace = true }
+asdreader-optimize = { workspace = true }
+asdreader-a11y = { workspace = true }
+asdreader-ocr = { workspace = true }
+asdreader-js = { workspace = true }
+asdreader-compare = { workspace = true }
+asdreader-preflight = { workspace = true }
+asdreader-export = { workspace = true }
+asdreader-fonts = { workspace = true }
+asdreader-create = { workspace = true }
+asdreader-model = { workspace = true }
+asdreader-geom = { workspace = true }
 thiserror = { workspace = true }
 png = "0.18"
-# Already in the graph (through image and pdfcraft-create): image's TiffEncoder can't set the
+# Already in the graph (through image and asdreader-create): image's TiffEncoder can't set the
 # resolution or the compression of an exported page.
 tiff = "0.11"
 # Already in the graph (url and idna through webbrowser, icu_properties through boa): they show
@@ -53,4 +53,4 @@ unicode-segmentation = "1.13"
 chrono = { workspace = true, features = ["clock"] }
 
 [dev-dependencies]
-pdfcraft-testkit = { workspace = true }
+asdreader-testkit = { workspace = true }

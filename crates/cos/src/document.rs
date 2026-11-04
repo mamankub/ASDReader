@@ -427,7 +427,7 @@ pub struct Document {
     header_offset: usize,
     version: String,
     /// The authenticated security handler of an encrypted document.
-    security: Option<Arc<pdfcraft_crypt::SecurityHandler>>,
+    security: Option<Arc<asdreader_crypt::SecurityHandler>>,
     /// Object number of the `/Encrypt` dictionary (never encrypted itself).
     encrypt_num: Option<u32>,
     /// Encryption was added, changed or removed since opening: only a full save can apply it.
@@ -435,7 +435,7 @@ pub struct Document {
     /// Set by edits that must not leave earlier revisions in the file (redaction).
     full_save: bool,
     /// The handler and `/Encrypt` object number that saves use, when encryption changed.
-    out_security: Option<Arc<pdfcraft_crypt::SecurityHandler>>,
+    out_security: Option<Arc<asdreader_crypt::SecurityHandler>>,
     out_encrypt_num: Option<u32>,
 }
 
@@ -535,7 +535,7 @@ impl std::fmt::Debug for Document {
 /// that has the same encryption (an earlier revision of the same file).
 enum Credentials<'a> {
     Password(Option<&'a str>),
-    Handler { handler: &'a Arc<pdfcraft_crypt::SecurityHandler>, id0: Vec<u8> },
+    Handler { handler: &'a Arc<asdreader_crypt::SecurityHandler>, id0: Vec<u8> },
 }
 
 impl Document {
@@ -719,9 +719,9 @@ impl Document {
         let params = crate::security::encrypt_dict(self, &dict);
         let id0 = self.first_id();
         let handler = match credentials {
-            Credentials::Password(password) => Arc::new(pdfcraft_crypt::SecurityHandler::open(params, &id0, *password).map_err(|e| match e {
-                pdfcraft_crypt::CryptError::WrongPassword if password.is_none() => CosError::NeedsPassword,
-                pdfcraft_crypt::CryptError::WrongPassword => CosError::WrongPassword,
+            Credentials::Password(password) => Arc::new(asdreader_crypt::SecurityHandler::open(params, &id0, *password).map_err(|e| match e {
+                asdreader_crypt::CryptError::WrongPassword if password.is_none() => CosError::NeedsPassword,
+                asdreader_crypt::CryptError::WrongPassword => CosError::WrongPassword,
                 other => CosError::Security(other.to_string()),
             })?),
             // The same encryption as the document whose key this is: that key opens it.
@@ -750,11 +750,11 @@ impl Document {
     /// Both passwords unlock the same file key, so nothing read so far is decoded again.
     pub fn unlock(&mut self, password: &str) -> Result<(), CosError> {
         let Some(current) = self.security.as_deref() else { return Ok(()) };
-        if current.auth() == pdfcraft_crypt::Auth::Owner {
+        if current.auth() == asdreader_crypt::Auth::Owner {
             return Ok(());
         }
         let owner = current.authenticate_owner(&self.first_id(), password).map_err(|e| match e {
-            pdfcraft_crypt::CryptError::WrongPassword => CosError::WrongPassword,
+            asdreader_crypt::CryptError::WrongPassword => CosError::WrongPassword,
             other => CosError::Security(other.to_string()),
         })?;
         self.security = Some(Arc::new(owner));
@@ -762,12 +762,12 @@ impl Document {
     }
 
     /// The security handler, when the document is encrypted.
-    pub fn security(&self) -> Option<&pdfcraft_crypt::SecurityHandler> {
+    pub fn security(&self) -> Option<&asdreader_crypt::SecurityHandler> {
         self.security.as_deref()
     }
 
     /// What the opening password allows (`None` for unencrypted documents: everything).
-    pub fn permissions(&self) -> Option<pdfcraft_crypt::Permissions> {
+    pub fn permissions(&self) -> Option<asdreader_crypt::Permissions> {
         self.security().map(|s| s.permissions())
     }
 
@@ -789,19 +789,19 @@ impl Document {
 
     /// The handler used to write: the new one after `set_encryption` / `remove_encryption`,
     /// otherwise the one the document was opened with.
-    pub(crate) fn output_security(&self) -> (Option<&pdfcraft_crypt::SecurityHandler>, Option<u32>) {
+    pub(crate) fn output_security(&self) -> (Option<&asdreader_crypt::SecurityHandler>, Option<u32>) {
         if self.encryption_changed { (self.out_security.as_deref(), self.out_encrypt_num) } else { (self.security.as_deref(), self.encrypt_num) }
     }
 
     /// The security the next save writes: protection applied with `set_encryption`, none after
     /// `remove_encryption`, otherwise the security the document was opened with.
-    pub fn output_handler(&self) -> Option<&pdfcraft_crypt::SecurityHandler> {
+    pub fn output_handler(&self) -> Option<&asdreader_crypt::SecurityHandler> {
         self.output_security().0
     }
 
     /// Protect the document with a password (§7.6.4). Takes effect on the next save, which is
     /// always a full rewrite. Returns the handler (authenticated as owner).
-    pub fn set_encryption(&mut self, params: &pdfcraft_crypt::NewEncryption) -> Result<(), CosError> {
+    pub fn set_encryption(&mut self, params: &asdreader_crypt::NewEncryption) -> Result<(), CosError> {
         // The file identifier is part of the key; make sure it exists and keep it.
         let id0 = match self.trailer.get(b"ID") {
             Some(Object::Array(a)) if a.len() == 2 => a[0].as_string().map(|s| s.bytes.clone()).unwrap_or_default(),
@@ -813,7 +813,7 @@ impl Document {
                 id
             }
         };
-        let h = pdfcraft_crypt::create(params, &id0).map_err(|e| CosError::Security(e.to_string()))?;
+        let h = asdreader_crypt::create(params, &id0).map_err(|e| CosError::Security(e.to_string()))?;
         let d = h.dict();
         let s = |b: &[u8]| Object::String(crate::PdfString { bytes: b.to_vec(), hex: true });
         let mut e = Dict::new();
@@ -2241,7 +2241,7 @@ fn generated_id(seed: &[u8; 32]) -> Vec<u8> {
     let mut out = Vec::new();
     for i in 0..2u8 {
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        (seed, i, b"pdfcraft id").hash(&mut h);
+        (seed, i, b"asdreader id").hash(&mut h);
         out.extend_from_slice(&h.finish().to_be_bytes());
     }
     out
@@ -3565,7 +3565,7 @@ endobj
         // /W [1 1 1]: at 3 bytes a row that is more than 8,388,607 objects' worth, so it is not
         // decoded (in full: the limit applies while inflating) and the objects are found by
         // reconstruction instead.
-        let bomb = pdfcraft_filters::encode_flate(&pdfcraft_filters::encode_flate(&vec![0u8; 32 << 20]));
+        let bomb = asdreader_filters::encode_flate(&asdreader_filters::encode_flate(&vec![0u8; 32 << 20]));
         let mut bytes = b"%PDF-1.7\n".to_vec();
         let o1 = bytes.len();
         bytes.extend_from_slice(b"1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");

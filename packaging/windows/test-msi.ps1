@@ -2,7 +2,7 @@
 .SYNOPSIS
   Check the compiled MSI's install scope, publisher, shortcuts, native UI and OCR models, without installing it.
 .EXAMPLE
-  pwsh packaging/windows/test-msi.ps1 dist/release/pdfcraft-0.2.1-windows-x64.msi
+  pwsh packaging/windows/test-msi.ps1 dist/release/asdreader-0.2.1-windows-x64.msi
 #>
 param([Parameter(Mandatory)] [string] $Path)
 $ErrorActionPreference = 'Stop'
@@ -35,7 +35,7 @@ function Assert-NoRow([string] $Sql, [string] $What) {
 # Test the compiled condition with Windows Installer's evaluator, in a restricted session that
 # cannot change machine state. Normal installs/repairs work, per-user overrides fail, and removal
 # of an older incorrectly scoped installation remains possible (#305).
-$scopeMessage = 'PdfCraft must be installed for all users. Run setup with administrator privileges and ALLUSERS=1; per-user installation is not supported.'
+$scopeMessage = 'ASDReader must be installed for all users. Run setup with administrator privileges and ALLUSERS=1; per-user installation is not supported.'
 $scopeCondition = Read-Row ('SELECT `Condition` FROM `LaunchCondition` WHERE `Description` = ''' + $scopeMessage + '''') 1
 $Installer.UILevel = 2
 $session = $null
@@ -73,15 +73,15 @@ $status = Read-Row 'SELECT `Text` FROM `Control` WHERE `Dialog_` = ''InstallProg
 Assert-Equal $status[0] 'Please wait while setup completes.' 'Persistent progress message'
 Assert-NoRow 'SELECT `Event` FROM `EventMapping` WHERE `Dialog_` = ''InstallProgress'' AND `Control_` = ''Status''' 'progress text subscription'
 
-# Plain (non-advertised) shortcuts to pdfcraft.exe, each in its own component; the desktop one is
+# Plain (non-advertised) shortcuts to ASDReader.exe, each in its own component; the desktop one is
 # gated by INSTALLDESKTOPSHORTCUT, which is secure so the UI choice reaches the
 # elevated install.
-foreach ($entry in @(@('StartMenuShortcut', 'ProgramMenuFolder', 'PdfcraftStartMenuShortcut', ''),
-                     @('DesktopShortcut', 'DesktopFolder', 'PdfcraftDesktopShortcut', 'INSTALLDESKTOPSHORTCUT = 1'))) {
+foreach ($entry in @(@('StartMenuShortcut', 'ProgramMenuFolder', 'ASDReaderStartMenuShortcut', ''),
+                     @('DesktopShortcut', 'DesktopFolder', 'ASDReaderDesktopShortcut', 'INSTALLDESKTOPSHORTCUT = 1'))) {
   $row = Read-Row ('SELECT `Directory_`, `Target`, `Icon_`, `WkDir`, `Component_` FROM `Shortcut` WHERE `Shortcut` = ''' + $entry[0] + '''') 5
   Assert-Equal $row[0] $entry[1] "$($entry[0]) directory"
-  Assert-Equal $row[1] '[#PdfcraftExe]' "$($entry[0]) target"
-  Assert-Equal $row[2] 'PdfcraftIcon.ico' "$($entry[0]) icon"
+  Assert-Equal $row[1] '[#ASDReaderExe]' "$($entry[0]) target"
+  Assert-Equal $row[2] 'ASDReaderIcon.ico' "$($entry[0]) icon"
   Assert-Equal $row[3] 'INSTALLFOLDER' "$($entry[0]) working directory"
   Assert-Equal $row[4] $entry[2] "$($entry[0]) component"
   $component = Read-Row ('SELECT `Directory_`, `Condition` FROM `Component` WHERE `Component` = ''' + $entry[2] + '''') 2
@@ -131,17 +131,71 @@ function Assert-KeptOnUpdate([string] $Property, [string] $Release, [string] $Fo
     if ($session) { [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($session) }
   }
 }
-Assert-KeptOnUpdate 'INSTALLDESKTOPSHORTCUT' 'WIX_UPGRADE_DETECTED' 'EXISTINGDESKTOPSHORTCUT' 'C:\Users\Public\Desktop\PdfCraft.lnk' 'PdfcraftDesktopShortcut' 'Desktop shortcut'
+Assert-KeptOnUpdate 'INSTALLDESKTOPSHORTCUT' 'WIX_UPGRADE_DETECTED' 'EXISTINGDESKTOPSHORTCUT' 'C:\Users\Public\Desktop\ASDReader.lnk' 'ASDReaderDesktopShortcut' 'Desktop shortcut'
 $secure = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''SecureCustomProperties''' 1
 if (($secure[0] -split ';') -notcontains 'INSTALLDESKTOPSHORTCUT') { throw "INSTALLDESKTOPSHORTCUT is not secure: '$($secure[0])'" }
+# The install folder page: Welcome's Next opens it, its PathEdit and Browse edit INSTALLFOLDER (under
+# Program Files by default: ProgramFiles6432Folder is C:\Program Files for a 64-bit package), and Install applies the folder before setup runs.
+if (($secure[0] -split ';') -notcontains 'INSTALLFOLDER') { throw "INSTALLFOLDER is not secure: '$($secure[0])'" }
+$next = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallWelcome'' AND `Control_` = ''Next'' AND `Event` = ''NewDialog''' 1
+Assert-Equal $next[0] 'InstallFolder' 'Welcome Next opens the folder page'
+$folder = Read-Row 'SELECT `Type`, `Property`, `Attributes` FROM `Control` WHERE `Dialog_` = ''InstallFolder'' AND `Control` = ''Folder''' 3
+Assert-Equal $folder[0] 'PathEdit' 'Install folder field'
+Assert-Equal $folder[1] '_BrowseProperty' 'Install folder field property'
+if (([int] $folder[2] -band 0x8) -eq 0) { throw "the install folder field is not indirect: $($folder[2])" }
+$browse = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Browse'' AND `Event` = ''SpawnDialog''' 1
+Assert-Equal $browse[0] 'BrowseFolder' 'Browse opens the folder chooser'
+$target = Read-Row 'SELECT `Argument` FROM `ControlEvent` WHERE `Dialog_` = ''InstallFolder'' AND `Control_` = ''Install'' AND `Event` = ''SetTargetPath''' 1
+Assert-Equal $target[0] '[_BrowseProperty]' 'Install applies the chosen folder'
+$indirect = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''_BrowseProperty''' 1
+Assert-Equal $indirect[0] 'INSTALLFOLDER' 'The folder controls edit INSTALLFOLDER'
+foreach ($control in 'LookIn', 'Folders', 'Path') {
+  $c = Read-Row ('SELECT `Property` FROM `Control` WHERE `Dialog_` = ''BrowseFolder'' AND `Control` = ''' + $control + '''') 1
+  Assert-Equal $c[0] '_BrowseProperty' "Browse dialog $control"
+}
+$installDir = Read-Row 'SELECT `Directory_Parent`, `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''' 2
+if ($installDir[0] -ne 'ProgramFiles6432Folder' -or $installDir[1] -notmatch '(^|\|)ASDReader$') { throw "default install folder: $($installDir -join ' ')" }
+# The ASD PDF Printer: a welcome-page checkbox (on by default, secure), a component that holds the
+# queue script and the receiver's Run entry, and deferred custom actions that run the script as
+# SYSTEM when the component is installed and when it is removed.
+if (($secure[0] -split ';') -notcontains 'INSTALLPDFPRINTER') { throw "INSTALLPDFPRINTER is not secure: '$($secure[0])'" }
+$printerBox = Read-Row 'SELECT `Type`, `Property` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''PdfPrinter''' 2
+Assert-Equal $printerBox[0] 'CheckBox' 'Welcome ASD PDF Printer checkbox'
+Assert-Equal $printerBox[1] 'INSTALLPDFPRINTER' 'Welcome ASD PDF Printer property'
+$printerDefault = Read-Row 'SELECT `Value` FROM `CheckBox` WHERE `Property` = ''INSTALLPDFPRINTER''' 1
+Assert-Equal $printerDefault[0] '1' 'ASD PDF Printer checkbox value'
+# MSI SQL has no LIKE: walk the File table (the name column is "short|long").
+$printerFileComponent = $null
+$view = $Database.OpenView('SELECT `FileName`, `Component_` FROM `File`')
+try {
+  [void] $view.Execute()
+  while ($record = $view.Fetch()) {
+    if ($record.StringData(1) -match 'asd-pdf-printer\.ps1$') { $printerFileComponent = $record.StringData(2) }
+  }
+} finally { [void] $view.Close() }
+Assert-Equal $printerFileComponent 'ASDReaderPrinter' 'The printer script component'
+$printerCondition = Read-Row 'SELECT `Condition` FROM `Component` WHERE `Component` = ''ASDReaderPrinter''' 1
+Assert-Equal $printerCondition[0] 'INSTALLPDFPRINTER = 1' 'The printer component condition'
+$runEntry = Read-Row 'SELECT `Name`, `Value` FROM `Registry` WHERE `Component_` = ''ASDReaderPrinter''' 2
+Assert-Equal $runEntry[0] 'ASDReaderPrinter' 'The receiver Run entry'
+if ($runEntry[1] -notmatch '--printer-listener') { throw "the Run entry does not start the receiver: '$($runEntry[1])'" }
+foreach ($action in @(@('InstallPdfPrinter', '-Install', '$ASDReaderPrinter = 3'), @('RemovePdfPrinter', '-Remove', '$ASDReaderPrinter = 2 AND ?ASDReaderPrinter = 3'))) {
+  $ca = Read-Row ('SELECT `Type`, `Target` FROM `CustomAction` WHERE `Action` = ''' + $action[0] + '''') 2
+  # Type 34 (directory + command line) with the deferred (0x400) and no-impersonate (0x800) flags,
+  # and the return code ignored (0x40): 34 + 1024 + 2048 + 64.
+  Assert-Equal ([int] $ca[0]) 3170 "$($action[0]) type"
+  if ($ca[1] -notmatch [regex]::Escape($action[1]) -or $ca[1] -notmatch 'asd-pdf-printer\.ps1') { throw "$($action[0]) runs the wrong command: '$($ca[1])'" }
+  $seq = Read-Row ('SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action` = ''' + $action[0] + '''') 1
+  Assert-Equal $seq[0] $action[2] "$($action[0]) condition"
+}
 $checkbox = Read-Row 'SELECT `Type`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''DesktopShortcut''' 3
 Assert-Equal $checkbox[0] 'CheckBox' 'Welcome desktop-shortcut control'
 Assert-Equal $checkbox[1] 'INSTALLDESKTOPSHORTCUT' 'Welcome checkbox property'
 if ($checkbox[2] -notmatch 'desktop shortcut') { throw "Welcome checkbox label: '$($checkbox[2])'" }
 $checked = Read-Row 'SELECT `Value` FROM `CheckBox` WHERE `Property` = ''INSTALLDESKTOPSHORTCUT''' 1
 Assert-Equal $checked[0] '1' 'Welcome checkbox value'
-$app = Read-Row 'SELECT `KeyPath` FROM `Component` WHERE `Component` = ''PdfcraftApp''' 1
-Assert-Equal $app[0] 'PdfcraftExe' 'Shortcut executable key path'
+$app = Read-Row 'SELECT `KeyPath` FROM `Component` WHERE `Component` = ''ASDReaderApp''' 1
+Assert-Equal $app[0] 'ASDReaderExe' 'Shortcut executable key path'
 $scope = Read-Row 'SELECT `Value` FROM `Property` WHERE `Property` = ''ALLUSERS''' 1
 Assert-Equal $scope[0] '1' 'Per-machine shortcut scope'
 
@@ -166,7 +220,7 @@ function Assert-MenuSearch([string] $Found, [string] $Key, [string] $Release, [s
   if (($secure[0] -split ';') -notcontains $Release) { throw "$Release is not secure: '$($secure[0])'" }
 }
 # The old version is removed before the new one is installed, so rows that moved between components
-# (the image menu left PdfcraftApp after 0.7.1) are removed with it rather than orphaned.
+# (the image menu left ASDReaderApp after 0.7.1) are removed with it rather than orphaned.
 $validate = Read-Row 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ''InstallValidate''' 1
 $remove = Read-Row 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ''RemoveExistingProducts''' 1
 $initialize = Read-Row 'SELECT `Sequence` FROM `InstallExecuteSequence` WHERE `Action` = ''InstallInitialize''' 1
@@ -177,64 +231,64 @@ if ([int] $remove[0] -le [int] $validate[0] -or [int] $remove[0] -ge [int] $init
 # Image context menu (#190) opens the DPI chooser. Its own component, gated by INSTALLIMAGECONTEXTMENU
 # (on for a first install, kept on update only while present, secure), with the .png label as key
 # path so uninstall removes every row. No image default association is changed.
-$imageKey = 'Software\Classes\SystemFileAssociations\.png\shell\PdfCraft.CreatePdf'
+$imageKey = 'Software\Classes\SystemFileAssociations\.png\shell\ASDReader.CreatePdf'
 foreach ($ext in @('png', 'jpg', 'jpeg', 'tif', 'tiff', 'gif', 'bmp', 'jp2', 'j2k', 'jpx')) {
-  $key = 'Software\Classes\SystemFileAssociations\.' + $ext + '\shell\PdfCraft.CreatePdf'
+  $key = 'Software\Classes\SystemFileAssociations\.' + $ext + '\shell\ASDReader.CreatePdf'
   $menu = Read-Row ('SELECT `Value`, `Component_`, `Root` FROM `Registry` WHERE `Key` = ''' + $key + ''' AND `Name` IS NULL') 3
-  Assert-Equal $menu[0] 'Create PDF with PdfCraft…' "$ext context menu label"
-  Assert-Equal $menu[1] 'PdfcraftImageContextMenu' "$ext context menu component"
+  Assert-Equal $menu[0] 'Create PDF with ASDReader…' "$ext context menu label"
+  Assert-Equal $menu[1] 'ASDReaderImageContextMenu' "$ext context menu component"
   Assert-Equal $menu[2] '2' "$ext context menu HKLM root"
   $command = Read-Row ('SELECT `Value`, `Component_` FROM `Registry` WHERE `Key` = ''' + $key + '\command''') 2
-  Assert-Equal $command[0] '"[#PdfcraftExe]" --create-images "%1"' "$ext context menu command"
-  Assert-Equal $command[1] 'PdfcraftImageContextMenu' "$ext context menu command component"
+  Assert-Equal $command[0] '"[#ASDReaderExe]" --create-images "%1"' "$ext context menu command"
+  Assert-Equal $command[1] 'ASDReaderImageContextMenu' "$ext context menu command component"
   $selection = Read-Row ('SELECT `Value`, `Component_` FROM `Registry` WHERE `Key` = ''' + $key + ''' AND `Name` = ''MultiSelectModel''') 2
   Assert-Equal $selection[0] 'Single' "$ext context menu selection"
-  Assert-Equal $selection[1] 'PdfcraftImageContextMenu' "$ext context menu selection component"
+  Assert-Equal $selection[1] 'ASDReaderImageContextMenu' "$ext context menu selection component"
 }
-$view = $Database.OpenView('SELECT `Key` FROM `Registry` WHERE `Component_` = ''PdfcraftApp''')
+$view = $Database.OpenView('SELECT `Key` FROM `Registry` WHERE `Component_` = ''ASDReaderApp''')
 try {
   [void] $view.Execute()
   while ($record = $view.Fetch()) {
-    if ($record.StringData(1) -match 'PdfCraft\.CreatePdf') { throw "image menu row left in PdfcraftApp: $($record.StringData(1))" }
+    if ($record.StringData(1) -match 'ASDReader\.CreatePdf') { throw "image menu row left in ASDReaderApp: $($record.StringData(1))" }
   }
 } finally { [void] $view.Close() }
 $imageKeyPath = Read-Row ('SELECT `Registry` FROM `Registry` WHERE `Key` = ''' + $imageKey + ''' AND `Name` IS NULL') 1
-$imageComponent = Read-Row 'SELECT `KeyPath`, `Attributes` FROM `Component` WHERE `Component` = ''PdfcraftImageContextMenu''' 2
+$imageComponent = Read-Row 'SELECT `KeyPath`, `Attributes` FROM `Component` WHERE `Component` = ''ASDReaderImageContextMenu''' 2
 Assert-Equal $imageComponent[0] $imageKeyPath[0] 'Image context menu key path'
 # msidbComponentAttributesRegistryKeyPath (4).
 if (([int] $imageComponent[1] -band 4) -eq 0) { throw "Image context menu key path is not a registry value: attributes $($imageComponent[1])" }
-Assert-KeptOnUpdate 'INSTALLIMAGECONTEXTMENU' 'IMAGECONTEXTMENURELEASE' 'EXISTINGIMAGECONTEXTMENU' 'Create PDF with PdfCraft…' 'PdfcraftImageContextMenu' 'Image context menu'
+Assert-KeptOnUpdate 'INSTALLIMAGECONTEXTMENU' 'IMAGECONTEXTMENURELEASE' 'EXISTINGIMAGECONTEXTMENU' 'Create PDF with ASDReader…' 'ASDReaderImageContextMenu' 'Image context menu'
 Assert-MenuSearch 'EXISTINGIMAGECONTEXTMENU' $imageKey 'IMAGECONTEXTMENURELEASE' '0.4.0' 'Image context menu'
 if (($secure[0] -split ';') -notcontains 'INSTALLIMAGECONTEXTMENU') { throw "INSTALLIMAGECONTEXTMENU is not secure: '$($secure[0])'" }
 
-# PDF context menu (#682): "Edit with PdfCraft" opens the file in PdfCraft. Its own component, gated
+# PDF context menu (#682): "Edit with ASDReader" opens the file in ASDReader. Its own component, gated
 # by INSTALLPDFCONTEXTMENU (on for a first install, kept on update only while present, secure, welcome
-# checkbox), with its menu value as key path so uninstall removes it. Several selected PDFs each start pdfcraft.exe "%1" (Document), which the
+# checkbox), with its menu value as key path so uninstall removes it. Several selected PDFs each start ASDReader.exe "%1" (Document), which the
 # single-instance hand-off opens as tabs. The .pdf default is never set, so the user's default app
 # stays.
-$pdfKey = 'Software\Classes\SystemFileAssociations\.pdf\shell\PdfCraft.Edit'
+$pdfKey = 'Software\Classes\SystemFileAssociations\.pdf\shell\ASDReader.Edit'
 $pdfMenu = Read-Row ('SELECT `Registry`, `Value`, `Component_`, `Root` FROM `Registry` WHERE `Key` = ''' + $pdfKey + ''' AND `Name` IS NULL') 4
-Assert-Equal $pdfMenu[1] 'Edit with PdfCraft' 'PDF context menu label'
-Assert-Equal $pdfMenu[2] 'PdfcraftPdfContextMenu' 'PDF context menu component'
+Assert-Equal $pdfMenu[1] 'Edit with ASDReader' 'PDF context menu label'
+Assert-Equal $pdfMenu[2] 'ASDReaderPdfContextMenu' 'PDF context menu component'
 Assert-Equal $pdfMenu[3] '2' 'PDF context menu HKLM root'
-foreach ($value in @(@('Icon', '"[#PdfcraftExe]",0'), @('MultiSelectModel', 'Document'))) {
+foreach ($value in @(@('Icon', '"[#ASDReaderExe]",0'), @('MultiSelectModel', 'Document'))) {
   $row = Read-Row ('SELECT `Value`, `Component_` FROM `Registry` WHERE `Key` = ''' + $pdfKey + ''' AND `Name` = ''' + $value[0] + '''') 2
   Assert-Equal $row[0] $value[1] "PDF context menu $($value[0])"
-  Assert-Equal $row[1] 'PdfcraftPdfContextMenu' "PDF context menu $($value[0]) component"
+  Assert-Equal $row[1] 'ASDReaderPdfContextMenu' "PDF context menu $($value[0]) component"
 }
 $pdfCommand = Read-Row ('SELECT `Value`, `Component_` FROM `Registry` WHERE `Key` = ''' + $pdfKey + '\command''') 2
-Assert-Equal $pdfCommand[0] '"[#PdfcraftExe]" "%1"' 'PDF context menu command'
-Assert-Equal $pdfCommand[1] 'PdfcraftPdfContextMenu' 'PDF context menu command component'
-$pdfComponent = Read-Row 'SELECT `Condition`, `KeyPath` FROM `Component` WHERE `Component` = ''PdfcraftPdfContextMenu''' 2
+Assert-Equal $pdfCommand[0] '"[#ASDReaderExe]" "%1"' 'PDF context menu command'
+Assert-Equal $pdfCommand[1] 'ASDReaderPdfContextMenu' 'PDF context menu command component'
+$pdfComponent = Read-Row 'SELECT `Condition`, `KeyPath` FROM `Component` WHERE `Component` = ''ASDReaderPdfContextMenu''' 2
 Assert-Equal $pdfComponent[0] 'INSTALLPDFCONTEXTMENU = 1' 'PDF context menu condition'
 Assert-Equal $pdfComponent[1] $pdfMenu[0] 'PDF context menu key path'
-Assert-KeptOnUpdate 'INSTALLPDFCONTEXTMENU' 'PDFCONTEXTMENURELEASE' 'EXISTINGPDFCONTEXTMENU' 'Edit with PdfCraft' 'PdfcraftPdfContextMenu' 'PDF context menu'
+Assert-KeptOnUpdate 'INSTALLPDFCONTEXTMENU' 'PDFCONTEXTMENURELEASE' 'EXISTINGPDFCONTEXTMENU' 'Edit with ASDReader' 'ASDReaderPdfContextMenu' 'PDF context menu'
 Assert-MenuSearch 'EXISTINGPDFCONTEXTMENU' $pdfKey 'PDFCONTEXTMENURELEASE' '0.7.1' 'PDF context menu'
 if (($secure[0] -split ';') -notcontains 'INSTALLPDFCONTEXTMENU') { throw "INSTALLPDFCONTEXTMENU is not secure: '$($secure[0])'" }
 $pdfCheckbox = Read-Row 'SELECT `Type`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''PdfContextMenu''' 3
 Assert-Equal $pdfCheckbox[0] 'CheckBox' 'Welcome PDF context-menu control'
 Assert-Equal $pdfCheckbox[1] 'INSTALLPDFCONTEXTMENU' 'Welcome PDF context-menu property'
-if ($pdfCheckbox[2] -notmatch 'Edit with PdfCraft') { throw "Welcome PDF context-menu label: '$($pdfCheckbox[2])'" }
+if ($pdfCheckbox[2] -notmatch 'Edit with ASDReader') { throw "Welcome PDF context-menu label: '$($pdfCheckbox[2])'" }
 $pdfChecked = Read-Row 'SELECT `Value` FROM `CheckBox` WHERE `Property` = ''INSTALLPDFCONTEXTMENU''' 1
 Assert-Equal $pdfChecked[0] '1' 'Welcome PDF context-menu value'
 Assert-NoRow 'SELECT `Registry` FROM `Registry` WHERE `Key` = ''Software\Classes\.pdf'' AND `Name` IS NULL' '.pdf default app'
@@ -253,7 +307,7 @@ foreach ($exit in @(@('InstallComplete', '-1'), @('InstallCancelled', '-2'), @('
 }
 $title = Read-Row 'SELECT `Text` FROM `Control` WHERE `Dialog_` = ''InstallComplete'' AND `Control` = ''Title''' 1
 if ($title[0] -notmatch 'completed successfully') { throw 'Success dialog does not confirm completion' }
-# OCR models (#103): installed into models\ beside pdfcraft.exe, where the app looks for them.
+# OCR models (#103): installed into models\ beside ASDReader.exe, where the app looks for them.
 $modelsDir = Read-Row 'SELECT `Directory_Parent`, `DefaultDir` FROM `Directory` WHERE `Directory` = ''ModelsFolder''' 2
 Assert-Equal $modelsDir[0] 'INSTALLFOLDER' 'OCR models folder parent'
 # DefaultDir is `models`, or `SHORT|models` with a generated 8.3 name.
@@ -262,9 +316,9 @@ $modelFiles = 0
 $view = $Database.OpenView('SELECT `File`.`FileName` FROM `File`, `Component` WHERE `File`.`Component_` = `Component`.`Component` AND `Component`.`Directory_` = ''ModelsFolder''')
 try {
   [void] $view.Execute()
-  while ($record = $view.Fetch()) { if ($record.StringData(1) -match '\.rten$') { $modelFiles++ } }
+  while ($record = $view.Fetch()) { if ($record.StringData(1) -match '\.(onnx|rten)$') { $modelFiles++ } }
 } finally { [void] $view.Close() }
-if ($modelFiles -lt 2) { throw "expected the OCR models (*.rten) in models\, found $modelFiles" }
+if ($modelFiles -lt 2) { throw "expected the OCR models (*.onnx or *.rten) in models\, found $modelFiles" }
 $rm = Read-Row 'SELECT `Dialog` FROM `Dialog` WHERE `Dialog` = ''MsiRMFilesInUse''' 1
 Assert-Equal $rm[0] 'MsiRMFilesInUse' 'Files-in-use dialog'
 [void] [Runtime.InteropServices.Marshal]::FinalReleaseComObject($Database)

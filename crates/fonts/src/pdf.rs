@@ -14,7 +14,7 @@
 use std::borrow::Cow;
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use pdfcraft_cos::{DecodeBudget, Dict, Document, Object};
+use asdreader_cos::{DecodeBudget, Dict, Document, Object};
 
 /// How the bytes of a string map to codes.
 #[derive(Clone, Debug, PartialEq)]
@@ -316,6 +316,24 @@ struct BfRange {
     /// Declaration order, shared with the explicit entries.
     seq: u32,
     units: Box<[u16]>,
+}
+
+impl Unicode {
+    /// Every code with a meaning and its text, from the explicit entries and the ranges (each code once,
+    /// as [`Unicode::text`] reads it), in code order; at most `limit` of them. Used to rewrite a
+    /// ToUnicode CMap, which never needs the encoding half.
+    pub(crate) fn entries(&self, limit: usize) -> Vec<(u32, String)> {
+        let mut codes: Vec<u32> = self.explicit.keys().copied().collect();
+        for r in &self.ranges {
+            codes.extend((r.lo..=r.hi).take(limit));
+            if codes.len() > limit.saturating_mul(2) {
+                break;
+            }
+        }
+        codes.sort_unstable();
+        codes.dedup();
+        codes.into_iter().take(limit).filter_map(|c| self.text(c).map(|t| (c, t.into_owned()))).collect()
+    }
 }
 
 impl Unicode {
@@ -849,15 +867,21 @@ impl Metrics {
 }
 
 impl Metrics {
+    /// Every code of the font's ToUnicode map with its text, in code order (at most `limit`).
+    pub(crate) fn to_unicode_entries(&self, limit: usize) -> Vec<(u32, String)> {
+        self.unicode.entries(limit)
+    }
+
     /// The text a string shows (codes without a known meaning are left out).
     pub fn decode(&self, s: &[u8]) -> String {
         self.codes(s).into_iter().filter_map(|(c, _)| self.text_of(c)).collect()
     }
 
-    /// The Unicode text of one code, if known.
+    /// The Unicode text of one code, if known. A Thai PUA glyph (a repositioned tone mark or vowel,
+    /// see [`crate::thai_pua`]) reads as the Thai character it shows, so `เจ้า` is not `เจ\u{F70B}า`.
     #[inline]
     pub fn text_of(&self, code: u32) -> Option<Cow<'_, str>> {
-        self.unicode.text(code)
+        self.unicode.text(code).map(crate::thai_pua::normalize_cow)
     }
 
     /// Whether the font has a glyph for `code` (subset fonts lack the glyphs they don't use).
@@ -892,9 +916,33 @@ impl Metrics {
         self.unicode.text(code).is_some_and(|t| t.chars().eq(std::iter::once(c))) && self.has_glyph(code)
     }
 
+    /// The lowest code that shows exactly `c` with a glyph, if any.
+    fn code_for(&self, c: char) -> Option<u32> {
+        let explicit = self.explicit_reverse.get(&c).copied().filter(|&code| self.shows(code, c));
+        let ranged = self.unicode.ranges.iter().filter_map(|range| range.first_code(c, |m| self.shows(m, c))).min();
+        match (explicit, ranged) {
+            (Some(a), Some(b)) => Some(a.min(b)),
+            (a, b) => a.or(b),
+        }
+    }
+
     /// The bytes that show `text` in this font, or `None` if some character has no code or
     /// no glyph in it (the caller then substitutes another font).
     pub fn encode(&self, text: &str) -> Option<Vec<u8>> {
+        // A Thai font that carries PUA variants (lowered and left-shifted marks) gets them where
+        // its designer meant them, as the PDF's producer chose them: `เจ้า` with the low ้.
+        let positioned;
+        let text = if text.chars().any(|c| matches!(c, '\u{0E01}'..='\u{0E4E}')) {
+            let pua: HashSet<char> = ('\u{F700}'..='\u{F71A}').chain('\u{F884}'..='\u{F89E}').filter(|&c| self.code_for(c).is_some()).collect();
+            if pua.is_empty() {
+                text
+            } else {
+                positioned = crate::thai_pua::positioned(text, |c| pua.contains(&c));
+                positioned.as_str()
+            }
+        } else {
+            text
+        };
         // The lowest code showing each wanted character. Explicit entries and the encoding are
         // checked one by one; each range is asked for the wanted characters it can show.
         let wanted: HashSet<char> = text.chars().collect();
@@ -1331,7 +1379,7 @@ fn identity_to_unicode() -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use pdfcraft_cos::{Dict, Document, Object, Stream};
+    use asdreader_cos::{Dict, Document, Object, Stream};
 
     use super::*;
 
@@ -1444,7 +1492,7 @@ mod tests {
 
     #[test]
     fn embedded_editor_fonts_are_validated_without_installing_or_exporting() {
-        use pdfcraft_cos::Stream;
+        use asdreader_cos::Stream;
         let mut doc = Document::new_empty();
         let bytes = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
         let program = doc.add(Object::Stream(Stream::flate(Dict::new(), bytes)));
@@ -1465,7 +1513,7 @@ mod tests {
     /// ("Mono" would mean Courier, 600 units for every glyph).
     #[test]
     fn a_font_without_widths_measures_with_its_embedded_program() {
-        use pdfcraft_cos::Stream;
+        use asdreader_cos::Stream;
         use skrifa::MetadataProvider as _;
         let mut doc = Document::new_empty();
         let bytes = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
@@ -1719,6 +1767,59 @@ mod tests {
         assert_eq!(m.decode(&[0, 0x24, 0, 0x25, 0, 3, 0, 0x30, 0, 0x31, 0, 0x10]), "AB Hié");
         assert_eq!(m.encode("Hi A").as_deref(), Some(&[0, 0x30, 0, 0x31, 0, 3, 0, 0x24][..]));
         assert_eq!(m.encode("Z"), None);
+    }
+
+    /// A Thai font as PDFsharp (and Word) embed Tahoma-style fonts: the lowered mai tho has its own
+    /// glyph whose ToUnicode is the Windows PUA U+F70B. It reads as ้, and text written back takes
+    /// the lowered glyph where the original had it (เจ้า) and the high one over an upper vowel (ตั้ง).
+    #[test]
+    fn thai_pua_glyphs_read_as_thai_and_are_chosen_again_when_writing() {
+        let mut doc = Document::new_empty();
+        // จ า ข อ ง ต ั ้ (high) ้ (low, PUA) ่
+        let cmap = b"/CIDInit /ProcSet findresource begin 1 begincodespacerange <0000> <FFFF> endcodespacerange \
+            9 beginbfchar <0010> <0E08> <0011> <0E32> <0012> <0E02> <0013> <0E2D> <0014> <0E07> <0015> <0E15> \
+            <0016> <0E31> <0017> <0E49> <0018> <F70B> endbfchar end";
+        let tu = doc.add(Object::Stream(Stream::from_raw(Dict::new(), cmap.to_vec())));
+        let mut desc = Dict::new();
+        desc.set(b"Subtype".to_vec(), Object::name("CIDFontType2"));
+        let widths = [500, 400, 500, 500, 500, 500, 0, 0, 0].map(Object::Int).to_vec();
+        desc.set(b"W".to_vec(), Object::Array(vec![Object::Int(0x10), Object::Array(widths)]));
+        let f = font(
+            &mut doc,
+            vec![
+                ("Subtype", Object::name("Type0")),
+                ("BaseFont", Object::name("CIDFont+F1")),
+                ("Encoding", Object::name("Identity-H")),
+                ("DescendantFonts", Object::Array(vec![Object::Dict(desc)])),
+                ("ToUnicode", Object::Ref(tu)),
+            ],
+        );
+        let m = Metrics::from_dict(&doc, &f);
+        // เจ (low ้) าของ, as the file draws it.
+        let drawn = [0, 0x10, 0, 0x18, 0, 0x11, 0, 0x12, 0, 0x13, 0, 0x14];
+        assert_eq!(m.decode(&drawn), "จ้าของ");
+        assert_eq!(m.text_of(0x18).as_deref(), Some("\u{0E49}"));
+        assert_eq!(m.encode("จ้าของ").as_deref(), Some(&drawn[..]), "the low mai tho again");
+        assert_eq!(m.encode("ตั้ง").as_deref(), Some(&[0, 0x15, 0, 0x16, 0, 0x17, 0, 0x14][..]), "high over an upper vowel");
+        // A font without the PUA glyph keeps the standard one.
+        let mut plain_doc = Document::new_empty();
+        let plain_cmap = b"1 beginbfchar <0010> <0E08> endbfchar 2 beginbfchar <0011> <0E49> <0012> <0E32> endbfchar";
+        let tu = plain_doc.add(Object::Stream(Stream::from_raw(Dict::new(), plain_cmap.to_vec())));
+        let mut desc = Dict::new();
+        desc.set(b"Subtype".to_vec(), Object::name("CIDFontType2"));
+        desc.set(b"W".to_vec(), Object::Array(vec![Object::Int(0x10), Object::Array([500, 0, 400].map(Object::Int).to_vec())]));
+        let f = font(
+            &mut plain_doc,
+            vec![
+                ("Subtype", Object::name("Type0")),
+                ("BaseFont", Object::name("CIDFont+F2")),
+                ("Encoding", Object::name("Identity-H")),
+                ("DescendantFonts", Object::Array(vec![Object::Dict(desc)])),
+                ("ToUnicode", Object::Ref(tu)),
+            ],
+        );
+        let plain = Metrics::from_dict(&plain_doc, &f);
+        assert_eq!(plain.encode("จ้า").as_deref(), Some(&[0, 0x10, 0, 0x11, 0, 0x12][..]));
     }
 
     /// Word's Type 0 subsets map CID 0 as well as the real space glyph to U+0020 and give CID 0 a
@@ -2145,7 +2246,7 @@ mod tests {
 
 #[cfg(test)]
 mod encoding_tests {
-    use pdfcraft_cos::{Dict, Document, Object};
+    use asdreader_cos::{Dict, Document, Object};
 
     use super::*;
 
@@ -2307,7 +2408,7 @@ mod encoding_tests {
         // 128 resources naming one 1 MiB program that isn't a font: each decode is charged,
         // so an enumeration stops decoding once the shared budget is spent.
         let mut doc = Document::new_empty();
-        let program = doc.add(pdfcraft_cos::Stream::flate(Dict::new(), &vec![0; 1 << 20]));
+        let program = doc.add(asdreader_cos::Stream::flate(Dict::new(), &vec![0; 1 << 20]));
         let descriptor: Dict = [(b"FontFile2".to_vec(), Object::Ref(program))].into_iter().collect();
         let descriptor = doc.add(descriptor);
         let font: Dict = [(b"FontDescriptor".to_vec(), Object::Ref(descriptor))].into_iter().collect();

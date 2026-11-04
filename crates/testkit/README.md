@@ -1,4 +1,4 @@
-# pdfcraft-testkit
+# asdreader-testkit
 
 Synthetic PDF fixtures: **one way to write the bytes, so tests differ only where they mean to.**
 
@@ -18,7 +18,7 @@ for a fixture to be quietly wrong in a way that makes a test prove less than it 
 ## API
 
 ```rust
-use pdfcraft_testkit::Pdf;
+use asdreader_testkit::Pdf;
 
 let bytes = Pdf::new()
     .version("1.4")                                        // default 1.7

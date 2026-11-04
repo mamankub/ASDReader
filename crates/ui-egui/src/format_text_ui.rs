@@ -2,13 +2,13 @@
 //! alignment; bold, italic, underline, superscript and subscript; line and paragraph spacing;
 //! horizontal scale and character spacing. One panel serves a paragraph being edited (with the
 //! fonts already on its page and the spacing controls) and added text (the standard families,
-//! size, colour, style and alignment). What PdfCraft can't apply yet (lists, superscript and
+//! size, colour, style and alignment). What ASDReader can't apply yet (lists, superscript and
 //! subscript, paragraph spacing, or spacing for added text) is shown disabled and says so.
 //!
 //! The icons are Lucide's (AGENTS.md §1); only the arrangement follows Acrobat.
 
+use asdreader_engine::{AddedText, FontFamily, TextAlign};
 use egui::{Align, Color32, CornerRadius, Layout, Rect, Sense, Stroke, vec2};
-use pdfcraft_engine::{AddedText, FontFamily, TextAlign};
 
 use crate::edit_text_ui::Extras;
 use crate::theme::Tokens;
@@ -26,8 +26,8 @@ pub(crate) enum FontChoice {
     Family(FontFamily),
     /// Load font…: pick a font file.
     Load,
-    /// A font file installed on this computer.
-    Installed(std::path::PathBuf),
+    /// A font installed on this computer (a face of a collection included).
+    Installed(asdreader_engine::text_fonts::FontFile),
 }
 
 /// What the font list offers and shows.
@@ -70,6 +70,51 @@ fn number(v: f64) -> String {
     s.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
+/// Rows the installed-font list shows before it scrolls.
+#[cfg(not(target_arch = "wasm32"))]
+const INSTALLED_ROWS: f32 = 12.0;
+
+/// Installed fonts…: every font installed on this computer that a PDF may embed, with a search box
+/// (a Windows machine has a thousand or more). Picking one loads it into the page and applies it
+/// to the paragraph, as Load font… does.
+#[cfg(not(target_arch = "wasm32"))]
+fn installed_fonts_menu(ui: &mut egui::Ui, out: &mut Outcome) {
+    ui.menu_button(tl!("Installed fonts…"), |ui| {
+        ui.set_min_width(280.0);
+        let Some(list) = crate::files::installed_font_files(ui.ctx()) else {
+            ui.label(tl!("Finding document fonts…"));
+            return;
+        };
+        if list.is_empty() {
+            ui.label(tl!("No usable installed fonts found. Load a font file."));
+            return;
+        }
+        let id = ui.id().with("installed-font-search");
+        let mut query: String = ui.data_mut(|d| d.get_temp(id)).unwrap_or_default();
+        ui.add(egui::TextEdit::singleline(&mut query).hint_text(tl!("Search fonts")).desired_width(f32::INFINITY));
+        ui.data_mut(|d| d.insert_temp(id, query.clone()));
+        let query = query.trim().to_lowercase();
+        let shown: Vec<(String, &asdreader_engine::text_fonts::FontFile)> = list
+            .iter()
+            .map(|font| (font.label(), font))
+            .filter(|(label, font)| query.is_empty() || label.to_lowercase().contains(&query) || font.face.to_lowercase().contains(&query))
+            .collect();
+        if shown.is_empty() {
+            ui.label(tl!("No fonts match."));
+            return;
+        }
+        let row = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
+        egui::ScrollArea::vertical().max_height(row * INSTALLED_ROWS).auto_shrink([false, true]).show_rows(ui, row, shown.len(), |ui, rows| {
+            for (label, font) in shown.get(rows).unwrap_or_default() {
+                if ui.button(label.as_str()).on_hover_text(font.path.display().to_string()).clicked() {
+                    out.font = Some(FontChoice::Installed((*font).clone()));
+                    ui.close();
+                }
+            }
+        });
+    });
+}
+
 pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, look: &mut AddedText, extras: Option<&mut Extras>, fonts: Fonts) -> Outcome {
     let before = (look.clone(), extras.as_deref().copied());
     let mut out = Outcome::default();
@@ -103,22 +148,7 @@ pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, look: &mut AddedText, extras:
                     out.font = Some(FontChoice::Load);
                 }
                 #[cfg(not(target_arch = "wasm32"))]
-                ui.menu_button(tl!("Installed fonts…"), |ui| match crate::files::installed_font_files(ui.ctx()) {
-                    Some(list) if list.is_empty() => {
-                        ui.label(tl!("No openly licensed document fonts found. Load a font file."));
-                    }
-                    Some(list) => {
-                        for font in list {
-                            if ui.button(&font.face).clicked() {
-                                out.font = Some(FontChoice::Installed(font.path));
-                                ui.close();
-                            }
-                        }
-                    }
-                    None => {
-                        ui.label(tl!("Finding document fonts…"));
-                    }
-                });
+                installed_fonts_menu(ui, &mut out);
             }
         })
         .response
@@ -254,7 +284,7 @@ fn row<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     .inner
 }
 
-/// A control PdfCraft doesn't have yet: its icon, disabled, saying so when hovered.
+/// A control ASDReader doesn't have yet: its icon, disabled, saying so when hovered.
 fn planned(ui: &mut egui::Ui, icon: &str, label: &str) {
     let _ = ui
         .add_enabled_ui(false, |ui| icons::button(ui, icon, 30.0, false, label))

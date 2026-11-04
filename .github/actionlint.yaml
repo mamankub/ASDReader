@@ -1,4 +1,4 @@
-# actionlint: runner labels that exist in the storytold org but not on GitHub-hosted runners.
+# actionlint: self-hosted runner labels the workflows may use.
 self-hosted-runner:
   labels:
     - macos-release

@@ -44,33 +44,85 @@ pub fn shape(bytes: &[u8], text: &str) -> Result<ShapedRun, String> {
     for run in runs {
         let Some(input) = text.get(run.clone()) else { continue };
         let rtl = levels.get(run.start).is_some_and(Level::is_rtl);
-        let mut buffer = UnicodeBuffer::new();
-        buffer.push_str(input);
-        buffer.set_cluster_level(BufferClusterLevel::MonotoneGraphemes);
-        buffer.set_direction(if rtl { Direction::RightToLeft } else { Direction::LeftToRight });
-        buffer.guess_segment_properties();
-        let output = shaper.shape(buffer, ShapeOptions::new());
-        let mut starts: Vec<_> = output.glyph_infos().iter().map(|g| g.cluster as usize).collect();
-        starts.sort_unstable();
-        starts.dedup();
-        let mut seen = std::collections::HashSet::new();
-        for (g, p) in output.glyph_infos().iter().zip(output.glyph_positions()) {
-            if g.glyph_id == 0 {
-                return Err("the full font lacks a required contextual glyph; choose the complete source face".into());
+        // A bidi run can contain both Latin and Thai. Guessing its script from the first
+        // letter applies Latin shaping to Thai Sara Am and stacked marks later in the run.
+        let mut parts = thai_script_runs(input);
+        if rtl {
+            parts.reverse();
+        }
+        for part in parts {
+            let Some(input) = input.get(part) else { continue };
+            let mut buffer = UnicodeBuffer::new();
+            buffer.push_str(input);
+            buffer.set_cluster_level(BufferClusterLevel::MonotoneGraphemes);
+            buffer.set_direction(if rtl { Direction::RightToLeft } else { Direction::LeftToRight });
+            buffer.guess_segment_properties();
+            let output = shaper.shape(buffer, ShapeOptions::new());
+            let mut starts: Vec<_> = output.glyph_infos().iter().map(|g| g.cluster as usize).collect();
+            starts.sort_unstable();
+            starts.dedup();
+            let mut seen = std::collections::HashSet::new();
+            for (g, p) in output.glyph_infos().iter().zip(output.glyph_positions()) {
+                if g.glyph_id == 0 {
+                    return Err("the full font lacks a required contextual glyph; choose the complete source face".into());
+                }
+                let start = g.cluster as usize;
+                let end = starts.get(starts.partition_point(|i| *i <= start)).copied().unwrap_or(input.len());
+                let logical = if seen.insert(start) { input.get(start..end).unwrap_or_default().to_string() } else { String::new() };
+                glyphs.push(ShapedGlyph {
+                    id: GlyphId::new(g.glyph_id),
+                    position: [x + f64::from(p.x_offset) / em, f64::from(p.y_offset) / em],
+                    text: logical,
+                });
+                x += f64::from(p.x_advance) / em;
             }
-            let start = g.cluster as usize;
-            let end = starts.get(starts.partition_point(|i| *i <= start)).copied().unwrap_or(input.len());
-            let logical = if seen.insert(start) { input.get(start..end).unwrap_or_default().to_string() } else { String::new() };
-            glyphs.push(ShapedGlyph {
-                id: GlyphId::new(g.glyph_id),
-                position: [x + f64::from(p.x_offset) / em, f64::from(p.y_offset) / em],
-                text: logical,
-            });
-            x += f64::from(p.x_advance) / em;
         }
     }
     if !x.is_finite() || glyphs.len() > 65_534 {
         return Err("shaped row exceeds its geometry budget".into());
     }
     Ok(ShapedRun { glyphs, advance: x })
+}
+
+/// Separate Thai from neighbouring scripts before HarfRust guesses segment properties.
+/// Byte ranges always come from char_indices, including when the adjacent script is non-ASCII.
+fn thai_script_runs(text: &str) -> Vec<std::ops::Range<usize>> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut previous = None;
+    for (at, ch) in text.char_indices() {
+        let thai = matches!(ch, '\u{0e00}'..='\u{0e7f}');
+        if previous.is_some_and(|was| was != thai) {
+            out.push(start..at);
+            start = at;
+        }
+        previous = Some(thai);
+    }
+    if start < text.len() {
+        out.push(start..text.len());
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thai_after_latin_keeps_its_contextual_glyphs_and_mark_offsets() {
+        let Some(face) = crate::document_thai_font() else { return };
+        for thai in ["น้ำ", "กิ่", "ปู่", "ญู", "ผู้ใช้", "เก้า"] {
+            let expected = shape(face.bytes, thai).unwrap();
+            let prefix = shape(face.bytes, "ASD ").unwrap();
+            let mixed = shape(face.bytes, &format!("ASD {thai}")).unwrap();
+            let suffix = &mixed.glyphs[prefix.glyphs.len()..];
+            assert_eq!(suffix.len(), expected.glyphs.len(), "{thai}");
+            for (actual, expected) in suffix.iter().zip(&expected.glyphs) {
+                assert_eq!(actual.id, expected.id, "wrong Thai glyph after Latin: {thai}");
+                assert!((actual.position[0] - prefix.advance - expected.position[0]).abs() < 1e-6, "wrong mark x: {thai}");
+                assert!((actual.position[1] - expected.position[1]).abs() < 1e-6, "wrong mark y: {thai}");
+            }
+            assert_eq!(mixed.glyphs.iter().map(|g| g.text.as_str()).collect::<String>(), format!("ASD {thai}"));
+        }
+    }
 }

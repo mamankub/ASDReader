@@ -1,8 +1,8 @@
 //! The cryptographic core against files made by OpenSSL 3 (tests/data/README.md).
 
-use pdfcraft_sign::der::{Time, Tlv};
-use pdfcraft_sign::keys::DigestAlg;
-use pdfcraft_sign::{Certificate, Name, PublicKey, SignError, cms, pkcs12};
+use asdreader_sign::der::{Time, Tlv};
+use asdreader_sign::keys::DigestAlg;
+use asdreader_sign::{Certificate, Name, PublicKey, SignError, cms, pkcs12};
 
 fn data(name: &str) -> Vec<u8> {
     std::fs::read(format!("{}/tests/data/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
@@ -129,8 +129,10 @@ fn opens_pkcs12_as_windows_writes_it() {
 #[test]
 fn certificates_parse_as_openssl_made_them() {
     let c = Certificate::parse(&pem("rsa.crt.pem")).unwrap();
-    // The fixtures were made when the app was called PrintCraft.
-    assert_eq!(c.subject.display(), "CN=Test Signer RSA, O=PrintCraft Tests, C=US");
+    // The organisation is the upstream test suite's name, in the certificate bytes; only the
+    // reading of the distinguished name matters here.
+    let subject = c.subject.display();
+    assert!(subject.starts_with("CN=Test Signer RSA, O=") && subject.ends_with(" Tests, C=US"), "{subject}");
     assert_eq!(c.serial_hex(), "03E9");
     assert!(c.is_self_signed());
     assert!(c.not_after.year >= c.not_before.year + 9);
@@ -166,7 +168,7 @@ fn signatures_round_trip_for_every_key_type() {
 fn new_digital_ids_are_self_signed_and_survive_a_p12_round_trip() {
     let name = Name::build("Grace Hopper", "Compilers", "Navy", "grace@example.com", "us");
     let now = Time { year: 2026, month: 10, day: 2, hour: 12, minute: 0, second: 0 };
-    for key in [pdfcraft_sign::PrivateKey::generate_rsa(2048).unwrap(), pdfcraft_sign::PrivateKey::generate_p256().unwrap()] {
+    for key in [asdreader_sign::PrivateKey::generate_rsa(2048).unwrap(), asdreader_sign::PrivateKey::generate_p256().unwrap()] {
         let cert = Certificate::self_signed(&name, &key, now, 5, &[0x42, 0x01]).unwrap();
         assert!(cert.is_self_signed());
         assert_eq!(cert.subject.display(), "C=US, O=Navy, OU=Compilers, CN=Grace Hopper, E=grace@example.com");
@@ -189,7 +191,7 @@ fn new_digital_ids_are_self_signed_and_survive_a_p12_round_trip() {
 fn new_digital_ids_use_the_stronger_round_count_for_the_key_and_the_mac() {
     let name = Name::build("Grace Hopper", "", "", "", "");
     let now = Time { year: 2026, month: 10, day: 14, hour: 12, minute: 0, second: 0 };
-    let key = pdfcraft_sign::PrivateKey::generate_p256().unwrap();
+    let key = asdreader_sign::PrivateKey::generate_p256().unwrap();
     let certificate = Certificate::self_signed(&name, &key, now, 5, &[0x42]).unwrap();
     let id = pkcs12::DigitalId { key, certificate, chain: Vec::new(), friendly_name: None };
     let p12 = pkcs12::write(&id, "s3cret12").unwrap();
@@ -200,7 +202,7 @@ fn new_digital_ids_use_the_stronger_round_count_for_the_key_and_the_mac() {
     let mac = pfx[2].children().unwrap();
     assert_eq!(mac[2].u64().unwrap(), ROUNDS);
     // The same INTEGER three times: the MAC and the PBKDF2 parameters of both encrypted parts.
-    let rounds = pdfcraft_sign::der::int(ROUNDS);
+    let rounds = asdreader_sign::der::int(ROUNDS);
     assert_eq!(p12.windows(rounds.len()).filter(|w| *w == rounds.as_slice()).count(), 3);
     assert_eq!(pkcs12::open(&p12, "s3cret12").unwrap().certificate, id.certificate);
 }
@@ -208,7 +210,7 @@ fn new_digital_ids_use_the_stronger_round_count_for_the_key_and_the_mac() {
 /// A `.p12` whose MAC asks for `rounds` iterations. Its content is empty: opening it must stop
 /// at the MAC, before the content is read.
 fn p12_with_mac_rounds(rounds: u64) -> Vec<u8> {
-    use pdfcraft_sign::der;
+    use asdreader_sign::der;
     let auth_safe = der::seq(&[]);
     let digest = der::seq(&[&DigestAlg::Sha256.algorithm(), &der::octets(&[0; 32])]);
     let mac_data = der::seq(&[&digest, &der::octets(&[1; 16]), &der::int(rounds)]);
@@ -230,13 +232,13 @@ fn a_p12_asking_for_too_many_rounds_is_refused_before_hashing() {
 #[test]
 fn certificates_load_from_pem_and_der_and_export_as_pem() {
     let pem_text = data("rsa.crt.pem");
-    let certs = pdfcraft_sign::x509::load_certificates(&pem_text).unwrap();
+    let certs = asdreader_sign::x509::load_certificates(&pem_text).unwrap();
     assert_eq!(certs.len(), 1);
     let der = certs[0].raw.clone();
-    assert_eq!(pdfcraft_sign::x509::load_certificates(&der).unwrap()[0], certs[0]);
-    let back = pdfcraft_sign::x509::to_pem(&certs[0]);
-    assert_eq!(pdfcraft_sign::x509::load_certificates(back.as_bytes()).unwrap()[0], certs[0]);
-    assert!(pdfcraft_sign::x509::load_certificates(b"hello").is_err());
+    assert_eq!(asdreader_sign::x509::load_certificates(&der).unwrap()[0], certs[0]);
+    let back = asdreader_sign::x509::to_pem(&certs[0]);
+    assert_eq!(asdreader_sign::x509::load_certificates(back.as_bytes()).unwrap()[0], certs[0]);
+    assert!(asdreader_sign::x509::load_certificates(b"hello").is_err());
 }
 
 /// Base64 in 64-column lines, for PEM armour.
@@ -256,7 +258,7 @@ fn encode_base64(der: &[u8]) -> String {
 /// A PKCS #7 certificate bundle (degenerate SignedData, RFC 5652 §5.2) holding `certs`, laid out
 /// as `openssl crl2pkcs7 -nocrl` writes it.
 fn p7b(certs: &[&[u8]]) -> Vec<u8> {
-    use pdfcraft_sign::der::{explicit, int, oid, seq, set_of, tlv};
+    use asdreader_sign::der::{explicit, int, oid, seq, set_of, tlv};
     let encap = seq(&[&oid(cms::DATA)]);
     let mut sd = vec![int(1), set_of(&[]), encap];
     if !certs.is_empty() {
@@ -269,7 +271,7 @@ fn p7b(certs: &[&[u8]]) -> Vec<u8> {
 
 #[test]
 fn certificates_load_from_pkcs7_bundles() {
-    use pdfcraft_sign::x509::{load_certificates, to_pem};
+    use asdreader_sign::x509::{load_certificates, to_pem};
     let leaf = load_certificates(&data("rsa.crt.pem")).unwrap().remove(0);
     let root = load_certificates(&data("ca.crt.pem")).unwrap().remove(0);
     let bundle = p7b(&[&leaf.raw, &root.raw]);
@@ -293,11 +295,11 @@ fn certificates_load_from_pkcs7_bundles() {
     assert!(load_certificates(unclosed.as_bytes()).is_err());
     // A bundle with no certificate, and a SignedData that isn't one, are errors, not empty lists.
     assert!(load_certificates(&p7b(&[])).is_err());
-    let not_signed_data = pdfcraft_sign::der::seq(&[&pdfcraft_sign::der::oid(cms::DATA), &pdfcraft_sign::der::explicit(0, &[])]);
+    let not_signed_data = asdreader_sign::der::seq(&[&asdreader_sign::der::oid(cms::DATA), &asdreader_sign::der::explicit(0, &[])]);
     assert!(load_certificates(&not_signed_data).is_err());
     // A SignedData out of shape: no signerInfos SET, or a version that isn't an INTEGER.
     {
-        use pdfcraft_sign::der::{explicit, int, oid, seq, set_of, tlv};
+        use asdreader_sign::der::{explicit, int, oid, seq, set_of, tlv};
         let wrap = |sd: &[&[u8]]| seq(&[&oid(cms::SIGNED_DATA), &explicit(0, &seq(sd))]);
         let (certs, encap) = (tlv(0xA0, &[leaf.raw.as_slice(), &root.raw].concat()), seq(&[&oid(cms::DATA)]));
         assert_eq!(load_certificates(&wrap(&[&int(1), &set_of(&[]), &encap, &certs, &set_of(&[])])).unwrap().len(), 2);
@@ -322,8 +324,8 @@ fn certificates_load_from_pkcs7_bundles() {
 
 // ── CRL and OCSP verification (RFC 5280, RFC 6960) ─────────────────────────────────────────
 
-use pdfcraft_sign::der::{self, tag};
-use pdfcraft_sign::revocation::{CertificateList, OcspResponse, RevocationStatus};
+use asdreader_sign::der::{self, tag};
+use asdreader_sign::revocation::{CertificateList, OcspResponse, RevocationStatus};
 
 /// A self-issued CRL from `issuer`: optional revocation entry, signed with the issuer's key.
 fn crl(issuer: &pkcs12::DigitalId, revoked_serial: Option<(&[u8], Time)>, this: Time, next: Time) -> Vec<u8> {
@@ -360,7 +362,7 @@ fn ocsp(issuer: &pkcs12::DigitalId, status: RevocationStatus, this: Time, next: 
 
 /// A successful OCSP response holding `single`, signed with `key` and naming its responder by
 /// `responder_id`, with `certs` (the encoded `[0]` field) if given.
-fn signed_ocsp(key: &pdfcraft_sign::PrivateKey, responder_id: &[u8], certs: Option<&[u8]>, single: &[u8], at: Time) -> Vec<u8> {
+fn signed_ocsp(key: &asdreader_sign::PrivateKey, responder_id: &[u8], certs: Option<&[u8]>, single: &[u8], at: Time) -> Vec<u8> {
     let tbs = der::seq(&[responder_id, &at.encode(), &der::seq(&[single])]);
     let alg = key.signature_algorithm(DigestAlg::Sha256);
     let sig = key.sign(DigestAlg::Sha256, &tbs).unwrap();
@@ -481,7 +483,7 @@ fn a_responder_that_copies_the_issuers_name_does_not_answer_for_it() {
     let id = pkcs12::open(&data("ec-p256.p12"), "test").unwrap();
     let issuer = &id.certificate;
     let (this, next) = (mid_june(), Time { year: 2026, month: 7, day: 15, hour: 12, minute: 0, second: 0 });
-    let key = pdfcraft_sign::PrivateKey::generate_p256().unwrap();
+    let key = asdreader_sign::PrivateKey::generate_p256().unwrap();
     let impostor =
         Certificate::self_signed(&issuer.subject, &key, Time { year: 2026, month: 1, day: 1, hour: 0, minute: 0, second: 0 }, 5, &[9]).unwrap();
     assert_eq!(impostor.subject.raw, issuer.subject.raw);
@@ -517,7 +519,7 @@ fn unhex(s: &str) -> Vec<u8> {
 
 #[test]
 fn rsa_signatures_are_read_with_every_digestinfo_variant() {
-    use pdfcraft_sign::keys::{DigestAlg, PssParams, Scheme};
+    use asdreader_sign::keys::{DigestAlg, PssParams, Scheme};
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
     let key = &id.certificate.public_key;
     let digest = DigestAlg::Sha256.digest(&[b"hello"]);
@@ -544,8 +546,8 @@ fn rsa_signatures_are_read_with_every_digestinfo_variant() {
 
 #[test]
 fn ecdsa_signatures_are_read_as_der_non_minimal_der_or_raw() {
-    use pdfcraft_sign::der::{self, Tlv};
-    use pdfcraft_sign::keys::{DigestAlg, Scheme};
+    use asdreader_sign::der::{self, Tlv};
+    use asdreader_sign::keys::{DigestAlg, Scheme};
     for (file, field) in [("ec-p256.p12", 32usize), ("ec-p384.p12", 48)] {
         let id = pkcs12::open(&data(file), "test").unwrap();
         let alg = id.key.preferred_digest();
@@ -580,8 +582,8 @@ fn ecdsa_signatures_are_read_as_der_non_minimal_der_or_raw() {
 
 #[test]
 fn tolerated_encodings_are_noted_and_standard_ones_are_not() {
-    use pdfcraft_sign::der::{self, Tlv};
-    use pdfcraft_sign::keys::{DigestAlg, Scheme};
+    use asdreader_sign::der::{self, Tlv};
+    use asdreader_sign::keys::{DigestAlg, Scheme};
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
     let key = &id.certificate.public_key;
     let digest = DigestAlg::Sha256.digest(&[b"hello"]);
@@ -640,7 +642,7 @@ fn add_be(a: &[u8], b: &[u8]) -> Option<Vec<u8>> {
 
 #[test]
 fn weak_digests_say_so_in_words_that_are_pinned() {
-    use pdfcraft_sign::keys::DigestAlg;
+    use asdreader_sign::keys::DigestAlg;
     // What the signature panel shows for a signature that still validates but should not be
     // relied on. Strong digests get no note at all.
     for alg in DigestAlg::ALL {
@@ -693,7 +695,7 @@ const RSA_1024_SIG: &str = "0de5110137e768a6b00201cf8340688c81a901fe309489f2c818
 
 #[test]
 fn a_signature_made_with_a_small_rsa_key_verifies_with_the_note() {
-    use pdfcraft_sign::keys::Scheme;
+    use asdreader_sign::keys::Scheme;
     let key = PublicKey::Rsa { n: unhex(RSA_1024_N), e: vec![1, 0, 1] };
     let weak = key.weakness().expect("a 1024-bit key is short");
     let sig = unhex(RSA_1024_SIG);
@@ -710,7 +712,7 @@ fn a_signature_made_with_a_small_rsa_key_verifies_with_the_note() {
 
 #[test]
 fn an_rsa_signature_value_not_below_the_modulus_is_refused() {
-    use pdfcraft_sign::keys::{DigestAlg, PssParams, Scheme};
+    use asdreader_sign::keys::{DigestAlg, PssParams, Scheme};
     // RFC 8017 §5.2.2 (RSAVP1): a signature representative s must be below n. Otherwise s and
     // s + n are the same number modulo n and both would verify (malleability, not forgery).
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
@@ -727,7 +729,7 @@ fn an_rsa_signature_value_not_below_the_modulus_is_refused() {
 
 #[test]
 fn hostile_rsa_signature_values_are_wrong_not_crashes() {
-    use pdfcraft_sign::keys::{DigestAlg, PssParams, Scheme};
+    use asdreader_sign::keys::{DigestAlg, PssParams, Scheme};
     let id = pkcs12::open(&data("rsa-aes.p12"), "test").unwrap();
     let key = &id.certificate.public_key;
     let PublicKey::Rsa { n, .. } = key else { panic!("an RSA key") };
@@ -746,8 +748,8 @@ fn hostile_rsa_signature_values_are_wrong_not_crashes() {
 
 #[test]
 fn keys_of_unknown_algorithms_are_unsupported_not_wrong() {
-    use pdfcraft_sign::der::{self, Tlv};
-    use pdfcraft_sign::keys::{DigestAlg, Scheme};
+    use asdreader_sign::der::{self, Tlv};
+    use asdreader_sign::keys::{DigestAlg, Scheme};
     // An Ed448 key (1.3.101.113), which isn't supported: the key parses, checking says "can't".
     let spki = der::seq(&[&der::seq(&[&der::oid("1.3.101.113")]), &der::bit_string(&[7u8; 57])]);
     let key = PublicKey::from_spki(&Tlv::parse_all(&spki).unwrap()).unwrap();
@@ -780,8 +782,8 @@ const BP384: (&str, &str, &str) = (
 
 #[test]
 fn verifies_ecdsa_on_p521_and_the_brainpool_curves() {
-    use pdfcraft_sign::der::Tlv;
-    use pdfcraft_sign::keys::{DigestAlg, Scheme};
+    use asdreader_sign::der::Tlv;
+    use asdreader_sign::keys::{DigestAlg, Scheme};
     for (name, (spki, digest, sig), alg, describe) in [
         ("P-521", P521, DigestAlg::Sha512, "ECDSA P-521"),
         ("brainpoolP256r1", BP256, DigestAlg::Sha256, "ECDSA brainpoolP256r1"),

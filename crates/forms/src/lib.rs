@@ -1,4 +1,4 @@
-//! pdfcraft-forms — interactive forms (AcroForm, ISO 32000-2 §12.7), execution plan M6.1–M6.2.
+//! asdreader-forms — interactive forms (AcroForm, ISO 32000-2 §12.7), execution plan M6.1–M6.2.
 //!
 //! - [`fields`]: the field tree flattened to terminal fields, each with its widgets (page,
 //!   rectangle, on-state), inherited attributes (`/FT`, `/Ff`, `/V`, `/DV`, `/DA`, `/Q`,
@@ -14,7 +14,7 @@
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
-use pdfcraft_cos::{DecodeBudget, Dict, Document, ObjRef, Object, PdfString};
+use asdreader_cos::{DecodeBudget, Dict, Document, ObjRef, Object, PdfString};
 
 mod actions;
 pub mod af;
@@ -49,7 +49,7 @@ pub enum FormError {
     #[error("{0}")]
     Invalid(String),
     #[error("{0}")]
-    Cos(#[from] pdfcraft_cos::CosError),
+    Cos(#[from] asdreader_cos::CosError),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -265,7 +265,7 @@ const MAX_LAYER_STATE: usize = 1024;
 
 /// A push button's mouse-up action (`/A`, or `/AA /U`, on the field or its widget).
 fn button_action(doc: &Document, d: &Dict, widgets: &[ObjRef], scripts: &mut DecodeBudget) -> Option<af::ButtonAction> {
-    // A button PdfCraft generated for an XFA image field (`/PCXfaImage true`, no PDF action):
+    // A button ASDReader generated for an XFA image field (`/PCXfaImage true`, no PDF action):
     // clicking it picks a picture, as `buttonImportIcon()` does.
     if matches!(d.get(b"PCXfaImage").map(|o| doc.resolve(o)).as_deref(), Some(Object::Bool(true))) {
         return Some(af::ButtonAction::ImportIcon);
@@ -474,7 +474,7 @@ pub(crate) fn page_refs(doc: &Document) -> Vec<ObjRef> {
 
 /// Depth-first walk over the leaf pages under `top`. It keeps one cursor per open `/Kids` array,
 /// never one entry per child, so a child listed many times or shared between nodes is skipped by
-/// the seen check without being queued first (`pdfcraft_model::pages` walks the same way).
+/// the seen check without being queued first (`asdreader_model::pages` walks the same way).
 /// Cycles end at the seen check and at most a million nodes are visited.
 struct PageWalk<'a> {
     doc: &'a Document,
@@ -1187,7 +1187,7 @@ fn set_states(doc: &mut Document, f: &Field, on: Option<&str>) -> Result<(), For
             (Some(c), Some(s)) if c == s => s,
             _ => "Off",
         };
-        // A widget without appearances for its states gets PdfCraft's own.
+        // A widget without appearances for its states gets ASDReader's own.
         let has_ap = doc.get(w.obj).as_dict().and_then(|d| d.get(b"AP").cloned()).is_some();
         if !has_ap {
             let on_name = w.on_state.clone().unwrap_or_else(|| on.unwrap_or("Yes").to_string());
@@ -1262,7 +1262,7 @@ fn redraw(doc: &mut Document, f: &Field, values: &[String], scripts: &mut dyn Sc
         doc.update_dict(w.obj, |d| {
             d.set(b"AP".to_vec(), Object::Dict(apd));
             d.remove(b"AS");
-            pdfcraft_fonts::set_undrawn_mark(d, missing);
+            asdreader_fonts::set_undrawn_mark(d, missing);
         })?;
     }
     if undrawn {
@@ -1275,7 +1275,7 @@ fn redraw(doc: &mut Document, f: &Field, values: &[String], scripts: &mut dyn Sc
 /// such a value): `/NeedAppearances` then asks other viewers to draw the fields from their values
 /// with fonts that have those characters (the interactive form dictionary, §12.7.3). Not in a
 /// document that declares PDF/A, which forbids it: there the widget's mark
-/// (`pdfcraft_fonts::UNDRAWN_MARK`) is all, and the edit's report says the `?` shows everywhere.
+/// (`asdreader_fonts::UNDRAWN_MARK`) is all, and the edit's report says the `?` shows everywhere.
 pub(crate) fn ask_viewers_to_redraw(doc: &mut Document) -> Result<(), FormError> {
     if declares_pdfa(doc) || need_appearances(doc) {
         return Ok(());
@@ -1405,7 +1405,7 @@ fn appearance_inputs(doc: &Document, w: &Widget) -> Vec<std::sync::Arc<Object>> 
 /// miss, never a stale hit.
 #[derive(Clone, Debug, Default)]
 pub struct FieldAppearanceCache {
-    entries: std::collections::HashMap<ObjRef, (Vec<std::sync::Arc<Object>>, pdfcraft_cos::Stream)>,
+    entries: std::collections::HashMap<ObjRef, (Vec<std::sync::Arc<Object>>, asdreader_cos::Stream)>,
     bytes: usize,
     hits: u64,
     builds: u64,
@@ -1420,7 +1420,7 @@ impl FieldAppearanceCache {
         *self = Self::default();
     }
 
-    fn get(&mut self, w: ObjRef, inputs: &[std::sync::Arc<Object>]) -> Option<pdfcraft_cos::Stream> {
+    fn get(&mut self, w: ObjRef, inputs: &[std::sync::Arc<Object>]) -> Option<asdreader_cos::Stream> {
         let (from, stream) = self.entries.get(&w)?;
         if from.len() != inputs.len() || !from.iter().zip(inputs).all(|(a, b)| std::sync::Arc::ptr_eq(a, b)) {
             return None;
@@ -1429,7 +1429,7 @@ impl FieldAppearanceCache {
         Some(stream.clone())
     }
 
-    fn insert(&mut self, w: ObjRef, inputs: Vec<std::sync::Arc<Object>>, stream: &pdfcraft_cos::Stream) {
+    fn insert(&mut self, w: ObjRef, inputs: Vec<std::sync::Arc<Object>>, stream: &asdreader_cos::Stream) {
         self.builds += 1;
         if self.bytes.saturating_add(stream.raw.len()) > Self::MAX_BYTES {
             self.clear();
@@ -1462,14 +1462,14 @@ pub fn declares_pdfa(doc: &Document) -> bool {
     }
 }
 
-/// Every field with a widget whose appearance PdfCraft drew with `?` for a character its font
-/// can't hold (`pdfcraft_fonts::UNDRAWN_MARK`): the field's name and that character, once per
+/// Every field with a widget whose appearance ASDReader drew with `?` for a character its font
+/// can't hold (`asdreader_fonts::UNDRAWN_MARK`): the field's name and that character, once per
 /// field.
 pub fn undrawn_fields(doc: &Document) -> Vec<(String, char)> {
     fields(doc)
         .into_iter()
         .filter_map(|f| {
-            let c = f.widgets.iter().find_map(|w| doc.get(w.obj).as_dict().and_then(pdfcraft_fonts::undrawn_mark))?;
+            let c = f.widgets.iter().find_map(|w| doc.get(w.obj).as_dict().and_then(asdreader_fonts::undrawn_mark))?;
             Some((f.name, c))
         })
         .collect()

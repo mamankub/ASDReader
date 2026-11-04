@@ -561,7 +561,7 @@ pub fn decode_xref_stream_with_limit(
 
         // Each width is a byte count for one xref-stream field. The PDF spec doesn't need more than a
         // few bytes per field (8 covers the full u64/i64 range); bound them before sizing a Vec from
-        // them, or a crafted stream can request an allocation of up to (2^64-1) bytes per field.
+        // them, or a made stream can request an allocation of up to (2^64-1) bytes per field.
         const MAX_XREF_FIELD_WIDTH: i64 = 8;
         if field_widths.len() < 3
             || field_widths[0].is_negative()

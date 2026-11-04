@@ -42,7 +42,7 @@ fn closes_only_marked_operators_not_strings_names_comments_or_image_samples() {
     {
         let mut input = b"/OC /L1 BDC\n".to_vec();
         input.extend_from_slice(tail);
-        assert_eq!(close(&[&input]), b"\nEMC\nQ %PdfCraft\n", "{tail:?}");
+        assert_eq!(close(&[&input]), b"\nEMC\nQ %ASDReader\n", "{tail:?}");
     }
 }
 
@@ -51,21 +51,21 @@ fn safe_suffix_stays_outside_marked_content_across_balanced_graphics() {
     let (doc, list) = placed(&[b"q /OC /L1 BDC Q", b"50 Tz"]);
     assert_eq!(stream_bytes(&doc, &list[0]).unwrap(), WRAP_OPEN);
     assert_eq!(stream_bytes(&doc, &list[1]).unwrap(), b"q /OC /L1 BDC Q");
-    assert_eq!(stream_bytes(&doc, &list[list.len() - 2]).unwrap(), b"\nEMC\nQ %PdfCraft\n");
-    assert_eq!(close(&[b"q /OC /L1 BDC Q"]), b"\nEMC\nQ %PdfCraft\n");
+    assert_eq!(stream_bytes(&doc, &list[list.len() - 2]).unwrap(), b"\nEMC\nQ %ASDReader\n");
+    assert_eq!(close(&[b"q /OC /L1 BDC Q"]), b"\nEMC\nQ %ASDReader\n");
 }
 
 #[test]
 fn known_marked_depth_survives_unknown_graphics_and_tolerant_operands() {
     for (input, expected) in [
-        (b"/OC /L1 BDC q".as_slice(), b"\nEMC\nQ\nQ %PdfCraft\n".as_slice()),
-        (b"Q /OC /L1 BDC", b"\nEMC\nQ %PdfCraft\n"),
-        (b"/OC /L1 BDC BT", b"\nEMC\nQ %PdfCraft\n"),
-        (b"/OC /L1 BDC 0 0 m", b"\nEMC\nQ %PdfCraft\n"),
-        (b"/OC /L1 BDC 123 BMC /Artifact BDC", b"\nEMC\nQ %PdfCraft\n"),
-        (b"EMC 123 /OC /L1 BDC 123 /Artifact BMC", b"\nEMC\nEMC\nQ %PdfCraft\n"),
-        (b"/OC /L1 BDC 123 EMC", b"\nQ %PdfCraft\n"),
-        (b"/Span 123 BDC", b"\nEMC\nQ %PdfCraft\n"),
+        (b"/OC /L1 BDC q".as_slice(), b"\nEMC\nQ\nQ %ASDReader\n".as_slice()),
+        (b"Q /OC /L1 BDC", b"\nEMC\nQ %ASDReader\n"),
+        (b"/OC /L1 BDC BT", b"\nEMC\nQ %ASDReader\n"),
+        (b"/OC /L1 BDC 0 0 m", b"\nEMC\nQ %ASDReader\n"),
+        (b"/OC /L1 BDC 123 BMC /Artifact BDC", b"\nEMC\nQ %ASDReader\n"),
+        (b"EMC 123 /OC /L1 BDC 123 /Artifact BMC", b"\nEMC\nEMC\nQ %ASDReader\n"),
+        (b"/OC /L1 BDC 123 EMC", b"\nQ %ASDReader\n"),
+        (b"/Span 123 BDC", b"\nEMC\nQ %ASDReader\n"),
     ] {
         assert_eq!(close(&[input]), expected, "{input:?}");
     }
@@ -73,23 +73,23 @@ fn known_marked_depth_survives_unknown_graphics_and_tolerant_operands() {
 
 #[test]
 fn closes_cross_stream_begins_without_closing_balanced_sequences_twice() {
-    assert_eq!(close(&[b"/OC", b"/L1 BDC"]), b"\nEMC\nQ %PdfCraft\n");
+    assert_eq!(close(&[b"/OC", b"/L1 BDC"]), b"\nEMC\nQ %ASDReader\n");
     assert_eq!(close(&[b"/OC /L1 BDC", b"EMC"]), WRAP_CLOSE);
-    assert_eq!(close(&[b"/OC /L1 BDC % EMC", b"EMC\n"]), b"\nEMC\nQ %PdfCraft\n");
+    assert_eq!(close(&[b"/OC /L1 BDC % EMC", b"EMC\n"]), b"\nEMC\nQ %ASDReader\n");
 }
 
 #[test]
 fn recognizes_only_canonical_new_closes_and_retains_legacy_closes() {
-    for bytes in [WRAP_CLOSE, OLD_WRAP_CLOSE, b"\nQ\nQ %PdfCraft\n", b"\nEMC\nQ %PdfCraft\n", b"\nEMC\nEMC\nQ\nQ %PdfCraft\n"] {
+    for bytes in [WRAP_CLOSE, OLD_WRAP_CLOSE, b"\nQ\nQ %ASDReader\n", b"\nEMC\nQ %ASDReader\n", b"\nEMC\nEMC\nQ\nQ %ASDReader\n"] {
         assert!(is_wrap_close(bytes), "{bytes:?}");
     }
     for bytes in [
-        b"\nEMCQ %PdfCraft\n".as_slice(),
-        b"\nEMC\nQQ %PdfCraft\n",
-        b"\nQ\nEMC\nQ %PdfCraft\n",
-        b"EMC\nQ %PdfCraft\n",
-        b"\nEMC 1 w\nQ %PdfCraft\n",
-        b"\nEMC\nQ %PdfCraft\nq Q",
+        b"\nEMCQ %ASDReader\n".as_slice(),
+        b"\nEMC\nQQ %ASDReader\n",
+        b"\nQ\nEMC\nQ %ASDReader\n",
+        b"EMC\nQ %ASDReader\n",
+        b"\nEMC 1 w\nQ %ASDReader\n",
+        b"\nEMC\nQ %ASDReader\nq Q",
     ] {
         assert!(!is_wrap_close(bytes), "{bytes:?}");
     }

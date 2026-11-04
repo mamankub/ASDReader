@@ -1,8 +1,8 @@
 //! Document font selection and contextual glyph save/reopen acceptance on synthetic PDFs.
 use crate::support;
-use pdfcraft_cos::{Dict, Document, Object, SaveOptions, Stream};
-use pdfcraft_engine::{BlockStyle, Edit, Session};
-use pdfcraft_render::{PageRenderer, RenderRequest};
+use asdreader_cos::{Dict, Document, Object, SaveOptions, Stream};
+use asdreader_engine::{BlockStyle, Edit, Session};
+use asdreader_render::{PageRenderer, RenderRequest};
 use std::sync::Arc;
 fn document() -> Arc<Vec<u8>> {
     let mut d = Document::new_empty();
@@ -34,7 +34,7 @@ fn document() -> Arc<Vec<u8>> {
     root.set(b"Pages".to_vec(), Object::Ref(pages));
     let root = d.add(Object::Dict(root));
     d.trailer_mut().set(b"Root".to_vec(), Object::Ref(root));
-    Arc::new(pdfcraft_cos::write_full(&d, &SaveOptions::default()).unwrap())
+    Arc::new(asdreader_cos::write_full(&d, &SaveOptions::default()).unwrap())
 }
 fn pixels(bytes: Arc<Vec<u8>>) -> Vec<u8> {
     let mut renderer = PageRenderer::new(bytes, Default::default());
@@ -82,17 +82,50 @@ fn opentype_cff_document_font_preserves_program_codes_and_rendering_after_reopen
 }
 #[test]
 fn contextual_arabic_marks_ligatures_and_mixed_bidi_keep_logical_text_after_reopen() {
-    if let Some(path) = std::env::var_os("PDFCRAFT_TEST_ARABIC_FONT") {
+    if let Some(path) = std::env::var_os("ASDREADER_TEST_ARABIC_FONT") {
         exercise(std::fs::read(path).unwrap(), "سَلَام 123", "NotoSansArabic-Regular");
         return;
     }
-    let Some(font) = pdfcraft_fonts::document_arabic_font() else {
-        eprintln!("set CRAFT_FONTS_DIR to test full Arabic glyph programs");
+    let Some(font) = asdreader_fonts::document_arabic_font() else {
+        eprintln!("set ASDESIGN_FONTS_DIR to test full Arabic glyph programs");
         return;
     };
-    if pdfcraft_fonts::embedding::validate(font.bytes).is_err() {
-        eprintln!("set PDFCRAFT_TEST_ARABIC_FONT to an openly licensed static Noto Sans Arabic face");
+    if asdreader_fonts::embedding::validate(font.bytes).is_err() {
+        eprintln!("set ASDREADER_TEST_ARABIC_FONT to an openly licensed static Noto Sans Arabic face");
         return;
     }
     exercise(font.bytes.to_vec(), "سَلَام 123", "NotoSansArabic-Regular");
+}
+
+#[test]
+fn thai_added_text_keeps_pixels_and_unicode_after_save_reopen_and_undo() {
+    let Some(_) = asdreader_fonts::document_thai_font() else {
+        assert!(option_env!("ASDREADER_REQUIRE_THAI").is_none(), "ASDReader acceptance requires Thai fonts");
+        return;
+    };
+    let text = "ASD น้ำ กิ่ กี้ กึ้ กื๊ ผู้ใช้ ปู่ ญู เก้า แก้ โก้ ใส่ ไก่ ฤๅ ๑๒๓";
+    let mut s = Session::new();
+    let id = s.open("thai.pdf", None, document(), None).unwrap();
+    let before = pixels(s.get(id).unwrap().display.clone());
+    s.apply(
+        id,
+        Edit::AddText {
+            page: 0,
+            text: asdreader_engine::AddedText { text: text.into(), rect: [20.0, 20.0, 280.0, 130.0], size: 14.0, ..Default::default() },
+        },
+    )
+    .unwrap();
+    let expected = pixels(s.get(id).unwrap().display.clone());
+    assert_ne!(expected, before);
+    let saved = s.save_bytes(id).unwrap();
+    let reopened = s.open("saved-thai.pdf", None, saved.clone(), None).unwrap();
+    assert_eq!(pixels(s.get(reopened).unwrap().display.clone()), expected);
+    let mut renderer = PageRenderer::new(saved, Default::default());
+    let copied = renderer.filtered_text(0, Default::default()).unwrap().plain_text();
+    let compact = |s: &str| s.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    assert_eq!(compact(&copied), compact(&format!("Source{text}")), "copy text must preserve every Thai codepoint exactly once");
+    s.undo(id).unwrap();
+    assert_eq!(pixels(s.get(id).unwrap().display.clone()), before);
+    s.redo(id).unwrap();
+    assert_eq!(pixels(s.get(id).unwrap().display.clone()), expected);
 }

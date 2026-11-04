@@ -1,7 +1,7 @@
 //! Encryption numbers from an **outside implementation**. Six of the seven rows below are qpdf's own,
 //! written by qpdf core 12.2.0 through pikepdf 9.11, and their `/O`, `/U`, `/OE`, `/UE`, `/Perms`
 //! and `/ID` values were copied out of those files rather than computed here. The seventh row,
-//! `crafted-r3-40bit-hand-derived`, is ours and says so where it is defined - no producer we can run
+//! `made-r3-40bit-hand-derived`, is ours and says so where it is defined - no producer we can run
 //! here writes revision 3 at 40 bits (qpdf core 12.2.0 emits `/Length 128` at `R=3`, measured below),
 //! so nothing outside computed that one either.
 //!
@@ -34,7 +34,7 @@
 //! filter set leaves all three tests green, so those are held to review rather than to a test. For how
 //! this repository treats qpdf as an oracle, see `crates/oracle/README.md`.
 
-use pdfcraft_crypt::{Auth, EncryptDict, Method, SecurityHandler, aes_cbc_decrypt};
+use asdreader_crypt::{Auth, EncryptDict, Method, SecurityHandler, aes_cbc_decrypt};
 
 const USER: &str = "open pw";
 const OWNER: &str = "owner pw";
@@ -216,11 +216,11 @@ const CASES: &[Case] = &[
     // (n = 5) computed this pair, cross-validated by having the same routine reproduce qpdf's
     // n = 16 `/O` byte for byte. It exists because no producer we can run here emits R3 at 40 bits -
     // qpdf core 12.2.0 writes `/Length 128` there, and this crate's own create() maps Rc4_40 to revision 2 - so
-    // the only route we have to `key_len` = 5 with the derivation loop RUNNING (r >= 3) is to craft
+    // the only route we have to `key_len` = 5 with the derivation loop RUNNING (r >= 3) is to asdesign
     // it by hand. With that combination live, the loop's truncation stops being a no-op: mutating
     // `Md5::digest(&digest[..n])` to hash the whole digest makes this password stop authenticating.
     Case {
-        label: "crafted-r3-40bit-hand-derived",
+        label: "made-r3-40bit-hand-derived",
         v: 2,
         r: 3,
         length_bits: 40,
@@ -299,7 +299,7 @@ fn metadata_flag_from_outside_changes_the_file_key_it_certifies() {
     let r3 = CASES.iter().find(|c| c.r == 3).unwrap();
     assert_ne!(hex(r2.u_hex), hex(r3.u_hex), "revision 2 and revision 3 /U differ because the key width differs");
     assert_eq!(r2.u_hex.len(), 64, "revision 2 /U is RC4 over the padding: 32 bytes");
-    assert_eq!(r3.u_hex.len(), 64, "revision 3 /U is 32 bytes: sixteen derived, plus padding qpdf fills (our crafted row leaves it zero)");
+    assert_eq!(r3.u_hex.len(), 64, "revision 3 /U is 32 bytes: sixteen derived, plus padding qpdf fills (our made row leaves it zero)");
 }
 
 #[test]

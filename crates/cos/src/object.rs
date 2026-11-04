@@ -3,7 +3,7 @@
 //! Dictionaries keep their key order so rewritten objects stay recognisable in diffs and
 //! byte-stable when re-serialized. Streams keep their *encoded* bytes; decoding is on demand.
 
-use pdfcraft_filters::{Filter, Params};
+use asdreader_filters::{Filter, Params};
 
 use crate::{Bytes, CosError};
 
@@ -66,7 +66,7 @@ impl PdfString {
             b => match std::str::from_utf8(b) {
                 // Pure ASCII is identical either way; only non-ASCII UTF-8 needs the switch.
                 Ok(utf8) if !b.is_ascii() => utf8.to_owned(),
-                _ => b.iter().map(|&c| pdfcraft_crypt::pdfdoc_char(c)).collect(),
+                _ => b.iter().map(|&c| asdreader_crypt::pdfdoc_char(c)).collect(),
             },
         };
         if s.starts_with('\u{FEFF}') { s.trim_start_matches('\u{FEFF}').to_owned() } else { s }
@@ -223,7 +223,7 @@ impl Stream {
     pub fn flate(mut dict: Dict, data: &[u8]) -> Self {
         dict.set(b"Filter".to_vec(), Object::Name(b"FlateDecode".to_vec()));
         dict.remove(b"DecodeParms");
-        Self { dict, raw: pdfcraft_filters::encode_flate(data).into() }
+        Self { dict, raw: asdreader_filters::encode_flate(data).into() }
     }
 
     /// The filter chain declared in the dictionary.
@@ -261,14 +261,14 @@ impl Stream {
     /// [`Stream::filters`], or an error when `/Filter` is present but is not a name or an
     /// array of names (an indirect reference, say): the data is not unfiltered, so it must not
     /// read as decoded.
-    fn readable_filters(&self) -> Result<Vec<(Filter, Params)>, pdfcraft_filters::FilterError> {
+    fn readable_filters(&self) -> Result<Vec<(Filter, Params)>, asdreader_filters::FilterError> {
         let readable = match self.dict.get(b"Filter") {
             None | Some(Object::Null | Object::Name(_)) => true,
             Some(Object::Array(a)) => a.iter().all(|f| f.as_name().is_some()),
             Some(_) => false,
         };
         if !readable {
-            return Err(pdfcraft_filters::FilterError::Unsupported("/Filter is not a name or an array of names".into()));
+            return Err(asdreader_filters::FilterError::Unsupported("/Filter is not a name or an array of names".into()));
         }
         Ok(self.filters())
     }
@@ -284,7 +284,7 @@ impl Stream {
     /// [`MAX_DECODED`]: decoding past `max` bytes is an error.
     pub fn decoded_within(&self, max: usize) -> Result<Vec<u8>, CosError> {
         let decode = |chain: &[(Filter, Params)], data: &[u8], max| {
-            pdfcraft_filters::decode_tolerant(chain, data, max).map(|(v, _)| (v, 0)).map_err(|e| (e, 0))
+            asdreader_filters::decode_tolerant(chain, data, max).map(|(v, _)| (v, 0)).map_err(|e| (e, 0))
         };
         self.decode_chain(max, decode).map(|(v, _)| v).map_err(|(e, _)| CosError::Filter(e.to_string()))
     }
@@ -293,9 +293,9 @@ impl Stream {
     /// typed, so a caller can tell a spent limit from corrupt data, `max` bounds all filter
     /// stages together, and the result gives the bytes they decoded (the work done, on success
     /// and on failure).
-    pub(crate) fn decoded_within_counted(&self, max: usize) -> Result<(Vec<u8>, usize), (pdfcraft_filters::FilterError, usize)> {
+    pub(crate) fn decoded_within_counted(&self, max: usize) -> Result<(Vec<u8>, usize), (asdreader_filters::FilterError, usize)> {
         let decode = |chain: &[(Filter, Params)], data: &[u8], max| {
-            pdfcraft_filters::decode_tolerant_counted(chain, data, max).map(|(v, _, spent)| (v, spent))
+            asdreader_filters::decode_tolerant_counted(chain, data, max).map(|(v, _, spent)| (v, spent))
         };
         self.decode_chain(max, decode)
     }
@@ -305,8 +305,8 @@ impl Stream {
     fn decode_chain(
         &self,
         max: usize,
-        decode: impl FnOnce(&[(Filter, Params)], &[u8], usize) -> Result<(Vec<u8>, usize), (pdfcraft_filters::FilterError, usize)>,
-    ) -> Result<(Vec<u8>, usize), (pdfcraft_filters::FilterError, usize)> {
+        decode: impl FnOnce(&[(Filter, Params)], &[u8], usize) -> Result<(Vec<u8>, usize), (asdreader_filters::FilterError, usize)>,
+    ) -> Result<(Vec<u8>, usize), (asdreader_filters::FilterError, usize)> {
         let max = max.min(MAX_DECODED);
         let chain = self.readable_filters().map_err(|e| (e, 0))?;
         if chain.is_empty() {
@@ -323,14 +323,14 @@ impl Stream {
 
     /// Decoded data, bounded by [`MAX_DECODED`]; any corruption is an error.
     pub fn decoded_strict(&self) -> Result<Vec<u8>, CosError> {
-        let decode = |chain: &[(Filter, Params)], data: &[u8], max| pdfcraft_filters::decode(chain, data, max).map(|v| (v, 0)).map_err(|e| (e, 0));
+        let decode = |chain: &[(Filter, Params)], data: &[u8], max| asdreader_filters::decode(chain, data, max).map(|v| (v, 0)).map_err(|e| (e, 0));
         self.decode_chain(MAX_DECODED, decode).map(|(v, _)| v).map_err(|(e, _)| CosError::Filter(e.to_string()))
     }
 
     /// [`Stream::decoded_strict`] bounded by `max` and counted like
     /// [`Stream::decoded_within_counted`].
-    pub(crate) fn decoded_strict_within_counted(&self, max: usize) -> Result<(Vec<u8>, usize), (pdfcraft_filters::FilterError, usize)> {
-        self.decode_chain(max, pdfcraft_filters::decode_counted)
+    pub(crate) fn decoded_strict_within_counted(&self, max: usize) -> Result<(Vec<u8>, usize), (asdreader_filters::FilterError, usize)> {
+        self.decode_chain(max, asdreader_filters::decode_counted)
     }
 
     /// Data after the first filter alone, bounded by `max`: the rest of the chain stays encoded.
@@ -341,19 +341,19 @@ impl Stream {
         if chain.is_empty() {
             return self.raw_within(max);
         }
-        pdfcraft_filters::decode(&chain, &self.raw, max.min(MAX_DECODED)).map_err(|e| CosError::Filter(e.to_string()))
+        asdreader_filters::decode(&chain, &self.raw, max.min(MAX_DECODED)).map_err(|e| CosError::Filter(e.to_string()))
     }
 
     fn raw_within(&self, max: usize) -> Result<Vec<u8>, CosError> {
         self.raw_within_typed(max).map_err(|e| CosError::Filter(e.to_string()))
     }
 
-    fn raw_within_typed(&self, max: usize) -> Result<Vec<u8>, pdfcraft_filters::FilterError> {
+    fn raw_within_typed(&self, max: usize) -> Result<Vec<u8>, asdreader_filters::FilterError> {
         let max = max.min(MAX_DECODED);
         // An empty decoder chain still produces an owned output buffer: check its limit
         // before cloning, including streams whose /Crypt filter was applied on load.
         if self.raw.len() > max {
-            return Err(pdfcraft_filters::FilterError::LimitExceeded(max));
+            return Err(asdreader_filters::FilterError::LimitExceeded(max));
         }
         Ok(self.raw.to_vec())
     }
@@ -654,7 +654,7 @@ mod tests {
         let data = "0 0 m 100 100 l S\n".repeat(64).into_bytes();
         let inner = Stream::flate(Dict::new(), &data).raw.to_vec();
         for (outer, name, corrupt) in [(Filter::Ascii85, "ASCII85Decode", &b"{~>"[..]), (Filter::AsciiHex, "ASCIIHexDecode", &b"G0>"[..])] {
-            let encoded = pdfcraft_filters::encode(&outer, &Params::default(), &inner).unwrap();
+            let encoded = asdreader_filters::encode(&outer, &Params::default(), &inner).unwrap();
             let mut dict = Dict::new();
             dict.set(b"Filter".to_vec(), Object::Array(vec![Object::name(name), Object::name("FlateDecode")]));
             let stream = Stream::from_raw(dict.clone(), encoded);

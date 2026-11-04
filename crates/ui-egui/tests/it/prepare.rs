@@ -1,17 +1,17 @@
 //! Prepare a form in the real shell (egui_kittest): field tools, placing, selecting, moving,
 //! Field Properties and deleting.
 
+use asdreader_engine::field_table::TableColumn;
+use asdreader_ui_egui::{ASDReaderApp, Dialog, QuickTool};
 use egui::Pos2;
 use egui::accesskit::Role;
 use egui_kittest::Harness;
 use egui_kittest::kittest::{Queryable, by};
-use pdfcraft_engine::field_table::TableColumn;
-use pdfcraft_ui_egui::{Dialog, PdfCraftApp, QuickTool};
 
-fn harness() -> Harness<'static, PdfCraftApp> {
+fn harness() -> Harness<'static, ASDReaderApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|cc| {
         cc.egui_ctx.options_mut(|options| options.warn_on_id_clash = true);
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         app.open_bytes("form.pdf", None, include_bytes!("../data/form.pdf").to_vec()).unwrap();
         app.set_option("zoom", "150").unwrap();
@@ -28,13 +28,13 @@ fn harness() -> Harness<'static, PdfCraftApp> {
 }
 
 /// A point on page 1 at (x, y) points from its top-left.
-fn at(h: &Harness<'static, PdfCraftApp>, x: f32, y: f32) -> Pos2 {
+fn at(h: &Harness<'static, ASDReaderApp>, x: f32, y: f32) -> Pos2 {
     let r = h.state().views[0].page_screen_rect(0).expect("on screen");
     let k = r.width() / 300.0;
     r.min + egui::vec2(x * k, y * k)
 }
 
-fn drag(h: &mut Harness<'static, PdfCraftApp>, a: Pos2, b: Pos2) {
+fn drag(h: &mut Harness<'static, ASDReaderApp>, a: Pos2, b: Pos2) {
     h.hover_at(a);
     h.run_steps(1);
     h.drag_at(a);
@@ -47,12 +47,12 @@ fn drag(h: &mut Harness<'static, PdfCraftApp>, a: Pos2, b: Pos2) {
     h.run_steps(4);
 }
 
-fn names(h: &Harness<'static, PdfCraftApp>) -> Vec<String> {
+fn names(h: &Harness<'static, ASDReaderApp>) -> Vec<String> {
     let s = h.state();
     s.session.get(s.views[0].id).unwrap().form.iter().map(|f| f.name.clone()).collect()
 }
 
-fn rect_of(h: &Harness<'static, PdfCraftApp>, name: &str) -> [f64; 4] {
+fn rect_of(h: &Harness<'static, ASDReaderApp>, name: &str) -> [f64; 4] {
     let s = h.state();
     s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == name).unwrap().widgets[0].rect
 }
@@ -97,7 +97,7 @@ fn placing_moving_editing_and_deleting_a_field() {
         let s = h.state();
         let doc = s.session.get(s.views[0].id).unwrap();
         assert_eq!(doc.can_undo(), Some("Change field properties"));
-        assert!(doc.form.iter().find(|f| f.name == "email").unwrap().has(pdfcraft_engine::field_flags::REQUIRED));
+        assert!(doc.form.iter().find(|f| f.name == "email").unwrap().has(asdreader_engine::field_flags::REQUIRED));
         assert_eq!(s.views[0].prepare.selected.as_ref().map(|s| s.0.as_str()), Some("email"));
     }
     // Delete removes the selected field.
@@ -160,7 +160,7 @@ fn arrow_keys_nudge_the_selected_field_instead_of_turning_the_page() {
 
 #[test]
 fn format_validate_and_calculate_tabs() {
-    use pdfcraft_engine::form_scripts::{Calculate, Format, Validate};
+    use asdreader_engine::form_scripts::{Calculate, Format, Validate};
     let mut h = harness();
     h.state_mut().execute("form.prepare");
     h.run_steps(2);
@@ -193,11 +193,11 @@ fn format_validate_and_calculate_tabs() {
 /// step, and says how many changed.
 #[test]
 fn renaming_a_field_says_how_many_calculations_now_use_the_new_name() {
-    use pdfcraft_engine::form_scripts::Calculate;
+    use asdreader_engine::form_scripts::Calculate;
     let mut h = harness();
     h.state_mut().execute("form.prepare");
     h.run_steps(2);
-    let rename = |h: &mut Harness<'static, PdfCraftApp>, from: &str, to: &str| {
+    let rename = |h: &mut Harness<'static, ASDReaderApp>, from: &str, to: &str| {
         h.state_mut().open_field_props(from, 0);
         h.run_steps(2);
         h.state_mut().field_props.as_mut().expect("open").name = to.into();
@@ -209,7 +209,7 @@ fn renaming_a_field_says_how_many_calculations_now_use_the_new_name() {
     h.state_mut().field_props.as_mut().expect("open").calculate = Calculate::Notation("name * 2".into());
     h.get_by_label("OK").click();
     h.run_steps(3);
-    let calculation = |h: &Harness<'static, PdfCraftApp>| {
+    let calculation = |h: &Harness<'static, ASDReaderApp>| {
         let s = h.state();
         s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").unwrap().actions.calculate.clone()
     };
@@ -230,7 +230,7 @@ fn renaming_a_field_says_how_many_calculations_now_use_the_new_name() {
 
 #[test]
 fn appearance_tab_restyles_the_field() {
-    use pdfcraft_engine::{BorderStyle, FieldFont};
+    use asdreader_engine::{BorderStyle, FieldFont};
     let mut h = harness();
     h.state_mut().execute("form.prepare");
     h.run_steps(2);
@@ -293,7 +293,7 @@ fn position_tab_rotates_a_field() {
     let mut h = harness();
     h.state_mut().open_field_props("city", 0);
     h.run_steps(2);
-    let widget = |h: &Harness<'static, PdfCraftApp>| {
+    let widget = |h: &Harness<'static, ASDReaderApp>| {
         let s = h.state();
         let f = s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").unwrap();
         f.widgets[0].clone()
@@ -324,12 +324,12 @@ fn position_tab_rotates_a_field() {
 #[test]
 fn options_tab_sets_the_check_box_style() {
     // #94: Check Box Style on the Options tab.
-    use pdfcraft_engine::CheckStyle;
+    use asdreader_engine::CheckStyle;
     let mut h = harness();
-    h.state_mut().apply_edit(pdfcraft_engine::Edit::AddField {
+    h.state_mut().apply_edit(asdreader_engine::Edit::AddField {
         page: 0,
         rect: [40.0, 300.0, 56.0, 316.0],
-        kind: pdfcraft_engine::NewField::CheckBox,
+        kind: asdreader_engine::NewField::CheckBox,
         name: Some("agree".into()),
     });
     h.state_mut().open_field_props("agree", 0);
@@ -347,7 +347,7 @@ fn options_tab_sets_the_check_box_style() {
 
 #[test]
 fn button_label_is_editable_without_renaming_the_field() {
-    use pdfcraft_engine::{Edit, NewField};
+    use asdreader_engine::{Edit, NewField};
     let mut h = harness();
     // The byte comparisons below must not vary with the save's /ModDate.
     let session = &mut h.state_mut().session;
@@ -373,7 +373,7 @@ fn button_label_is_editable_without_renaming_the_field() {
     let id = app.views[0].id;
     let field = app.session.get(id).unwrap().form.iter().find(|f| f.name == "clear_button").unwrap();
     let bytes = app.session.save_bytes(id).unwrap();
-    let doc = pdfcraft_cos::Document::open(bytes).unwrap();
+    let doc = asdreader_cos::Document::open(bytes).unwrap();
     let widget = doc.get(field.widgets[0].obj);
     let mk = doc.resolve(widget.as_dict().unwrap().get(b"MK").unwrap());
     assert_eq!(doc.resolve(mk.as_dict().unwrap().get(b"CA").unwrap()).as_string().unwrap().to_text(), "Clear Form");
@@ -403,22 +403,22 @@ fn button_label_is_editable_without_renaming_the_field() {
 
 #[test]
 fn dropdown_alignment_is_editable_and_preserved() {
-    choice_alignment(pdfcraft_engine::NewField::Combo { options: vec!["One".into(), "Two".into()], editable: false }, "Center", 1);
+    choice_alignment(asdreader_engine::NewField::Combo { options: vec!["One".into(), "Two".into()], editable: false }, "Center", 1);
 }
 
 #[test]
 fn list_box_alignment_is_editable_and_preserved() {
-    choice_alignment(pdfcraft_engine::NewField::List { options: vec!["One".into(), "Two".into()], multi: true }, "Left", 0);
+    choice_alignment(asdreader_engine::NewField::List { options: vec!["One".into(), "Two".into()], multi: true }, "Left", 0);
 }
 
-fn choice_alignment(kind: pdfcraft_engine::NewField, label: &str, quadding: i64) {
-    use pdfcraft_engine::{Edit, FieldProps, FieldValue};
+fn choice_alignment(kind: asdreader_engine::NewField, label: &str, quadding: i64) {
+    use asdreader_engine::{Edit, FieldProps, FieldValue};
     let mut h = harness();
     h.state_mut().apply_edit(Edit::AddField { page: 0, rect: [40.0, 260.0, 240.0, 310.0], kind, name: Some("aligned_choice".into()) });
     h.state_mut()
         .apply_edit(Edit::SetFieldProps { name: "aligned_choice".into(), props: Box::new(FieldProps { quadding: Some(2), ..Default::default() }) });
     h.state_mut().apply_edit(Edit::SetFieldValue { name: "aligned_choice".into(), value: FieldValue::Choice(vec!["Two".into()]) });
-    let field = |h: &Harness<'static, PdfCraftApp>| {
+    let field = |h: &Harness<'static, ASDReaderApp>| {
         let app = h.state();
         app.session.get(app.views[0].id).unwrap().form.iter().find(|f| f.name == "aligned_choice").unwrap().clone()
     };
@@ -453,7 +453,7 @@ fn choice_alignment(kind: pdfcraft_engine::NewField, label: &str, quadding: i64)
     let id = app.views[0].id;
     assert_eq!(app.session.get(id).unwrap().can_undo(), Some("Change field properties"));
     let bytes = app.session.save_bytes(id).unwrap();
-    let mut reopened = pdfcraft_engine::Session::new();
+    let mut reopened = asdreader_engine::Session::new();
     let reopened_id = reopened.open("saved.pdf", None, bytes, None).unwrap();
     assert_eq!(reopened.get(reopened_id).unwrap().form.iter().find(|f| f.name == "aligned_choice").unwrap().quadding, quadding);
     h.state_mut().execute("edit.undo");
@@ -466,7 +466,7 @@ fn choice_alignment(kind: pdfcraft_engine::NewField, label: &str, quadding: i64)
 
 #[test]
 fn options_tab_sets_flags_alignment_and_defaults() {
-    use pdfcraft_engine::field_flags as ff;
+    use asdreader_engine::field_flags as ff;
     let mut h = harness();
     h.state_mut().open_field_props("city", 0);
     h.run_steps(2);
@@ -495,7 +495,7 @@ fn the_fields_panel_orders_tabs_manually() {
     h.state_mut().execute("form.prepare");
     h.state_mut().set_option("panel", "fields").unwrap();
     h.run_steps(3);
-    let order = |h: &Harness<'static, PdfCraftApp>| -> Vec<String> {
+    let order = |h: &Harness<'static, ASDReaderApp>| -> Vec<String> {
         let s = h.state();
         let form = &s.session.get(s.views[0].id).unwrap().form;
         let mut v: Vec<(usize, String)> = form.iter().filter_map(|f| f.widgets.iter().map(|w| w.tab).min().map(|t| (t, f.name.clone()))).collect();
@@ -515,14 +515,14 @@ fn the_fields_panel_orders_tabs_manually() {
 #[test]
 fn duplicating_a_field_onto_every_page() {
     let mut h = harness();
-    h.state_mut().apply_edit(pdfcraft_engine::Edit::InsertBlankPage { at: 1, width: 300.0, height: 400.0 });
+    h.state_mut().apply_edit(asdreader_engine::Edit::InsertBlankPage { at: 1, width: 300.0, height: 400.0 });
     h.state_mut().execute("form.prepare");
     h.run_steps(3);
     let (n, p) = {
         let s = h.state();
         let doc = s.session.get(s.views[0].id).unwrap();
         let f = doc.form.iter().find(|f| f.name == "city").unwrap();
-        (doc.info.pages.len(), pdfcraft_ui_egui::forms_ui::field_screen_rect(&s.views[0], &doc.info, f, 0).expect("on screen").center())
+        (doc.info.pages.len(), asdreader_ui_egui::forms_ui::field_screen_rect(&s.views[0], &doc.info, f, 0).expect("on screen").center())
     };
     assert!(n >= 2, "the fixture has {n} pages");
     h.hover_at(p);
@@ -546,19 +546,19 @@ fn duplicating_a_field_onto_every_page() {
 
 #[test]
 fn aligning_distributing_and_sizing_several_fields() {
-    use pdfcraft_ui_egui::prepare::{Arrange, arrange};
+    use asdreader_ui_egui::prepare::{Arrange, arrange};
     let mut h = harness();
     for (name, x, y, w) in [("a", 20.0, 300.0, 60.0), ("b", 120.0, 280.0, 80.0), ("c", 260.0, 260.0, 30.0)] {
-        h.state_mut().apply_edit(pdfcraft_engine::Edit::AddField {
+        h.state_mut().apply_edit(asdreader_engine::Edit::AddField {
             page: 0,
             rect: [x, y, x + w, y + 20.0],
-            kind: pdfcraft_engine::NewField::Text { multiline: false },
+            kind: asdreader_engine::NewField::Text { multiline: false },
             name: Some(name.into()),
         });
     }
     h.run_steps(2);
-    let form = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(h.state().views[0].id).unwrap().form.as_ref().clone();
-    let rect = |h: &Harness<'static, PdfCraftApp>, n: &str| form(h).iter().find(|f| f.name == n).unwrap().widgets[0].rect;
+    let form = |h: &Harness<'static, ASDReaderApp>| h.state().session.get(h.state().views[0].id).unwrap().form.as_ref().clone();
+    let rect = |h: &Harness<'static, ASDReaderApp>, n: &str| form(h).iter().find(|f| f.name == n).unwrap().widgets[0].rect;
     let a = ("a".to_string(), 0);
     let others = vec![("b".to_string(), 0), ("c".to_string(), 0)];
     // Align tops with a.
@@ -583,10 +583,10 @@ fn aligning_distributing_and_sizing_several_fields() {
 fn deleting_several_selected_fields_and_detecting_fields_from_the_panel() {
     let mut h = harness();
     for (name, x) in [("a", 20.0), ("b", 120.0), ("c", 220.0)] {
-        h.state_mut().apply_edit(pdfcraft_engine::Edit::AddField {
+        h.state_mut().apply_edit(asdreader_engine::Edit::AddField {
             page: 0,
             rect: [x, 300.0, x + 60.0, 320.0],
-            kind: pdfcraft_engine::NewField::Text { multiline: false },
+            kind: asdreader_engine::NewField::Text { multiline: false },
             name: Some(name.into()),
         });
     }
@@ -627,7 +627,7 @@ fn preview_fills_the_form_and_locked_fields_keep_their_properties() {
     h.run_steps(1);
     h.get_by_label("OK").click();
     h.run_steps(3);
-    let locked = |h: &Harness<'static, PdfCraftApp>| {
+    let locked = |h: &Harness<'static, ASDReaderApp>| {
         let s = h.state();
         s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == "city").unwrap().locked()
     };
@@ -651,7 +651,7 @@ fn image_fields_take_a_picture_when_clicked() {
     drag(&mut h, a, b);
     assert_eq!(names(&h).last().map(String::as_str), Some("Image1"));
     // A picture to choose (the picker is bypassed in tests).
-    let path = std::env::temp_dir().join(format!("pdfcraft-image-field-{}.png", std::process::id()));
+    let path = std::env::temp_dir().join(format!("asdreader-image-field-{}.png", std::process::id()));
     image::RgbImage::from_pixel(8, 4, image::Rgb([200, 30, 30])).save(&path).unwrap();
     h.state_mut().save_override = Some(path.to_string_lossy().into_owned());
     // Fill it in as a reader would.
@@ -670,7 +670,7 @@ fn image_fields_take_a_picture_when_clicked() {
 
 #[test]
 fn actions_tab_adds_and_removes_actions() {
-    use pdfcraft_engine::{FieldAction, FieldTrigger};
+    use asdreader_engine::{FieldAction, FieldTrigger};
     let mut h = harness();
     h.state_mut().execute("form.prepare");
     h.run_steps(2);
@@ -714,7 +714,7 @@ fn actions_tab_adds_and_removes_actions() {
 
 /// Text field table: pick the tool and drag out an area in the empty lower part of page 1, 200 by
 /// 120 points from (40, 240) as displayed. The table's window opens for it.
-fn draw_table(h: &mut Harness<'static, PdfCraftApp>) {
+fn draw_table(h: &mut Harness<'static, ASDReaderApp>) {
     assert!(h.state_mut().execute("form.add.text_table"));
     h.run_steps(2);
     let (a, b) = (at(h, 40.0, 240.0), at(h, 240.0, 360.0));
@@ -834,7 +834,7 @@ fn dragging_a_column_divider_between_many_columns() {
 #[test]
 fn the_table_window_closes_when_its_document_is_left() {
     let mut h = harness();
-    let blank = pdfcraft_engine::Session::new().create_blank(300.0, 400.0, 1).unwrap().to_vec();
+    let blank = asdreader_engine::Session::new().create_blank(300.0, 400.0, 1).unwrap().to_vec();
     h.state_mut().open_bytes("other.pdf", None, blank).unwrap();
     h.state_mut().active = Some(0);
     h.run_steps(4);
@@ -889,7 +889,7 @@ fn the_table_window_closes_when_the_document_changes_under_it() {
     let mut h = harness();
     let before = names(&h);
     draw_table(&mut h);
-    assert!(h.state_mut().apply_edit(pdfcraft_engine::Edit::RotatePages { pages: vec![0], degrees: 90 }));
+    assert!(h.state_mut().apply_edit(asdreader_engine::Edit::RotatePages { pages: vec![0], degrees: 90 }));
     h.run_steps(2);
     assert_eq!((h.state().dialog, h.state().field_table_draft.is_some()), (None, false), "closed by the rotation");
     assert_eq!(names(&h), before, "nothing added");
@@ -943,7 +943,7 @@ fn a_table_clicked_near_the_page_edge_stays_on_the_page() {
 /// prepared, says when nothing calculates, and Back returns to Prepare a form.
 #[test]
 fn the_calculation_order_is_a_page_of_prepare_a_form() {
-    use pdfcraft_ui_egui::LeftPanel;
+    use asdreader_ui_egui::LeftPanel;
     let mut h = harness();
     h.state_mut().execute("form.prepare");
     h.run_steps(3);
@@ -983,9 +983,9 @@ fn the_calculation_order_is_a_page_of_prepare_a_form() {
 /// back, every change is one undo step, and a row selects its field.
 #[test]
 fn the_calculation_order_is_moved_dragged_and_fixed() {
+    use asdreader_engine::form_scripts::{CalcOp, Calculate, Format};
+    use asdreader_engine::{Edit, FieldProps, FieldValue, NewField};
     use egui::{Key, Modifiers};
-    use pdfcraft_engine::form_scripts::{CalcOp, Calculate, Format};
-    use pdfcraft_engine::{Edit, FieldProps, FieldValue, NewField};
     let mut h = harness();
     for (i, name) in ["qty", "sub", "total", "other"].into_iter().enumerate() {
         let y = 200.0 + 30.0 * i as f64;
@@ -1009,11 +1009,11 @@ fn the_calculation_order_is_moved_dragged_and_fixed() {
     h.run_steps(3);
     h.get_by_label("Calculation order").click();
     h.run_steps(3);
-    let order = |h: &Harness<'static, PdfCraftApp>| -> Vec<String> {
+    let order = |h: &Harness<'static, ASDReaderApp>| -> Vec<String> {
         let s = h.state();
         s.session.get(s.views[0].id).unwrap().calculation_order().fields.into_iter().map(|f| f.name).collect()
     };
-    let undo_label = |h: &Harness<'static, PdfCraftApp>| h.state().session.get(h.state().views[0].id).unwrap().can_undo().map(str::to_owned);
+    let undo_label = |h: &Harness<'static, ASDReaderApp>| h.state().session.get(h.state().views[0].id).unwrap().can_undo().map(str::to_owned);
     assert_eq!(order(&h), ["total", "sub", "other"]);
     // The card says what is wrong, and each row shows its value as the field does: total
     // calculated before sub, so it still has sub's old value.
@@ -1069,9 +1069,9 @@ fn the_calculation_order_is_moved_dragged_and_fixed() {
 /// link opens the first one's formula.
 #[test]
 fn a_loop_has_its_own_card_that_opens_the_formula() {
-    use pdfcraft_engine::form_scripts::Calculate;
-    use pdfcraft_engine::{Edit, FieldProps, NewField};
-    use pdfcraft_ui_egui::prepare::FieldTab;
+    use asdreader_engine::form_scripts::Calculate;
+    use asdreader_engine::{Edit, FieldProps, NewField};
+    use asdreader_ui_egui::prepare::FieldTab;
     let mut h = harness();
     for (i, (name, formula)) in [("a", "b + 1"), ("b", "a + 1")].into_iter().enumerate() {
         let y = 200.0 + 30.0 * i as f64;

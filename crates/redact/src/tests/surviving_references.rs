@@ -16,9 +16,9 @@ pub(super) fn full_save_holds(doc: &Document, secret: &[u8]) -> bool {
 #[test]
 fn a_redacted_field_listed_in_the_calculation_order_leaves_the_saved_file() {
     let mut doc = one_page(b"", "", vec![]);
-    pdfcraft_forms::add_field(&mut doc, 0, [10.0, 50.0, 100.0, 70.0], &pdfcraft_forms::NewField::Text { multiline: false }, Some("ssn")).unwrap();
-    pdfcraft_forms::set_value(&mut doc, "ssn", &pdfcraft_forms::FieldValue::Text("SSN-078-05-1120".into())).unwrap();
-    let field = pdfcraft_forms::fields(&doc).swap_remove(0).obj;
+    asdreader_forms::add_field(&mut doc, 0, [10.0, 50.0, 100.0, 70.0], &asdreader_forms::NewField::Text { multiline: false }, Some("ssn")).unwrap();
+    asdreader_forms::set_value(&mut doc, "ssn", &asdreader_forms::FieldValue::Text("SSN-078-05-1120".into())).unwrap();
+    let field = asdreader_forms::fields(&doc).swap_remove(0).obj;
     let root = doc.root().unwrap();
     let af = doc.get(root).as_dict().unwrap().reference(b"AcroForm").unwrap();
     doc.update_dict(af, |d| d.set(b"CO".to_vec(), Object::Array(vec![Object::Ref(field)]))).unwrap();

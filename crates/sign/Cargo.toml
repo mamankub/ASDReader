@@ -1,5 +1,5 @@
 [package]
-name = "pdfcraft-sign"
+name = "asdreader-sign"
 description = "Digital signatures (ISO 32000-2 §12.8, PAdES): X.509, CMS, PKCS #12, signing and validation"
 version.workspace = true
 edition.workspace = true
@@ -11,10 +11,10 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-pdfcraft-cos = { workspace = true }
-pdfcraft-annot = { workspace = true }
-pdfcraft-fonts = { workspace = true }
-pdfcraft-model = { workspace = true }
+asdreader-cos = { workspace = true }
+asdreader-annot = { workspace = true }
+asdreader-fonts = { workspace = true }
+asdreader-model = { workspace = true }
 thiserror.workspace = true
 # ASN.1 UTCTime/GeneralizedTime conversion goes through chrono (no hand-rolled calendar code).
 chrono = { workspace = true }

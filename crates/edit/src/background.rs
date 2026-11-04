@@ -1,8 +1,8 @@
 //! A page's background colour: the colour the page is painted with before anything else, as
 //! Edit a PDF ▸ Background and many producers do it, for exports that keep a page colour (#2992).
 
-use pdfcraft_content::{Matrix, Op, Pieces};
-use pdfcraft_cos::{Dict, Document};
+use asdreader_content::{Matrix, Op, Pieces};
+use asdreader_cos::{Dict, Document};
 
 use crate::{EditError, Rgb};
 
@@ -45,7 +45,7 @@ struct State {
 /// whole visible page (and no clip keeps it from doing so). `None` for a page that paints anything else
 /// first, or nothing. Forms and later content are not looked at.
 pub fn page_background(doc: &Document, page: usize) -> Result<Option<Rgb>, EditError> {
-    let pages = pdfcraft_model::pages(doc);
+    let pages = asdreader_model::pages(doc);
     let p = pages.get(page).ok_or(EditError::NoSuchPage(page))?;
     let crop = p.crop(doc);
     let resources = p.dict.get(b"Resources").map(|r| doc.resolve(r)).and_then(|r| r.as_dict().cloned()).unwrap_or_default();
@@ -174,7 +174,7 @@ fn apply_gstate(doc: &Document, g: &Dict, st: &mut State) {
     if let Some(bm) = g.get(b"BM") {
         let normal = |n: Option<&[u8]>| matches!(n, Some(b"Normal" | b"Compatible"));
         st.plain &= match &*doc.resolve(bm) {
-            pdfcraft_cos::Object::Array(a) => a.first().is_some_and(|n| normal(doc.resolve(n).as_name())),
+            asdreader_cos::Object::Array(a) => a.first().is_some_and(|n| normal(doc.resolve(n).as_name())),
             other => normal(other.as_name()),
         };
     }

@@ -257,6 +257,559 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 
 [[package]]
+name = "asdesign-docpath"
+version = "0.13.4"
+
+[[package]]
+name = "asdesign-print"
+version = "0.13.4"
+dependencies = [
+ "miniz_oxide 0.8.9",
+ "roxmltree",
+ "tempfile",
+ "winprint",
+ "winsafe",
+]
+
+[[package]]
+name = "asdesign-quit"
+version = "0.13.4"
+dependencies = [
+ "dispatch2",
+ "egui",
+ "muda",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+]
+
+[[package]]
+name = "asdesign-ui"
+version = "0.13.4"
+dependencies = [
+ "egui",
+ "egui_extras",
+ "egui_kittest",
+ "image",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "asdreader"
+version = "0.13.4"
+dependencies = [
+ "asdesign-quit",
+ "asdreader-engine",
+ "asdreader-ui-egui",
+ "chrono",
+ "eframe",
+ "egui",
+ "fmv-macos-events",
+ "log",
+ "pollster 1.0.1",
+ "raw-window-handle",
+ "rustls-native-certs",
+ "serde_json",
+ "uds_windows",
+ "ureq",
+ "wayland-client",
+ "wayland-protocols",
+ "windows",
+ "winit",
+ "winresource",
+ "winsafe",
+]
+
+[[package]]
+name = "asdreader-a11y"
+version = "0.13.4"
+dependencies = [
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-filters",
+ "asdreader-fonts",
+ "asdreader-model",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-annot"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "asdreader-fonts",
+ "asdreader-model",
+ "hayro-syntax",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-audit"
+version = "0.13.4"
+dependencies = [
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-edit",
+ "asdreader-model",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-automation"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "asdreader-engine",
+ "asdreader-fonts",
+ "asdreader-model",
+ "asdreader-organize",
+ "asdreader-platform",
+ "asdreader-render",
+ "asdreader-xfa",
+ "base64 0.22.1",
+ "flate2",
+ "image",
+ "png 0.18.1",
+ "rustix 1.1.5",
+ "serde_json",
+ "sha2 0.11.0",
+ "tempfile",
+]
+
+[[package]]
+name = "asdreader-cli"
+version = "0.13.4"
+dependencies = [
+ "asdreader-audit",
+ "asdreader-automation",
+ "asdreader-cos",
+ "asdreader-engine",
+ "asdreader-platform",
+ "asdreader-preflight",
+ "asdreader-render",
+ "base64 0.22.1",
+ "png 0.18.1",
+ "rustix 1.1.5",
+ "serde_json",
+ "winresource",
+]
+
+[[package]]
+name = "asdreader-compare"
+version = "0.13.4"
+
+[[package]]
+name = "asdreader-content"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "hayro-syntax",
+]
+
+[[package]]
+name = "asdreader-cos"
+version = "0.13.4"
+dependencies = [
+ "asdreader-crypt",
+ "asdreader-filters",
+ "asdreader-oracle",
+ "asdreader-testkit",
+ "chrono",
+ "hayro-syntax",
+ "proptest",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-create"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "asdreader-fonts",
+ "asdreader-model",
+ "encoding_rs",
+ "hayro-syntax",
+ "image",
+ "png 0.18.1",
+ "thiserror 2.0.21",
+ "tiff",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "asdreader-crypt"
+version = "0.13.4"
+dependencies = [
+ "aes",
+ "md-5",
+ "proptest",
+ "sha2 0.11.0",
+ "stringprep",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-edit"
+version = "0.13.4"
+dependencies = [
+ "asdreader-annot",
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-fonts",
+ "asdreader-model",
+ "hayro-syntax",
+ "kurbo 0.13.1",
+ "thiserror 2.0.21",
+ "unicode-bidi",
+]
+
+[[package]]
+name = "asdreader-engine"
+version = "0.13.4"
+dependencies = [
+ "asdesign-docpath",
+ "asdreader-a11y",
+ "asdreader-annot",
+ "asdreader-audit",
+ "asdreader-compare",
+ "asdreader-cos",
+ "asdreader-create",
+ "asdreader-edit",
+ "asdreader-export",
+ "asdreader-fonts",
+ "asdreader-forms",
+ "asdreader-geom",
+ "asdreader-js",
+ "asdreader-measure",
+ "asdreader-model",
+ "asdreader-ocr",
+ "asdreader-optimize",
+ "asdreader-organize",
+ "asdreader-preflight",
+ "asdreader-print",
+ "asdreader-redact",
+ "asdreader-render",
+ "asdreader-sign",
+ "asdreader-testkit",
+ "asdreader-xfa",
+ "asdreader-xfdf",
+ "chrono",
+ "icu_properties",
+ "idna",
+ "image",
+ "png 0.18.1",
+ "thiserror 2.0.21",
+ "tiff",
+ "unicode-segmentation",
+ "url",
+]
+
+[[package]]
+name = "asdreader-export"
+version = "0.13.4"
+dependencies = [
+ "flate2",
+]
+
+[[package]]
+name = "asdreader-filters"
+version = "0.13.4"
+dependencies = [
+ "flate2",
+ "proptest",
+ "thiserror 2.0.21",
+ "weezl 0.2.1",
+]
+
+[[package]]
+name = "asdreader-fonts"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "harfrust",
+ "skrifa 0.44.0",
+ "unicode-bidi",
+]
+
+[[package]]
+name = "asdreader-forms"
+version = "0.13.4"
+dependencies = [
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-fonts",
+ "asdreader-model",
+ "hayro-syntax",
+ "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-geom"
+version = "0.13.4"
+
+[[package]]
+name = "asdreader-js"
+version = "0.13.4"
+dependencies = [
+ "boa_engine",
+ "chrono",
+]
+
+[[package]]
+name = "asdreader-measure"
+version = "0.13.4"
+dependencies = [
+ "asdreader-annot",
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-model",
+ "asdreader-testkit",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-model"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+]
+
+[[package]]
+name = "asdreader-ocr"
+version = "0.13.4"
+dependencies = [
+ "asdreader-fonts",
+ "ocrs",
+ "rten",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-optimize"
+version = "0.13.4"
+dependencies = [
+ "asdreader-annot",
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-model",
+ "asdreader-render",
+ "image",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-oracle"
+version = "0.13.4"
+
+[[package]]
+name = "asdreader-organize"
+version = "0.13.4"
+dependencies = [
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-oracle",
+ "hayro-syntax",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-platform"
+version = "0.13.4"
+dependencies = [
+ "async-channel",
+ "futures-lite",
+ "rustix 1.1.5",
+ "zbus",
+]
+
+[[package]]
+name = "asdreader-preflight"
+version = "0.13.4"
+dependencies = [
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-model",
+ "flate2",
+ "roxmltree",
+]
+
+[[package]]
+name = "asdreader-print"
+version = "0.13.4"
+dependencies = [
+ "asdesign-print",
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-model",
+ "asdreader-render",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-redact"
+version = "0.13.4"
+dependencies = [
+ "asdreader-annot",
+ "asdreader-content",
+ "asdreader-cos",
+ "asdreader-edit",
+ "asdreader-fonts",
+ "asdreader-forms",
+ "asdreader-model",
+ "asdreader-testkit",
+ "asdreader-xfa",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-render"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "asdreader-fonts",
+ "bytemuck",
+ "flate2",
+ "getrandom 0.4.3",
+ "hayro",
+ "hayro-syntax",
+ "kurbo 0.13.1",
+ "log",
+ "lopdf",
+ "serde",
+ "skrifa 0.44.0",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-sign"
+version = "0.13.4"
+dependencies = [
+ "aes",
+ "asdreader-annot",
+ "asdreader-cos",
+ "asdreader-fonts",
+ "asdreader-model",
+ "aws-lc-rs",
+ "base64 0.22.1",
+ "bp256",
+ "bp384",
+ "cbc",
+ "chrono",
+ "crypto-bigint",
+ "des",
+ "ecdsa",
+ "ed25519-dalek",
+ "getrandom 0.4.3",
+ "hmac",
+ "p256",
+ "p384",
+ "p521",
+ "pbkdf2",
+ "rc2",
+ "ripemd",
+ "rsa",
+ "rustls-cng",
+ "security-framework",
+ "sha1 0.11.0",
+ "sha2 0.11.0",
+ "sha3",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-testkit"
+version = "0.13.4"
+
+[[package]]
+name = "asdreader-ui-egui"
+version = "0.13.4"
+dependencies = [
+ "arboard",
+ "asdesign-quit",
+ "asdesign-ui",
+ "asdreader-cos",
+ "asdreader-engine",
+ "asdreader-fonts",
+ "asdreader-model",
+ "asdreader-platform",
+ "asdreader-render",
+ "asdreader-xfa",
+ "base64 0.22.1",
+ "block2 0.6.2",
+ "bytemuck",
+ "chrono",
+ "eframe",
+ "egui",
+ "egui_extras",
+ "egui_kittest",
+ "fontconfig-parser",
+ "getrandom 0.4.3",
+ "image",
+ "js-sys",
+ "log",
+ "objc2 0.6.4",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "plist",
+ "png 0.18.1",
+ "pollster 1.0.1",
+ "rfd",
+ "rustix 1.1.5",
+ "serde",
+ "serde_json",
+ "skrifa 0.44.0",
+ "sys-locale",
+ "toml",
+ "unicode-bidi",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winsafe",
+ "xattr",
+]
+
+[[package]]
+name = "asdreader-web"
+version = "0.13.4"
+dependencies = [
+ "asdreader-ui-egui",
+ "eframe",
+ "egui",
+ "js-sys",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "asdreader-xfa"
+version = "0.13.4"
+dependencies = [
+ "asdreader-cos",
+ "asdreader-fonts",
+ "base64 0.22.1",
+ "image",
+ "png 0.18.1",
+ "roxmltree",
+ "sha2 0.11.0",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "asdreader-xfdf"
+version = "0.13.4"
+dependencies = [
+ "asdreader-annot",
+ "asdreader-cos",
+ "asdreader-forms",
+ "asdreader-model",
+ "roxmltree",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "ash"
 version = "0.38.0+1.3.281"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1143,44 +1696,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "craft-docpath"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=82a24b006eefa036b43c09a67fb9a3fbd17ffe63#82a24b006eefa036b43c09a67fb9a3fbd17ffe63"
-
-[[package]]
-name = "craft-print"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=666c358065261a2816b376fa3bb10538dbf53040#666c358065261a2816b376fa3bb10538dbf53040"
-dependencies = [
- "miniz_oxide 0.8.9",
- "roxmltree",
- "tempfile",
- "winprint",
- "winsafe",
-]
-
-[[package]]
-name = "craft-quit"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=f58bc1a3df490992d633393d0898af0588ce882c#f58bc1a3df490992d633393d0898af0588ce882c"
-dependencies = [
- "dispatch2",
- "egui",
- "muda",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
-]
-
-[[package]]
-name = "craft-ui"
-version = "0.1.0"
-source = "git+https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51eeb3de70e735c8ce87a59a7dedd47675"
-dependencies = [
- "egui",
- "serde",
-]
-
-[[package]]
 name = "crc32fast"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1243,9 +1758,9 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
-version = "0.7.5"
+version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a52aa3fcda4e6302a9f48734f234d35d4721b96f8fe07d073f07ce9df4f0271"
+checksum = "9c035cb64cba03dad2fb921f3e218785e8cf9a41790da5eb3a1400f62fa2be11"
 dependencies = [
  "cpubits",
  "ctutils",
@@ -1291,9 +1806,9 @@ dependencies = [
 
 [[package]]
 name = "ctutils"
-version = "0.4.5"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38d28fb6aa7dd680b3ffd1a3e64e115c177bdba63c0ae7f9cd48129ff05c4fa0"
+checksum = "261af4dc7a06ea8a527a8717d8cbba3417530d6ea14e1edb3de6b67806be474f"
 dependencies = [
  "cmov",
  "subtle",
@@ -3830,6 +4345,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordered-channel"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "95be4d57809897b5a7539fc15a7dfe0e84141bc3dfaa2e9b1b27caa90acf61ab"
+dependencies = [
+ "crossbeam-channel",
+]
+
+[[package]]
 name = "ordered-float"
 version = "5.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3932,521 +4456,6 @@ checksum = "112d82ceb8c5bf524d9af484d4e4970c9fd5a0cc15ba14ad93dccd28873b0629"
 dependencies = [
  "digest 0.11.3",
  "hmac",
-]
-
-[[package]]
-name = "pdfcraft"
-version = "0.13.0"
-dependencies = [
- "chrono",
- "craft-quit",
- "eframe",
- "egui",
- "fmv-macos-events",
- "log",
- "pdfcraft-engine",
- "pdfcraft-ui-egui",
- "pollster 1.0.1",
- "raw-window-handle",
- "rustls-native-certs",
- "serde_json",
- "uds_windows",
- "ureq",
- "wayland-client",
- "wayland-protocols",
- "windows",
- "winit",
- "winresource",
- "winsafe",
-]
-
-[[package]]
-name = "pdfcraft-a11y"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-filters",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-annot"
-version = "0.13.0"
-dependencies = [
- "hayro-syntax",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-audit"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-edit",
- "pdfcraft-model",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-automation"
-version = "0.13.0"
-dependencies = [
- "base64 0.22.1",
- "flate2",
- "image",
- "pdfcraft-cos",
- "pdfcraft-engine",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "pdfcraft-organize",
- "pdfcraft-platform",
- "pdfcraft-render",
- "pdfcraft-xfa",
- "png 0.18.1",
- "rustix 1.1.5",
- "serde_json",
- "sha2 0.11.0",
- "tempfile",
-]
-
-[[package]]
-name = "pdfcraft-cli"
-version = "0.13.0"
-dependencies = [
- "base64 0.22.1",
- "pdfcraft-audit",
- "pdfcraft-automation",
- "pdfcraft-cos",
- "pdfcraft-engine",
- "pdfcraft-platform",
- "pdfcraft-preflight",
- "pdfcraft-render",
- "png 0.18.1",
- "rustix 1.1.5",
- "serde_json",
- "winresource",
-]
-
-[[package]]
-name = "pdfcraft-compare"
-version = "0.13.0"
-
-[[package]]
-name = "pdfcraft-content"
-version = "0.13.0"
-dependencies = [
- "hayro-syntax",
- "pdfcraft-cos",
-]
-
-[[package]]
-name = "pdfcraft-cos"
-version = "0.13.0"
-dependencies = [
- "chrono",
- "hayro-syntax",
- "pdfcraft-crypt",
- "pdfcraft-filters",
- "pdfcraft-oracle",
- "pdfcraft-testkit",
- "proptest",
- "serde_json",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-create"
-version = "0.13.0"
-dependencies = [
- "encoding_rs",
- "hayro-syntax",
- "image",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "png 0.18.1",
- "thiserror 2.0.21",
- "tiff",
- "zune-jpeg",
-]
-
-[[package]]
-name = "pdfcraft-crypt"
-version = "0.13.0"
-dependencies = [
- "aes",
- "md-5",
- "proptest",
- "sha2 0.11.0",
- "stringprep",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-edit"
-version = "0.13.0"
-dependencies = [
- "hayro-syntax",
- "kurbo 0.13.1",
- "pdfcraft-annot",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "thiserror 2.0.21",
- "unicode-bidi",
-]
-
-[[package]]
-name = "pdfcraft-engine"
-version = "0.13.0"
-dependencies = [
- "chrono",
- "craft-docpath",
- "icu_properties",
- "idna",
- "image",
- "pdfcraft-a11y",
- "pdfcraft-annot",
- "pdfcraft-audit",
- "pdfcraft-compare",
- "pdfcraft-cos",
- "pdfcraft-create",
- "pdfcraft-edit",
- "pdfcraft-export",
- "pdfcraft-fonts",
- "pdfcraft-forms",
- "pdfcraft-geom",
- "pdfcraft-js",
- "pdfcraft-measure",
- "pdfcraft-model",
- "pdfcraft-ocr",
- "pdfcraft-optimize",
- "pdfcraft-organize",
- "pdfcraft-preflight",
- "pdfcraft-print",
- "pdfcraft-redact",
- "pdfcraft-render",
- "pdfcraft-sign",
- "pdfcraft-testkit",
- "pdfcraft-xfa",
- "pdfcraft-xfdf",
- "png 0.18.1",
- "thiserror 2.0.21",
- "tiff",
- "unicode-segmentation",
- "url",
-]
-
-[[package]]
-name = "pdfcraft-export"
-version = "0.13.0"
-dependencies = [
- "flate2",
-]
-
-[[package]]
-name = "pdfcraft-filters"
-version = "0.13.0"
-dependencies = [
- "flate2",
- "proptest",
- "thiserror 2.0.21",
- "weezl 0.2.1",
-]
-
-[[package]]
-name = "pdfcraft-fonts"
-version = "0.13.0"
-dependencies = [
- "harfrust",
- "pdfcraft-cos",
- "skrifa 0.44.0",
- "unicode-bidi",
-]
-
-[[package]]
-name = "pdfcraft-forms"
-version = "0.13.0"
-dependencies = [
- "hayro-syntax",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "proptest",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-geom"
-version = "0.13.0"
-
-[[package]]
-name = "pdfcraft-js"
-version = "0.13.0"
-dependencies = [
- "boa_engine",
- "chrono",
-]
-
-[[package]]
-name = "pdfcraft-measure"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-annot",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-model",
- "pdfcraft-testkit",
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-model"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-cos",
-]
-
-[[package]]
-name = "pdfcraft-ocr"
-version = "0.13.0"
-dependencies = [
- "ocrs",
- "pdfcraft-fonts",
- "rten",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-optimize"
-version = "0.13.0"
-dependencies = [
- "image",
- "pdfcraft-annot",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-model",
- "pdfcraft-render",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-oracle"
-version = "0.13.0"
-
-[[package]]
-name = "pdfcraft-organize"
-version = "0.13.0"
-dependencies = [
- "hayro-syntax",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-oracle",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-platform"
-version = "0.13.0"
-dependencies = [
- "async-channel",
- "futures-lite",
- "rustix 1.1.5",
- "zbus",
-]
-
-[[package]]
-name = "pdfcraft-preflight"
-version = "0.13.0"
-dependencies = [
- "flate2",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-model",
- "roxmltree",
-]
-
-[[package]]
-name = "pdfcraft-print"
-version = "0.13.0"
-dependencies = [
- "craft-print",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-model",
- "pdfcraft-render",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-redact"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-annot",
- "pdfcraft-content",
- "pdfcraft-cos",
- "pdfcraft-edit",
- "pdfcraft-fonts",
- "pdfcraft-forms",
- "pdfcraft-model",
- "pdfcraft-testkit",
- "pdfcraft-xfa",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-render"
-version = "0.13.0"
-dependencies = [
- "bytemuck",
- "flate2",
- "getrandom 0.4.3",
- "hayro",
- "hayro-syntax",
- "kurbo 0.13.1",
- "log",
- "lopdf",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "serde",
- "skrifa 0.44.0",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-sign"
-version = "0.13.0"
-dependencies = [
- "aes",
- "aws-lc-rs",
- "base64 0.22.1",
- "bp256",
- "bp384",
- "cbc",
- "chrono",
- "crypto-bigint",
- "des",
- "ecdsa",
- "ed25519-dalek",
- "getrandom 0.4.3",
- "hmac",
- "p256",
- "p384",
- "p521",
- "pbkdf2",
- "pdfcraft-annot",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "rc2",
- "ripemd",
- "rsa",
- "rustls-cng",
- "security-framework",
- "sha1 0.11.0",
- "sha2 0.11.0",
- "sha3",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-testkit"
-version = "0.13.0"
-
-[[package]]
-name = "pdfcraft-ui-egui"
-version = "0.13.0"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "block2 0.6.2",
- "bytemuck",
- "chrono",
- "craft-quit",
- "craft-ui",
- "eframe",
- "egui",
- "egui_extras",
- "egui_kittest",
- "fontconfig-parser",
- "getrandom 0.4.3",
- "image",
- "js-sys",
- "log",
- "objc2 0.6.4",
- "objc2-app-kit 0.3.2",
- "objc2-foundation 0.3.2",
- "pdfcraft-cos",
- "pdfcraft-engine",
- "pdfcraft-fonts",
- "pdfcraft-model",
- "pdfcraft-platform",
- "pdfcraft-render",
- "pdfcraft-xfa",
- "plist",
- "png 0.18.1",
- "pollster 1.0.1",
- "rfd",
- "rustix 1.1.5",
- "serde",
- "serde_json",
- "skrifa 0.44.0",
- "sys-locale",
- "toml",
- "unicode-bidi",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "winsafe",
- "xattr",
-]
-
-[[package]]
-name = "pdfcraft-web"
-version = "0.13.0"
-dependencies = [
- "eframe",
- "egui",
- "js-sys",
- "pdfcraft-ui-egui",
- "wasm-bindgen-futures",
- "web-sys",
-]
-
-[[package]]
-name = "pdfcraft-xfa"
-version = "0.13.0"
-dependencies = [
- "base64 0.22.1",
- "image",
- "pdfcraft-cos",
- "pdfcraft-fonts",
- "png 0.18.1",
- "roxmltree",
- "sha2 0.11.0",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "pdfcraft-xfdf"
-version = "0.13.0"
-dependencies = [
- "pdfcraft-annot",
- "pdfcraft-cos",
- "pdfcraft-forms",
- "pdfcraft-model",
- "roxmltree",
- "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -5377,6 +5386,7 @@ dependencies = [
  "rten-base",
  "rten-gemm",
  "rten-model-file",
+ "rten-onnx",
  "rten-parallel",
  "rten-shape-inference",
  "rten-simd",
@@ -5425,6 +5435,12 @@ dependencies = [
  "flatbuffers",
  "rten-base",
 ]
+
+[[package]]
+name = "rten-onnx"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96944374568990b8d1bbc5bae5957585866f9dd8256130460405730948bfd42e"
 
 [[package]]
 name = "rten-parallel"
@@ -6525,6 +6541,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "thread_local"
+version = "1.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1ad99c4c6d32803332c548b1af0540b357b3f5fc0be8f6c6bfe8b2e6ae784070"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
 name = "tiff"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7045,9 +7070,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6d8ded630e8316bb94a55881256506d1f3b9947b5f66db8a7d32ca7ba02decd0"
 dependencies = [
  "bytemuck",
+ "crossbeam-channel",
  "glifo 0.1.1",
  "hashbrown 0.17.1",
+ "ordered-channel",
  "png 0.18.1",
+ "rayon",
+ "thread_local",
  "vello_common 0.0.8",
 ]
 
@@ -7890,7 +7919,6 @@ dependencies = [
 [[package]]
 name = "winprint"
 version = "0.2.1"
-source = "git+https://github.com/storytold/winprint.rs?rev=5f80b9baf6b58937c401656634e42d33f00ddf49#5f80b9baf6b58937c401656634e42d33f00ddf49"
 dependencies = [
  "flate2",
  "fmt-derive",
@@ -8069,10 +8097,10 @@ name = "xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "asdreader-cos",
+ "asdreader-oracle",
  "chrono",
  "lopdf",
- "pdfcraft-cos",
- "pdfcraft-oracle",
  "png 0.18.1",
  "serde",
  "serde_json",

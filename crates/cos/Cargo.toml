@@ -1,5 +1,5 @@
 [package]
-name = "pdfcraft-cos"
+name = "asdreader-cos"
 description = "PDF object layer: lazy tolerant parsing, copy-on-write edits, incremental and full saving"
 version.workspace = true
 edition.workspace = true
@@ -9,15 +9,15 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-pdfcraft-crypt = { workspace = true }
-pdfcraft-filters = { workspace = true }
+asdreader-crypt = { workspace = true }
+asdreader-filters = { workspace = true }
 thiserror = { workspace = true }
 # PDF date strings (`pdf_date`) go through chrono (no hand-rolled calendar code).
 chrono = { workspace = true }
 
 [dev-dependencies]
-pdfcraft-oracle = { workspace = true }
-pdfcraft-testkit = { workspace = true }
+asdreader-oracle = { workspace = true }
+asdreader-testkit = { workspace = true }
 serde_json = { workspace = true }
 proptest = { workspace = true }
 hayro-syntax = { workspace = true }

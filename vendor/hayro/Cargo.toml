@@ -60,7 +60,7 @@ default-features = false
 [dependencies.kurbo]
 version = "0.13.0"
 
-# PdfCraft patch: report image resampling fallbacks through the application's logger.
+# ASDReader patch: report image resampling fallbacks through the application's logger.
 [dependencies.log]
 version = "0.4"
 
@@ -74,16 +74,19 @@ features = [
 ]
 default-features = false
 
+# ASDReader patch: `multithreading`, so a page's paths are rasterized on several threads while
+# its content stream is interpreted (see `render_into`).
 [dependencies.vello_cpu]
 version = "0.0.8"
 features = [
     "std",
     "png",
     "u8_pipeline",
+    "multithreading",
 ]
 default-features = false
 
-# PdfCraft patch: the upstream-only `[dev-dependencies.log]` entry is removed (log is a normal
+# ASDReader patch: the upstream-only `[dev-dependencies.log]` entry is removed (log is a normal
 # dependency since the logging patch), so `cargo test -p hayro` can run this crate's unit tests
 # even though a patched non-workspace crate may not require dev-dependencies.
 [lints.clippy]

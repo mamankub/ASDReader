@@ -1,5 +1,5 @@
 use super::*;
-use pdfcraft_render::{PageRenderer, RenderConfig, RenderRequest, RenderedPage, RequestKind};
+use asdreader_render::{PageRenderer, RenderConfig, RenderRequest, RenderedPage, RequestKind};
 
 fn numbers(values: &[f64]) -> Object {
     Object::Array(values.iter().copied().map(Object::Real).collect())
@@ -8,7 +8,7 @@ fn numbers(values: &[f64]) -> Object {
 // Contributor-original artwork uses a named color resource, without fonts or external assets.
 fn widget_fixture(subtype: Option<Object>, matrix: Option<[f64; 6]>) -> (Document, ObjRef, ObjRef) {
     let mut doc = fixture(1);
-    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let page = asdreader_model::pages(&doc)[0].obj;
     let mut colors = Dict::new();
     colors.set(b"Ink".to_vec(), Object::name("DeviceRGB"));
     let mut resources = Dict::new();
@@ -100,7 +100,7 @@ fn missing_subtype_appearance_survives_vector_print() {
     assert_eq!(pixel(&source, 30, 70), [0, 255, 0, 255], "source display");
     let output = impose(&doc, &print_settings(Content::Document)).unwrap();
     let reopened = Document::open(Arc::new(output.clone())).unwrap();
-    assert_eq!(pdfcraft_model::pages(&reopened).len(), 1);
+    assert_eq!(asdreader_model::pages(&reopened).len(), 1);
     let printed = render(output);
     assert_eq!(pixel(&printed, 5, 5), [255, 255, 255, 255], "outside the appearance");
     assert_eq!(pixel(&printed, 30, 70), [0, 255, 0, 255], "imposed missing-Subtype appearance");
@@ -111,7 +111,7 @@ fn missing_subtype_appearance_survives_vector_print() {
     assert_eq!(doc.get(ap), original);
     assert_eq!(saved(&doc), before);
     let source = Document::open(Arc::new(before)).unwrap();
-    let page = &pdfcraft_model::pages(&source)[0];
+    let page = &asdreader_model::pages(&source)[0];
     let annots = source.resolve(page.dict.get(b"Annots").unwrap());
     let widget = source.resolve(&annots.as_array().unwrap()[0]);
     let selected = appearance(&source, widget.as_dict().unwrap()).unwrap();
@@ -119,7 +119,7 @@ fn missing_subtype_appearance_survives_vector_print() {
     assert!(!stream.dict.contains(b"Subtype") && !stream.dict.contains(b"Type"));
     assert_eq!(stream.decoded().unwrap(), b"/Ink cs 0 1 0 scn 0 0 20 10 re f");
     assert_eq!(source.resolve(stream.dict.get(b"Resources").unwrap()), doc.resolve(original.as_dict().unwrap().get(b"Resources").unwrap()));
-    let sheet = &pdfcraft_model::pages(&reopened)[0];
+    let sheet = &asdreader_model::pages(&reopened)[0];
     let form = reopened.get(xobject(&reopened, &sheet.dict, b"P0"));
     let promoted = reopened.get(xobject(&reopened, form.as_dict().unwrap(), b"PCPrA0"));
     let Object::Stream(promoted) = &*promoted else { panic!("promoted AP stream") };
@@ -137,8 +137,8 @@ fn missing_subtype_appearance_survives_vector_print() {
     // The writer can spell integral Real values as integers. Compare their PDF values.
     let mut actual_bytes = Vec::new();
     let mut expected_bytes = Vec::new();
-    pdfcraft_cos::serialize(&Object::Dict(actual), &mut actual_bytes);
-    pdfcraft_cos::serialize(&Object::Dict(expected), &mut expected_bytes);
+    asdreader_cos::serialize(&Object::Dict(actual), &mut actual_bytes);
+    asdreader_cos::serialize(&Object::Dict(expected), &mut expected_bytes);
     assert_eq!(actual_bytes, expected_bytes);
 }
 
@@ -147,14 +147,14 @@ fn promotion_preserves_streams_and_explicit_subtypes() {
     for subtype in [None, Some(Object::name("Form")), Some(Object::name("Image")), Some(Object::Null), Some(Object::Int(7))] {
         let (mut doc, ap, _) = widget_fixture(subtype.clone(), Some([2.0, 0.0, 0.0, 3.0, 5.0, 7.0]));
         let original = doc.get(ap);
-        let pages = pdfcraft_model::pages(&doc);
+        let pages = asdreader_model::pages(&doc);
         let form = page_form(&mut doc, &pages, 0, Content::Document, &mut std::collections::HashMap::new()).unwrap();
         assert_eq!(doc.get(ap), original, "original in the print clone");
         let promoted = xobject(&doc, doc.get(form).as_dict().unwrap(), b"PCPrA0");
         if subtype.is_some() {
             assert_eq!(promoted, ap, "an explicit subtype keeps its object");
             let printed = Document::open(Arc::new(impose(&doc, &print_settings(Content::Document)).unwrap())).unwrap();
-            let sheet = &pdfcraft_model::pages(&printed)[0];
+            let sheet = &asdreader_model::pages(&printed)[0];
             let page_form = printed.get(xobject(&printed, &sheet.dict, b"P0"));
             let printed_ap = printed.get(xobject(&printed, page_form.as_dict().unwrap(), b"PCPrA0"));
             assert_eq!(printed_ap.as_dict().unwrap().get(b"Subtype"), subtype.as_ref(), "explicit subtype survives serialization");
@@ -194,7 +194,7 @@ fn selected_shared_appearances_keep_placement_flags_and_content_modes() {
             copy.set(b"F".to_vec(), Object::Int(flags));
             widgets.push(Object::Ref(doc.add(Object::Dict(copy))));
         }
-        let page = pdfcraft_model::pages(&doc)[0].obj;
+        let page = asdreader_model::pages(&doc)[0].obj;
         doc.update_dict(page, |d| d.set(b"Annots".to_vec(), Object::Array(widgets))).unwrap();
         let before = saved(&doc);
         for (mode, content) in
@@ -202,8 +202,8 @@ fn selected_shared_appearances_keep_placement_flags_and_content_modes() {
         {
             let output = impose(&doc, &print_settings(content)).unwrap();
             let reopened = Document::open(Arc::new(output.clone())).unwrap();
-            assert_eq!(pdfcraft_model::pages(&reopened).len(), 1);
-            let sheet = &pdfcraft_model::pages(&reopened)[0];
+            assert_eq!(asdreader_model::pages(&reopened).len(), 1);
+            let sheet = &asdreader_model::pages(&reopened)[0];
             let form = reopened.get(xobject(&reopened, &sheet.dict, b"P0"));
             assert_eq!(
                 xobject(&reopened, form.as_dict().unwrap(), b"PCPrA0"),
@@ -248,7 +248,7 @@ fn shared_promotions_span_pages_without_merging_distinct_sources() {
         dict.set(b"Resources".to_vec(), Object::Ref(resources));
         appearances.push(doc.add(Object::Stream(Stream::from_raw(dict, payload.clone()))));
     }
-    let pages = pdfcraft_model::pages(&doc);
+    let pages = asdreader_model::pages(&doc);
     for (index, page) in pages.iter().enumerate() {
         let mut widgets = Vec::new();
         for (ap, rect) in [(appearances[0], [10.0, 20.0, 50.0, 40.0]), (appearances[0], [60.0, 20.0, 90.0, 40.0])]
@@ -282,7 +282,7 @@ fn shared_promotions_span_pages_without_merging_distinct_sources() {
     for _ in 0..2 {
         let output = impose(&doc, &settings).unwrap();
         let reopened = Document::open(Arc::new(output.clone())).unwrap();
-        let sheets = pdfcraft_model::pages(&reopened);
+        let sheets = asdreader_model::pages(&reopened);
         assert_eq!(sheets.len(), 2);
         let mut shared = Vec::new();
         let mut distinct = None;

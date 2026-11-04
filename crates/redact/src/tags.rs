@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object};
+use asdreader_cos::{Dict, Document, ObjRef, Object};
 
 use crate::RedactError;
 
@@ -49,7 +49,7 @@ fn by_mcid(doc: &Document, resources: &Dict, data: &[u8]) -> Marked {
             e.1 |= drawn > drawn_before;
         }
     };
-    for op in pdfcraft_content::parse(data).ops {
+    for op in asdreader_content::parse(data).ops {
         match op.op.as_slice() {
             b"BDC" => {
                 let id = match op.operands.get(1) {
@@ -92,7 +92,7 @@ fn by_mcid(doc: &Document, resources: &Dict, data: &[u8]) -> Marked {
             b"f" | b"F" | b"f*" | b"B" | b"B*" | b"b" | b"b*" | b"S" | b"s" | b"sh" | b"Do" | b"BI" => true,
             _ => false,
         };
-        pdfcraft_content::write_op(&op, &mut out.ops);
+        asdreader_content::write_op(&op, &mut out.ops);
         drawn += usize::from(draws);
     }
     // Sequences the stream leaves open run to its end.

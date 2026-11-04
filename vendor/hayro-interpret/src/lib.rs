@@ -32,6 +32,7 @@ This crate has one optional feature:
 mod log;
 
 mod cache;
+mod content_index;
 mod context;
 mod convert;
 mod device;
@@ -41,7 +42,7 @@ mod ocg;
 mod soft_mask;
 mod types;
 mod x_object;
-/// PdfCraft patch: exported for its regression test.
+/// ASDReader patch: exported for its regression test.
 pub use x_object::image_size_ok;
 
 pub mod color;
@@ -52,7 +53,8 @@ pub mod pattern;
 pub mod shading;
 pub mod util;
 
-pub use cache::CacheKey;
+pub use cache::{CacheKey, SharedImageCache};
+pub use content_index::{ContentIndex, ContentIndexMode};
 pub use context::*;
 pub use device::*;
 pub use function::Function;

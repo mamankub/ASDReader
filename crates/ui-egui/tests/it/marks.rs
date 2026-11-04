@@ -1,9 +1,9 @@
 //! Header & footer, watermark and background dialogs in the real shell (egui_kittest).
 
+use asdreader_engine::MarkKind;
+use asdreader_ui_egui::{ASDReaderApp, Dialog};
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
-use pdfcraft_engine::MarkKind;
-use pdfcraft_ui_egui::{Dialog, PdfCraftApp};
 
 const FIXTURE: &[u8] = b"%PDF-1.7
 1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
@@ -14,9 +14,9 @@ const FIXTURE: &[u8] = b"%PDF-1.7
 trailer << /Root 1 0 R >>
 %%EOF";
 
-fn harness() -> Harness<'static, PdfCraftApp> {
+fn harness() -> Harness<'static, ASDReaderApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
-        let mut app = PdfCraftApp::new();
+        let mut app = ASDReaderApp::new();
         app.set_option("language", "en").unwrap();
         app.open_bytes("doc.pdf", None, FIXTURE.to_vec()).unwrap();
         app
@@ -25,7 +25,7 @@ fn harness() -> Harness<'static, PdfCraftApp> {
     h
 }
 
-fn marks(h: &Harness<'static, PdfCraftApp>) -> Vec<MarkKind> {
+fn marks(h: &Harness<'static, ASDReaderApp>) -> Vec<MarkKind> {
     let s = h.state();
     s.session.get(s.views[0].id).unwrap().marks().to_vec()
 }
@@ -42,7 +42,7 @@ fn header_and_footer_dialog_inserts_tokens_and_applies_to_a_subset() {
     h.get_by_label("Insert Page Number").click();
     h.run_steps(2);
     assert_eq!(h.state().marks_draft.hf.text[4], "<<1>>");
-    h.state_mut().marks_draft.range.subset = pdfcraft_ui_egui::marks::Subset::Odd;
+    h.state_mut().marks_draft.range.subset = asdreader_ui_egui::marks::Subset::Odd;
     h.run_steps(2);
     h.get_by_label("OK").click();
     h.run_steps(4);
@@ -70,15 +70,15 @@ fn header_and_footer_dialog_draws_in_the_chosen_face() {
     h.run_steps(2);
     h.get_by_label("Times").click();
     h.run_steps(2);
-    assert_eq!(h.state().marks_draft.hf.font, pdfcraft_engine::FontFamily::Times);
+    assert_eq!(h.state().marks_draft.hf.font, asdreader_engine::FontFamily::Times);
     h.state_mut().marks_draft.hf.text[0] = "Serif".into();
     h.run_steps(2);
     h.get_by_label("OK").click();
     h.run_steps(4);
     assert_eq!(marks(&h), [MarkKind::HeaderFooter]);
     let s = h.state();
-    let doc = pdfcraft_cos::Document::open(s.session.get(s.views[0].id).unwrap().bytes.clone()).unwrap();
-    let page = &pdfcraft_model::pages(&doc)[0];
+    let doc = asdreader_cos::Document::open(s.session.get(s.views[0].id).unwrap().bytes.clone()).unwrap();
+    let page = &asdreader_model::pages(&doc)[0];
     let res = doc.resolve(page.dict.get(b"Resources").unwrap());
     let fonts = doc.resolve(res.as_dict().unwrap().get(b"Font").unwrap()).as_dict().cloned().unwrap();
     let face = doc.resolve(fonts.get(b"PCTimes").expect("Times is added")).as_dict().cloned().unwrap();
@@ -163,9 +163,9 @@ fn page_range_from_one_to_one_selects_only_the_first_page() {
     let doc = s.session.get(s.views[0].id).unwrap();
     assert_eq!(doc.marks(), [MarkKind::Background]);
     // Rendered: page 1 has the (default cream) background, page 2 is still blank.
-    let mut r = pdfcraft_render::PageRenderer::new(doc.bytes.clone(), pdfcraft_render::RenderConfig::default());
-    let corner = |r: &mut pdfcraft_render::PageRenderer, page: usize| {
-        let p = r.render(pdfcraft_render::RenderRequest { page, scale: 1.0, ..Default::default() });
+    let mut r = asdreader_render::PageRenderer::new(doc.bytes.clone(), asdreader_render::RenderConfig::default());
+    let corner = |r: &mut asdreader_render::PageRenderer, page: usize| {
+        let p = r.render(asdreader_render::RenderRequest { page, scale: 1.0, ..Default::default() });
         assert!(p.error.is_none(), "{:?}", p.error);
         p.rgba[..4].to_vec()
     };

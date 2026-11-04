@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
-use pdfcraft_annot::{Markup, Meta, NewAnnotation, Shape, Style, add_annotation, add_reply, add_text_replacement, summaries};
-use pdfcraft_cos::{SaveOptions, write_full, write_incremental};
-use pdfcraft_forms::{NewField, add_field, fields, set_value};
+use asdreader_annot::{Markup, Meta, NewAnnotation, Shape, Style, add_annotation, add_reply, add_text_replacement, summaries};
+use asdreader_cos::{SaveOptions, write_full, write_incremental};
+use asdreader_forms::{NewField, add_field, fields, set_value};
 
 use super::*;
 
@@ -86,7 +86,7 @@ fn self_closing_elements_do_not_accumulate_in_the_depth() {
 fn filled() -> Document {
     let mut doc = blank();
     let meta = |id: &str| Meta { date: Some("D:20261002120000Z".into()), id: id.into() };
-    let note = Shape::Note { at: [100.0, 500.0], icon: pdfcraft_annot::NoteIcon::Comment };
+    let note = Shape::Note { at: [100.0, 500.0], icon: asdreader_annot::NoteIcon::Comment };
     add_annotation(
         &mut doc,
         &NewAnnotation {
@@ -189,7 +189,7 @@ fn xml_exports_preserve_whitespace_in_field_names() {
     let names = ["Line\nName", "Line\tName", "Line\rName", "Line\r\nName", "\t Leading\nTrailing \t", "Line Name"];
     let value = "value\twith\nlines\r\nand <XML> & \"quotes\"";
     let mut src = one_field();
-    pdfcraft_forms::delete_field(&mut src, "Name").unwrap();
+    asdreader_forms::delete_field(&mut src, "Name").unwrap();
     for (index, name) in names.iter().enumerate() {
         let placeholder = format!("field{index}");
         add_field(&mut src, 0, [50.0, 700.0, 250.0, 720.0], &NewField::Text { multiline: true }, Some(&placeholder)).unwrap();
@@ -230,7 +230,7 @@ fn xml_exports_preserve_whitespace_in_field_names() {
 #[test]
 fn xfdf_exports_preserve_whitespace_in_comment_attributes() {
     let mut src = one_field();
-    let shape = Shape::Note { at: [100.0, 500.0], icon: pdfcraft_annot::NoteIcon::Comment };
+    let shape = Shape::Note { at: [100.0, 500.0], icon: asdreader_annot::NoteIcon::Comment };
     let names = ["note\tline\nidentity", "note line identity"];
     let author = "Ada\tLovelace\nReview";
     let subject = "Subject\twith\nlines\r\nand & quotes\"";
@@ -243,7 +243,7 @@ fn xfdf_exports_preserve_whitespace_in_comment_attributes() {
         .unwrap();
     }
     let annotation_refs = |doc: &Document| {
-        let page = pdfcraft_model::pages(doc)[0].obj;
+        let page = asdreader_model::pages(doc)[0].obj;
         doc.get(page)
             .as_dict()
             .unwrap()
@@ -311,7 +311,7 @@ fn xfdf_round_trips_comments_and_values() {
 #[test]
 fn xfdf_round_trip_keeps_zero_flags() {
     let square = |doc: &Document| {
-        let page = pdfcraft_model::pages(doc)[0].obj;
+        let page = asdreader_model::pages(doc)[0].obj;
         let annots = doc.get(page).as_dict().unwrap().get(b"Annots").map(|a| doc.resolve(a)).unwrap();
         annots
             .as_array()
@@ -406,7 +406,7 @@ fn threads(doc: &Document) -> Vec<(Option<String>, Option<String>, Option<String
 fn fdf_keeps_replies_and_review_status_on_their_note() {
     let mut src = blank();
     let meta = |id: &str| Meta { date: Some("D:20261002120000Z".into()), id: id.into() };
-    let note = Shape::Note { at: [100.0, 100.0], icon: pdfcraft_annot::NoteIcon::Comment };
+    let note = Shape::Note { at: [100.0, 100.0], icon: asdreader_annot::NoteIcon::Comment };
     add_annotation(
         &mut src,
         &NewAnnotation { page: 1, style: Style::default_for(&note), shape: note, contents: "Literal Note".into(), author: "Alpha".into() },
@@ -416,7 +416,7 @@ fn fdf_keeps_replies_and_review_status_on_their_note() {
     let index = summaries(&src).iter().find(|s| s.subtype == "Text").map(|s| s.index).unwrap();
     add_reply(&mut src, 1, index, "Reply One", "Beta", &meta("one")).unwrap();
     add_reply(&mut src, 1, index, "Reply Two", "Gamma", &meta("two")).unwrap();
-    pdfcraft_annot::set_review_state(&mut src, 1, index, pdfcraft_annot::ReviewState::Accepted, "Review", &meta("status")).unwrap();
+    asdreader_annot::set_review_state(&mut src, 1, index, asdreader_annot::ReviewState::Accepted, "Review", &meta("status")).unwrap();
     let want = threads(&src);
     assert_eq!(want.iter().filter(|t| t.1.as_deref() == Some("note")).count(), 3, "{want:?}");
 
@@ -489,7 +489,7 @@ fn xml_field_names_remain_valid_and_round_trip_without_collisions() {
         ("-Value", "_-Value"),
     ];
     let mut src = one_field();
-    pdfcraft_forms::delete_field(&mut src, "Name").unwrap();
+    asdreader_forms::delete_field(&mut src, "Name").unwrap();
     for (index, (name, _)) in names.iter().enumerate() {
         add_field(&mut src, 0, [50.0, 700.0, 250.0, 720.0], &NewField::Text { multiline: false }, Some(name)).unwrap();
         set_value(&mut src, name, &FieldValue::Text(format!("value-{index}"))).unwrap();
@@ -682,7 +682,7 @@ fn data_files_merge_into_a_spreadsheet() {
     let fdf = export_fdf(&src, false, true, "form.pdf").unwrap();
     let mut other = blank();
     set_value(&mut other, "Name", &FieldValue::Text("Grace \"Amazing\" Hopper, RADM".into())).unwrap();
-    let pdf = pdfcraft_cos::write_full(&other, &Default::default()).unwrap();
+    let pdf = asdreader_cos::write_full(&other, &Default::default()).unwrap();
     let rows: Vec<_> = [xfdf.as_bytes(), &fdf[..], &pdf[..]].iter().map(|b| data_values(b).unwrap()).collect();
     assert_eq!(rows[0], rows[1], "XFDF and FDF carry the same values");
     let csv = merge_csv(&rows);
@@ -716,7 +716,7 @@ fn reimporting_a_note_replaces_its_popup() {
     for _ in 0..3 {
         import(&mut doc, xfdf.as_bytes()).unwrap();
     }
-    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let page = asdreader_model::pages(&doc)[0].obj;
     let annots = doc.get(page).as_dict().and_then(|p| p.get(b"Annots").cloned()).and_then(|a| doc.resolve(&a).as_array().cloned()).unwrap();
     let refs: Vec<ObjRef> = annots.iter().filter_map(|a| a.as_ref()).collect();
     let is_popup = |r: &ObjRef| doc.get(*r).as_dict().and_then(|d| d.name(b"Subtype")) == Some(b"Popup".as_slice());
@@ -739,11 +739,11 @@ fn replacing_a_note_keeps_existing_replies_and_review_status() {
     import(&mut incoming, xfdf.as_bytes()).unwrap();
     let mut original = filled();
     let index = summaries(&original).iter().find(|s| s.name.as_deref() == Some("n1")).unwrap().index;
-    pdfcraft_annot::set_review_state(
+    asdreader_annot::set_review_state(
         &mut original,
         0,
         index,
-        pdfcraft_annot::ReviewState::Accepted,
+        asdreader_annot::ReviewState::Accepted,
         "Reviewer",
         &Meta { date: None, id: "status".into() },
     )
@@ -793,11 +793,11 @@ fn replacing_an_indirectly_named_note_preserves_its_identity_and_thread() {
     let update = br#"<xfdf><annots><text page="0" name="n1" rect="10,10,30,30"><contents>Updated</contents></text></annots></xfdf>"#;
     let mut original = blank();
     for name in ["Name", "Agree", "Pick"] {
-        pdfcraft_forms::delete_field(&mut original, name).unwrap();
+        asdreader_forms::delete_field(&mut original, name).unwrap();
     }
     import(&mut original, initial.as_bytes()).unwrap();
     let annotation_refs = |doc: &Document| {
-        let page = pdfcraft_model::pages(doc)[0].obj;
+        let page = asdreader_model::pages(doc)[0].obj;
         doc.get(page)
             .as_dict()
             .unwrap()
@@ -866,7 +866,7 @@ fn replacement_matches_named_comments_only_on_their_page() {
 #[test]
 fn the_last_same_named_record_controls_its_reply_parent() {
     let mut incoming = blank();
-    let page = pdfcraft_model::pages(&incoming)[0].obj;
+    let page = asdreader_model::pages(&incoming)[0].obj;
     let mut refs = Vec::new();
     for name in ["parent", "duplicate", "duplicate"] {
         let mut d = Dict::new();
@@ -894,7 +894,7 @@ fn indirectly_named_protected_comments_and_popups_are_not_replaced() {
     let xfdf = br#"<xfdf><annots><redact page="0" name="n1" rect="0,0,1,1" flags="invisible,hidden,noview,print"><contents>Updated</contents></redact></annots></xfdf>"#;
     let fdf = b"%FDF-1.2\n1 0 obj\n<< /FDF << /Annots [<< /Subtype /Redact /NM (n1) /Page 0 /Rect [0 0 1 1] /F 39 /Contents (Updated) >>] >> >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n";
     let annotation_refs = |doc: &Document| {
-        pdfcraft_model::pages(doc)[0]
+        asdreader_model::pages(doc)[0]
             .dict
             .get(b"Annots")
             .map(|a| doc.resolve(a))
@@ -907,7 +907,7 @@ fn indirectly_named_protected_comments_and_popups_are_not_replaced() {
     };
     for (subtype, flags) in [("Text", LOCKED), ("Redact", 0)] {
         let mut original = blank();
-        let page = pdfcraft_model::pages(&original)[0].obj;
+        let page = asdreader_model::pages(&original)[0].obj;
         let name = original.add(PdfString::text("n1"));
         let mut protected = Dict::new();
         protected.set(b"Type".to_vec(), Object::name("Annot"));
@@ -957,7 +957,7 @@ fn indirectly_named_protected_comments_and_popups_are_not_replaced() {
 #[test]
 fn imported_redact_marks_cannot_replace_a_locked_mark_or_hide_themselves() {
     let mut doc = blank();
-    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let page = asdreader_model::pages(&doc)[0].obj;
     // A locked redaction mark the user placed, with a known /NM.
     let mut mark = Dict::new();
     mark.set(b"Type".to_vec(), Object::name("Annot"));
@@ -1009,7 +1009,7 @@ fn imported_redact_marks_cannot_replace_a_locked_mark_or_hide_themselves() {
 /// The `/Vertices` of every annotation on the document's pages, by subtype.
 fn vertices(doc: &Document) -> Vec<(String, Vec<f64>)> {
     let mut out = Vec::new();
-    for p in pdfcraft_model::pages(doc) {
+    for p in asdreader_model::pages(doc) {
         for a in p.dict.get(b"Annots").map(|a| doc.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap_or_default() {
             let Some(d) = doc.resolve(&a).as_dict().cloned() else { continue };
             let sub = String::from_utf8_lossy(d.name(b"Subtype").unwrap_or_default()).into_owned();
@@ -1022,7 +1022,7 @@ fn vertices(doc: &Document) -> Vec<(String, Vec<f64>)> {
     out
 }
 
-/// storytold/pdfcraft#809: XFDF exchange dropped polygon and polyline vertices, so the
+/// mamankub/ASDReader#809: XFDF exchange dropped polygon and polyline vertices, so the
 /// imported comments had no shape (and no appearance).
 #[test]
 fn xfdf_keeps_polygon_and_polyline_vertices() {
@@ -1031,8 +1031,8 @@ fn xfdf_keeps_polygon_and_polyline_vertices() {
     let polygon = Shape::Polygon { vertices: vec![[100.0, 100.0], [200.0, 120.0], [150.0, 220.5]], cloud: false };
     let polyline = Shape::PolyLine {
         vertices: vec![[50.0, 300.0], [120.0, 380.0], [200.0, 310.0]],
-        start: pdfcraft_annot::LineEnding::None,
-        end: pdfcraft_annot::LineEnding::ClosedArrow,
+        start: asdreader_annot::LineEnding::None,
+        end: asdreader_annot::LineEnding::ClosedArrow,
     };
     for (page, shape, id) in [(0, polygon, "pg"), (1, polyline, "pl")] {
         let new = NewAnnotation { page, style: Style::default_for(&shape), shape, contents: id.into(), author: "Ada".into() };
@@ -1046,7 +1046,7 @@ fn xfdf_keeps_polygon_and_polyline_vertices() {
     assert_eq!(r.comments, 2, "{r:?}");
     assert_eq!(vertices(&dst), vertices(&src));
     // The imported shapes are drawn again.
-    for p in pdfcraft_model::pages(&dst) {
+    for p in asdreader_model::pages(&dst) {
         for a in p.dict.get(b"Annots").map(|a| dst.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap_or_default() {
             let d = dst.resolve(&a).as_dict().cloned().unwrap();
             assert!(d.get(b"AP").is_some(), "{d:?}");
@@ -1070,7 +1070,7 @@ fn xfdf_keeps_callout_leader_inset_and_ending() {
         knee: [260.0, 330.0],
         point: [320.0, 200.0],
         font_size: 12.0,
-        ending: pdfcraft_annot::LineEnding::ClosedArrow,
+        ending: asdreader_annot::LineEnding::ClosedArrow,
     };
     let meta = Meta { date: Some("D:20261002120000Z".into()), id: "c1".into() };
     add_annotation(
@@ -1083,7 +1083,7 @@ fn xfdf_keeps_callout_leader_inset_and_ending() {
     let mut dst = blank();
     import(&mut dst, xfdf.as_bytes()).unwrap();
     let callout_keys = |doc: &Document| {
-        let page = pdfcraft_model::pages(doc).remove(0);
+        let page = asdreader_model::pages(doc).remove(0);
         let annots = page.dict.get(b"Annots").map(|a| doc.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap_or_default();
         let d = annots.iter().filter_map(|a| doc.resolve(a).as_dict().cloned()).find(|d| d.name(b"Subtype") == Some(b"FreeText")).unwrap();
         (
@@ -1184,7 +1184,7 @@ fn duplicate_xfdf_annotation_flags_do_not_turn_on_unrelated_bits() {
         );
         let mut doc = blank();
         assert_eq!(import(&mut doc, xfdf.as_bytes()).unwrap().comments, 1);
-        let page = pdfcraft_model::pages(&doc)[0].obj;
+        let page = asdreader_model::pages(&doc)[0].obj;
         let annotations = doc.get(page).as_dict().and_then(|p| p.get(b"Annots")).map(|a| doc.resolve(a)).and_then(|a| a.as_array().cloned()).unwrap();
         let square = annotations.iter().filter_map(|a| doc.resolve(a).as_dict().cloned()).find(|d| d.name(b"Subtype") == Some(b"Square")).unwrap();
         assert_eq!(square.get(b"F").and_then(Object::as_int), Some(expected), "flags={flags}");
@@ -1229,7 +1229,7 @@ fn xfdf_import_keeps_text_around_xml_comments_and_instructions() {
 #[test]
 fn fdf_export_keeps_indirect_values_nested_in_annotation_properties() {
     let mut src = blank();
-    let page = pdfcraft_model::pages(&src)[0].obj;
+    let page = asdreader_model::pages(&src)[0].obj;
     let mut annotation = Dict::new();
     annotation.set(b"Type".to_vec(), Object::name("Annot"));
     annotation.set(b"Subtype".to_vec(), Object::name("Square"));
@@ -1275,7 +1275,7 @@ fn fdf_export_keeps_indirect_values_nested_in_annotation_properties() {
 
 /// Put extension data on a real exported comment without changing its normal properties.
 fn fdf_note_with_data(doc: &mut Document, data: Object) {
-    let page = pdfcraft_model::pages(doc)[0].obj;
+    let page = asdreader_model::pages(doc)[0].obj;
     let mut note = Dict::new();
     note.set(b"Type".to_vec(), Object::name("Annot"));
     note.set(b"Subtype".to_vec(), Object::name("Square"));
@@ -1304,7 +1304,7 @@ fn fdf_export_preserves_shared_cycles_and_nested_streams_without_expansion() {
     src.set(cycle, Object::Array(vec![Object::Ref(cycle)]));
     let mut stream_dict = Dict::new();
     stream_dict.set(b"PCMeta".to_vec(), Object::Ref(leaf));
-    let stream = src.add(pdfcraft_cos::Stream::from_raw(stream_dict, b"original bytes".to_vec()));
+    let stream = src.add(asdreader_cos::Stream::from_raw(stream_dict, b"original bytes".to_vec()));
     let data = Object::Array(vec![Object::Ref(shared), Object::Ref(shared), Object::Ref(cycle), Object::Ref(stream)]);
     fdf_note_with_data(&mut src, data);
     let src = Document::open(Arc::new(write_full(&src, &SaveOptions::default()).unwrap())).unwrap();
@@ -1368,7 +1368,7 @@ fn fdf_export_refuses_excessive_direct_depth_values_and_payload() {
     assert_eq!(export_fdf(&src, true, false, "source.pdf"), Err(DataError::ExportLimit("100,000 values")));
 
     let mut src = blank();
-    let stream = src.add(pdfcraft_cos::Stream::from_raw(Dict::new(), vec![0; MAX_FDF_BYTES + 1]));
+    let stream = src.add(asdreader_cos::Stream::from_raw(Dict::new(), vec![0; MAX_FDF_BYTES + 1]));
     fdf_note_with_data(&mut src, Object::Ref(stream));
     assert_eq!(export_fdf(&src, true, false, "source.pdf"), Err(DataError::ExportLimit("64 MiB data")));
 
@@ -1383,7 +1383,7 @@ fn fdf_export_refuses_excessive_direct_depth_values_and_payload() {
 fn fdf_export_refuses_aliases_before_cloning_large_annotation_values() {
     let mut src = blank();
     fdf_note_with_data(&mut src, Object::Array(vec![Object::Null; 1_024]));
-    let page = pdfcraft_model::pages(&src)[0].obj;
+    let page = asdreader_model::pages(&src)[0].obj;
     let annots = src.get(page).as_dict().unwrap().get(b"Annots").unwrap().clone();
     let note = annots.as_array().unwrap()[0].as_ref().unwrap();
     // The source holds one 1,024-value dictionary. The aliases must not clone its
@@ -1396,7 +1396,7 @@ fn fdf_export_refuses_aliases_before_cloning_large_annotation_values() {
 fn fdf_export_refuses_repeated_saved_annotations_after_cache_eviction() {
     let bytes = {
         let mut src = blank();
-        let page = pdfcraft_model::pages(&src)[0].obj;
+        let page = asdreader_model::pages(&src)[0].obj;
         let mut notes = Vec::new();
         // More than the editor cache's 1,024 objects. Four passes force reparsing;
         // retaining each resolved body during discovery would pin all four copies.
@@ -1498,7 +1498,7 @@ fn fdf_export_nulls_nested_page_links_without_copying_the_source_page_tree() {
             let tree = doc.get(root).as_dict().unwrap().reference(b"Pages").unwrap();
             let mut pages = Vec::new();
             for _ in 0..3 {
-                let contents = doc.add(pdfcraft_cos::Stream::from_raw(
+                let contents = doc.add(asdreader_cos::Stream::from_raw(
                     Dict::new(),
                     b"% source-page-content-must-stay-in-the-PDF\nq 0 g 0 0 10 10 re f Q\n".repeat(1_024),
                 ));
@@ -1538,7 +1538,7 @@ fn fdf_export_nulls_nested_page_links_without_copying_the_source_page_tree() {
         };
         let source = Document::open(Arc::new(source)).unwrap();
         assert!(source.repair_log().is_empty());
-        assert_eq!(pdfcraft_model::pages(&source).len(), 3);
+        assert_eq!(asdreader_model::pages(&source).len(), 3);
         let bytes = export_fdf(&source, true, false, "source.pdf").unwrap();
         assert!(bytes.len() < 4_096, "a comment export must not carry source pages or their content ({} bytes)", bytes.len());
         let fdf = Document::open(Arc::new(bytes)).unwrap();
@@ -1664,7 +1664,7 @@ fn tabular_import_keeps_tsv_quotes_literal_and_csv_value_tabs() {
 #[test]
 fn a_same_named_comment_import_never_replaces_a_form_widget() {
     let mut doc = blank();
-    let page = pdfcraft_model::pages(&doc)[0].clone();
+    let page = asdreader_model::pages(&doc)[0].clone();
     let widget = doc
         .resolve(page.dict.get(b"Annots").unwrap())
         .as_array()
@@ -1687,7 +1687,7 @@ fn an_imported_rect_only_or_transparent_redaction_mark_is_drawn_for_review() {
     for data in [xfdf.as_slice(), fdf.as_slice()] {
         let mut doc = blank();
         assert_eq!(import(&mut doc, data).unwrap().comments, 1);
-        let page = pdfcraft_model::pages(&doc)[0].clone();
+        let page = asdreader_model::pages(&doc)[0].clone();
         let mark = doc
             .resolve(page.dict.get(b"Annots").unwrap())
             .as_array()
@@ -1721,7 +1721,7 @@ fn merged_spreadsheet_cells_never_start_a_formula() {
 fn imported_redact_mark(data: &[u8]) -> Dict {
     let mut doc = blank();
     assert_eq!(import(&mut doc, data).unwrap().comments, 1);
-    let page = pdfcraft_model::pages(&doc)[0].clone();
+    let page = asdreader_model::pages(&doc)[0].clone();
     doc.resolve(page.dict.get(b"Annots").unwrap())
         .as_array()
         .unwrap()
@@ -1834,7 +1834,7 @@ fn fdf_comment_graphs_that_repeat_references_are_bounded() {
 #[test]
 fn xfdf_line_ending_names_are_escaped() {
     let mut doc = blank();
-    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let page = asdreader_model::pages(&doc)[0].obj;
     let hostile = b"a\" tail=\"x\"><field name=\"Name\"><value>pwned</value></field><b".to_vec();
     let mut line = Dict::new();
     line.set(b"Type".to_vec(), Object::name("Annot"));
@@ -1857,7 +1857,7 @@ fn xfdf_line_ending_names_are_escaped() {
 #[test]
 fn a_comment_locked_by_an_indirect_flag_is_not_replaced_by_an_import() {
     let mut doc = blank();
-    let page = pdfcraft_model::pages(&doc)[0].obj;
+    let page = asdreader_model::pages(&doc)[0].obj;
     let flag = doc.add(Object::Int(128)); // Locked
     let mut note = Dict::new();
     note.set(b"Type".to_vec(), Object::name("Annot"));

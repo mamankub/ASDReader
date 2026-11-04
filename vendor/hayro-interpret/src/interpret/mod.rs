@@ -105,21 +105,25 @@ pub struct InterpreterSettings {
     /// Note that this feature is currently not fully implemented yet, so some
     /// annotations might be missing.
     pub render_annotations: bool,
-    /// PdfCraft patch: hide comments (markup annotations) but keep form fields (`/Widget`)
+    /// ASDReader patch: hide comments (markup annotations) but keep form fields (`/Widget`)
     /// and links, for the viewer's "Hide all comments".
     pub hide_comments: bool,
-    /// PdfCraft patch: viewer overrides for optional content groups (object number, generation,
+    /// ASDReader patch: viewer overrides for optional content groups (object number, generation,
     /// visible), applied on top of the document's default configuration (Layers panel toggles).
     pub ocg_overrides: Arc<Vec<(i32, i32, bool)>>,
-    /// PdfCraft patch: once this is `true`, interpretation stops before the next content
+    /// ASDReader patch: once this is `true`, interpretation stops before the next content
     /// operator. What was drawn is then incomplete, so only set it when the output will be
     /// thrown away (a viewer's render whose result nobody can receive any more).
     pub cancelled: Option<Arc<AtomicBool>>,
-    /// PdfCraft patch: a low-detail render for previews (page backdrops, thumbnails). Images
+    /// ASDReader patch: a low-detail render for previews (page backdrops, thumbnails). Images
     /// that would cover only a few device pixels are skipped: redrawing them at full detail
     /// costs a decode and a resample each for pixels nobody can see. Never set it for a final
     /// render (tiles, whole pages, print, export).
     pub preview: bool,
+    /// ASDReader patch: make or use the index of the page's content that lets a render of part
+    /// of the page skip what cannot reach it (see `content_index`). Only a page's own top-level
+    /// content is indexed.
+    pub content_index: crate::content_index::ContentIndexMode,
 }
 
 impl Default for InterpreterSettings {
@@ -142,6 +146,7 @@ impl Default for InterpreterSettings {
             ocg_overrides: Arc::new(Vec::new()),
             cancelled: None,
             preview: false,
+            content_index: crate::content_index::ContentIndexMode::Off,
         }
     }
 }
@@ -155,7 +160,7 @@ pub enum InterpreterWarning {
     UnsupportedFont,
     /// An image failed to decode.
     ImageDecodeFailure,
-    /// PdfCraft patch (18): a page content stream was skipped after exhausting its safety budget.
+    /// ASDReader patch (18): a page content stream was skipped after exhausting its safety budget.
     ContentTruncated,
 }
 
@@ -167,33 +172,63 @@ pub fn interpret_page<'a>(
 ) {
     let resources = page.resources();
     let mut content = page.content_reader();
-    // PdfCraft patch: the page's own contents count against its content budget too, where they
+    // ASDReader patch: the page's own contents count against its content budget too, where they
     // are decoded whole. Streamed content is only ever held a window at a time.
     crate::context::charge_content(content.materialized_len());
-    interpret_content(&mut content, resources, context, device);
+    // ASDReader patch: the page's content index (see `content_index`). Taken out of the settings
+    // so that nothing nested (forms, patterns, masks, glyphs) sees it.
+    let mode = core::mem::take(&mut context.settings.content_index);
+    let initial = context.initial_transform();
+    let to_page = initial.inverse();
+    let page_box = to_page.transform_rect_bbox(context.bbox());
+    let slot = match &mode {
+        crate::content_index::ContentIndexMode::Record(slot) => Some(slot.clone()),
+        _ => None,
+    };
+    let (mut indexing, collected) =
+        crate::content_index::Indexing::new(mode, to_page, context.bbox(), page_box);
+    match collected {
+        Some(collected) => {
+            let mut bounds = crate::content_index::BoundsDevice {
+                inner: &mut *device,
+                collecting: collected,
+                to_page,
+                glyph_bounds: std::collections::HashMap::new(),
+            };
+            interpret_content(&mut content, resources, context, &mut bounds, &mut indexing);
+        }
+        None => interpret_content(&mut content, resources, context, device, &mut indexing),
+    }
+    if let Some(slot) = slot {
+        let cancelled = context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed));
+        let cut = content.truncated() || crate::context::content_was_truncated();
+        if !cancelled && !cut && let Some(index) = indexing.finish() {
+            *slot.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::new(index));
+        }
+    }
 
     if context.settings.render_annotations
         && let Some(annot_arr) = page.raw().get::<Array<'_>>(ANNOTS)
     {
-        // PdfCraft patch (29): bracket the annotations so devices can tell their paints from
+        // ASDReader patch (29): bracket the annotations so devices can tell their paints from
         // the document's own (the reading-colours setting recolours the document, not comments).
         device.begin_annotations();
         for annot in annot_arr.iter::<Dict<'_>>() {
             let flags = annot.get::<u32>(F).unwrap_or(0);
 
             // Annotation should be hidden (Hidden = bit 2, NoView = bit 6).
-            // PdfCraft patch: NoView was not honoured upstream.
+            // ASDReader patch: NoView was not honoured upstream.
             if flags & (2 | 32) != 0 {
                 continue;
             }
-            // PdfCraft patch: "Hide all comments" keeps widgets and links.
+            // ASDReader patch: "Hide all comments" keeps widgets and links.
             if context.settings.hide_comments
                 && !matches!(annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref(), Some(b"Widget" | b"Link"))
             {
                 continue;
             }
 
-            // PdfCraft patch: `/N` may be a stream or a dictionary of appearance states selected
+            // ASDReader patch: `/N` may be a stream or a dictionary of appearance states selected
             // by `/AS` (checkboxes, radio buttons, …). Upstream only handled the stream form.
             let normal = annot.get::<Dict<'_>>(AP).and_then(|ap| {
                 ap.get::<Stream<'_>>(N).or_else(|| {
@@ -235,7 +270,7 @@ pub fn interpret_page<'a>(
                 // corner with the greatest x and y coordinates) of the
                 // transformed appearance box to the corresponding corners
                 // of the annotation’s rectangle.
-                // PdfCraft patch: the translation is taken after scaling (it was
+                // ASDReader patch: the translation is taken after scaling (it was
                 // `/Rect.x0 - box.x0`, right only for a box at the origin or a scale of 1).
                 let (sx, sy) = (
                     annot_rect.width() / transformed_rect.width(),
@@ -250,7 +285,7 @@ pub fn interpret_page<'a>(
                     annot_rect.y0 - sy * transformed_rect.y0,
                 ]);
 
-                // PdfCraft patch: a /BBox or /Matrix that collapses the appearance box to a line
+                // ASDReader patch: a /BBox or /Matrix that collapses the appearance box to a line
                 // or a point leaves nothing to map onto /Rect: the scales above divide by zero,
                 // and the infinite or NaN matrix reached the device with everything the
                 // appearance draws. Clipped to such a box the appearance shows nothing, so skip
@@ -274,7 +309,7 @@ pub fn interpret_page<'a>(
                 context.pop_root_transform();
                 context.restore_state(device);
             } else if annot.get::<hayro_syntax::object::Name<'_>>(SUBTYPE).as_deref() == Some(b"Highlight") {
-                // PdfCraft patch: a Highlight without a usable normal appearance was not drawn.
+                // ASDReader patch: a Highlight without a usable normal appearance was not drawn.
                 draw_highlight_without_appearance(&annot, context, device);
             }
         }
@@ -282,8 +317,8 @@ pub fn interpret_page<'a>(
     }
 }
 
-/// PdfCraft patch: the normal appearance of a Highlight annotation that has none (ISO 32000-2
-/// §12.5.6.10), drawn as PdfCraft draws its own highlights (pdfcraft-annot): each /QuadPoints
+/// ASDReader patch: the normal appearance of a Highlight annotation that has none (ISO 32000-2
+/// §12.5.6.10), drawn as ASDReader draws its own highlights (asdreader-annot): each /QuadPoints
 /// quadrilateral filled with /C at /CA opacity, blended with Multiply so the marked-up content
 /// stays legible. /QuadPoints that aren't groups of eight numbers, or a /C that isn't a gray, RGB
 /// or CMYK colour (absent or empty means transparent), draw nothing.
@@ -336,7 +371,7 @@ fn draw_highlight_without_appearance<'a>(
     context.restore_state(device);
 }
 
-/// PdfCraft patch (38): the colour space `cs` or `CS` selects by `name`: a device space, else
+/// ASDReader patch (38): the colour space `cs` or `CS` selects by `name`: a device space, else
 /// the `/ColorSpace` resource `name`. A device space, named directly or by a resource, is
 /// replaced by its default from `defaults` (ISO 32000-2 §8.6.5.6).
 fn named_color_space<'a>(
@@ -363,37 +398,66 @@ fn named_color_space<'a>(
 /// Interprets the instructions that `ops` yields, until they run out or the caller cancels. It runs
 /// once per window of a content stream, between one `save_state` and its restore (see
 /// `interpret_content`).
+/// ASDReader patch: `indexing` makes or uses the page's content index (see `content_index`);
+/// `base` is the offset of the window's first byte in the page's decoded content. Returns where to
+/// continue when a group of the index is skipped.
 fn interpret_window<'a>(
     ops: &mut TypedIter<'_>,
     resources: &Resources<'a>,
     context: &mut Context<'a>,
     device: &mut impl Device<'a>,
-) {
-    // PdfCraft patch (38): the resources' DefaultGray, DefaultRGB and DefaultCMYK replace the
+    indexing: &mut crate::content_index::Indexing,
+    base: u64,
+    window: &[u8],
+) -> Option<(u64, Vec<u8>)> {
+    use crate::content_index::Op;
+    // ASDReader patch (38): the resources' DefaultGray, DefaultRGB and DefaultCMYK replace the
     // device spaces that colour operators and images select (ISO 32000-2 §8.6.5.6).
     let defaults = DefaultColorSpaces::new(resources, &context.interpreter_cache.object_cache);
-    while let Some(op) = ops.next() {
-        // PdfCraft patch: stop when the caller cancelled (see `InterpreterSettings::cancelled`).
-        if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+    let indexed = !matches!(indexing, crate::content_index::Indexing::Off);
+    let recording = indexing.recording();
+    let mut since_checkpoint = 0_u32;
+    loop {
+        let pos = base + ops.committed() as u64;
+        if indexed
+            && let Some(skip) = indexing.skip_to(pos, context.num_states(), context.path_is_empty(), context.clip_pending())
+        {
+            return Some(skip);
+        }
+        let Some(op) = ops.next() else { break };
+        // ASDReader patch: stop when the caller cancelled (see `InterpreterSettings::cancelled`),
+        // or the device asked to.
+        if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) || device.stop_requested() {
             break;
         }
+        // ASDReader patch: a moment for a device that shows the page as it is drawn.
+        since_checkpoint += 1;
+        if since_checkpoint >= CHECKPOINT_EVERY {
+            since_checkpoint = 0;
+            device.checkpoint();
+        }
+        let (kind, clean_before) = if recording {
+            (index_op(&op), context.path_is_empty() && !context.clip_pending())
+        } else {
+            (Op::Other, false)
+        };
         match op {
             TypedInstruction::SaveState(_) => context.save_state(),
             TypedInstruction::StrokeColorDeviceRgb(s) => {
-                // PdfCraft patch (38): DeviceRGB, or the DefaultRGB that replaces it.
+                // ASDReader patch (38): DeviceRGB, or the DefaultRGB that replaces it.
                 context.get_mut().graphics_state.stroke_cs = defaults.device(DeviceFamily::Rgb);
                 context.get_mut().graphics_state.stroke_color =
                     smallvec![s.0.as_f32(), s.1.as_f32(), s.2.as_f32()];
                 context.get_mut().graphics_state.stroke_pattern = None;
             }
             TypedInstruction::StrokeColorDeviceGray(s) => {
-                // PdfCraft patch (38): DeviceGray, or the DefaultGray that replaces it.
+                // ASDReader patch (38): DeviceGray, or the DefaultGray that replaces it.
                 context.get_mut().graphics_state.stroke_cs = defaults.device(DeviceFamily::Gray);
                 context.get_mut().graphics_state.stroke_color = smallvec![s.0.as_f32()];
                 context.get_mut().graphics_state.stroke_pattern = None;
             }
             TypedInstruction::StrokeColorCmyk(s) => {
-                // PdfCraft patch (38): DeviceCMYK, or the DefaultCMYK that replaces it.
+                // ASDReader patch (38): DeviceCMYK, or the DefaultCMYK that replaces it.
                 context.get_mut().graphics_state.stroke_cs = defaults.device(DeviceFamily::Cmyk);
                 context.get_mut().graphics_state.stroke_color =
                     smallvec![s.0.as_f32(), s.1.as_f32(), s.2.as_f32(), s.3.as_f32()];
@@ -458,20 +522,20 @@ fn interpret_window<'a>(
                 fill_stroke_path(context, device, FillRule::NonZero);
             }
             TypedInstruction::NonStrokeColorDeviceGray(s) => {
-                // PdfCraft patch (38): DeviceGray, or the DefaultGray that replaces it.
+                // ASDReader patch (38): DeviceGray, or the DefaultGray that replaces it.
                 context.get_mut().graphics_state.none_stroke_cs = defaults.device(DeviceFamily::Gray);
                 context.get_mut().graphics_state.non_stroke_color = smallvec![s.0.as_f32()];
                 context.get_mut().graphics_state.non_stroke_pattern = None;
             }
             TypedInstruction::NonStrokeColorDeviceRgb(s) => {
-                // PdfCraft patch (38): DeviceRGB, or the DefaultRGB that replaces it.
+                // ASDReader patch (38): DeviceRGB, or the DefaultRGB that replaces it.
                 context.get_mut().graphics_state.none_stroke_cs = defaults.device(DeviceFamily::Rgb);
                 context.get_mut().graphics_state.non_stroke_color =
                     smallvec![s.0.as_f32(), s.1.as_f32(), s.2.as_f32()];
                 context.get_mut().graphics_state.non_stroke_pattern = None;
             }
             TypedInstruction::NonStrokeColorCmyk(s) => {
-                // PdfCraft patch (38): DeviceCMYK, or the DefaultCMYK that replaces it.
+                // ASDReader patch (38): DeviceCMYK, or the DefaultCMYK that replaces it.
                 context.get_mut().graphics_state.none_stroke_cs = defaults.device(DeviceFamily::Cmyk);
                 context.get_mut().graphics_state.non_stroke_color =
                     smallvec![s.0.as_f32(), s.1.as_f32(), s.2.as_f32(), s.3.as_f32()];
@@ -561,7 +625,7 @@ fn interpret_window<'a>(
                 // Ignore for now.
             }
             TypedInstruction::ColorSpaceStroke(c) => {
-                // PdfCraft patch (38): see `named_color_space`.
+                // ASDReader patch (38): see `named_color_space`.
                 let cs = named_color_space(c.0, resources, &defaults, context)
                     .unwrap_or(ColorSpace::device_gray());
 
@@ -572,7 +636,7 @@ fn interpret_window<'a>(
                 context.get_mut().graphics_state.stroke_cs = cs;
             }
             TypedInstruction::ColorSpaceNonStroke(c) => {
-                // PdfCraft patch (38): see `named_color_space`.
+                // ASDReader patch (38): see `named_color_space`.
                 let cs = named_color_space(c.0, resources, &defaults, context)
                     .unwrap_or(ColorSpace::device_gray());
 
@@ -645,7 +709,7 @@ fn interpret_window<'a>(
 
                 device.begin_marked_content(bdc.0, mcid);
 
-                // PdfCraft patch (25): hand the device the sequence's `/ActualText`, from an inline
+                // ASDReader patch (25): hand the device the sequence's `/ActualText`, from an inline
                 // property list or one named in the resources' `/Properties`.
                 let actual = dict_or_stream(bdc.1)
                     .map(|(props, _)| props.clone())
@@ -806,7 +870,7 @@ fn interpret_window<'a>(
             TypedInstruction::ShapeGlyph(_) => {}
             TypedInstruction::XObject(x) => {
                 let cache = context.interpreter_cache.object_cache.clone();
-                // PdfCraft patch: decoded images are cached per quality (preview or final).
+                // ASDReader patch: decoded images are cached per quality (preview or final).
                 let decoded_cache = context
                     .interpreter_cache
                     .decoded_cache
@@ -819,7 +883,7 @@ fn interpret_window<'a>(
                         &cache,
                         Some(&decoded_cache),
                         transfer_function.clone(),
-                        // PdfCraft patch (38): an image in a device space draws in its default.
+                        // ASDReader patch (38): an image in a device space draws in its default.
                         &defaults,
                     )
                 }) {
@@ -830,8 +894,8 @@ fn interpret_window<'a>(
                 let warning_sink = context.settings.warning_sink.clone();
                 let transfer_function = context.get().graphics_state.transfer_function.clone();
                 let cache = context.interpreter_cache.object_cache.clone();
-                // PdfCraft patch: inline images are not cached (see `DecodedImageKey`).
-                // PdfCraft patch (38): an inline image in a device space, named directly or by a
+                // ASDReader patch: inline images are not cached (see `DecodedImageKey`).
+                // ASDReader patch (38): an inline image in a device space, named directly or by a
                 // resource, draws in its default.
                 if let Some(x_object) = ImageXObject::new(
                     i.0,
@@ -860,7 +924,7 @@ fn interpret_window<'a>(
                     .get_shading(s.0)
                     .and_then(|o| {
                         let (dict, stream) = dict_or_stream(&o)?;
-                        // PdfCraft patch (38): a shading in a device space draws in its default.
+                        // ASDReader patch (38): a shading in a device space draws in its default.
                         Shading::new(
                             dict,
                             stream,
@@ -909,6 +973,86 @@ fn interpret_window<'a>(
                 warn!("failed to read an operator");
             }
         }
+        if recording {
+            let end = base + ops.committed() as u64;
+            let from = usize::try_from(pos - base).unwrap_or(usize::MAX);
+            let to = usize::try_from(end - base).unwrap_or(usize::MAX);
+            let bytes = window.get(from..to).unwrap_or(&[]);
+            indexing.after(kind, pos, end, bytes, context.num_states(), clean_before, context.path_is_empty());
+        }
+    }
+    None
+}
+
+/// ASDReader patch: content operators between two `Device::checkpoint` calls.
+const CHECKPOINT_EVERY: u32 = 2048;
+
+/// ASDReader patch: what `op` is to the content index (see `content_index`).
+fn index_op(op: &TypedInstruction<'_, '_>) -> crate::content_index::Op {
+    use crate::content_index::{Key, Op, Sets};
+    use TypedInstruction as I;
+    match op {
+        I::SaveState(_) => Op::Save,
+        I::RestoreState(_) => Op::Restore,
+        I::BeginText(_) => Op::BeginText,
+        I::EndText(_) => Op::EndText,
+        I::BeginMarkedContent(_) | I::BeginMarkedContentWithProperties(_) => Op::BeginMarked,
+        I::EndMarkedContent(_) => Op::EndMarked,
+        I::MarkedContentPoint(_) | I::MarkedContentPointWithProperties(_) => Op::Nothing,
+        I::MoveTo(_)
+        | I::LineTo(_)
+        | I::CubicTo(_)
+        | I::CubicStartTo(_)
+        | I::CubicEndTo(_)
+        | I::ClosePath(_)
+        | I::RectPath(_) => Op::Build,
+        I::ClipNonZero(_) | I::ClipEvenOdd(_) => Op::Clip,
+        I::StrokePath(_)
+        | I::CloseAndStrokePath(_)
+        | I::FillPathNonZero(_)
+        | I::FillPathNonZeroCompatibility(_)
+        | I::FillPathEvenOdd(_)
+        | I::FillAndStrokeNonZero(_)
+        | I::FillAndStrokeEvenOdd(_)
+        | I::CloseFillAndStrokeNonZero(_)
+        | I::CloseFillAndStrokeEvenOdd(_)
+        | I::EndPath(_) => Op::Paint,
+        I::Transform(_) => Op::State(Key::Cm, Sets::Other),
+        I::LineWidth(_) => Op::State(Key::LineWidth, Sets::Other),
+        I::LineCap(_) => Op::State(Key::LineCap, Sets::Other),
+        I::LineJoin(_) => Op::State(Key::LineJoin, Sets::Other),
+        I::MiterLimit(_) => Op::State(Key::MiterLimit, Sets::Other),
+        I::DashPattern(_) => Op::State(Key::Dash, Sets::Other),
+        I::RenderingIntent(_) => Op::State(Key::Intent, Sets::Other),
+        I::FlatnessTolerance(_) => Op::State(Key::Flatness, Sets::Other),
+        I::SetGraphicsState(_) => Op::State(Key::Gs, Sets::Other),
+        I::ColorSpaceStroke(_) => Op::State(Key::StrokeColor, Sets::Space),
+        I::ColorSpaceNonStroke(_) => Op::State(Key::FillColor, Sets::Space),
+        I::StrokeColorDeviceGray(_) | I::StrokeColorDeviceRgb(_) | I::StrokeColorCmyk(_) => {
+            Op::State(Key::StrokeColor, Sets::Space)
+        }
+        I::NonStrokeColorDeviceGray(_) | I::NonStrokeColorDeviceRgb(_) | I::NonStrokeColorCmyk(_) => {
+            Op::State(Key::FillColor, Sets::Space)
+        }
+        I::StrokeColor(_) | I::StrokeColorNamed(_) => Op::State(Key::StrokeColor, Sets::Colour),
+        I::NonStrokeColor(_) | I::NonStrokeColorNamed(_) => Op::State(Key::FillColor, Sets::Colour),
+        I::CharacterSpacing(_) => Op::State(Key::Text(0), Sets::Other),
+        I::WordSpacing(_) => Op::State(Key::Text(1), Sets::Other),
+        I::HorizontalScaling(_) => Op::State(Key::Text(2), Sets::Other),
+        I::TextLeading(_) => Op::State(Key::Text(3), Sets::Other),
+        I::TextFont(_) => Op::State(Key::Text(4), Sets::Other),
+        I::TextRenderingMode(_) => Op::State(Key::Text(5), Sets::Other),
+        I::TextRise(_) => Op::State(Key::Text(6), Sets::Other),
+        I::XObject(_) | I::Shading(_) => Op::Draw,
+        I::NextLine(_)
+        | I::NextLineAndSetLeading(_)
+        | I::SetTextMatrix(_)
+        | I::NextLineUsingLeading(_)
+        | I::ShowText(_)
+        | I::NextLineAndShowText(_)
+        | I::ShowTextWithParameters(_)
+        | I::ShowTexts(_) => Op::TextObject,
+        _ => Op::Other,
     }
 }
 
@@ -923,22 +1067,30 @@ pub fn interpret<'a>(
 
     context.save_state();
 
-    interpret_window(&mut ops, resources, context, device);
+    interpret_window(
+        &mut ops,
+        resources,
+        context,
+        device,
+        &mut crate::content_index::Indexing::Off,
+        0,
+        &[],
+    );
 
     while context.num_states() > num_states {
         context.restore_state(device);
     }
-    // PdfCraft patch (18): say that content was skipped, so a truncated page isn't a clean render.
+    // ASDReader patch (18): say that content was skipped, so a truncated page isn't a clean render.
     if crate::context::content_was_truncated() {
         (context.settings.warning_sink)(InterpreterWarning::ContentTruncated);
     }
 }
 
-/// PdfCraft patch: the bytes of a window of page content. A window grows only while an instruction
+/// ASDReader patch: the bytes of a window of page content. A window grows only while an instruction
 /// at its end is incomplete.
 const CONTENT_WINDOW: usize = 64 << 10;
 
-/// PdfCraft patch: interprets the content of a page a window at a time, so the decoded content is
+/// ASDReader patch: interprets the content of a page a window at a time, so the decoded content is
 /// never all in memory (see `ContentReader`). A window ends at an instruction that is not complete
 /// yet: its bytes are kept, and the next window starts with them.
 fn interpret_content<'a>(
@@ -946,21 +1098,56 @@ fn interpret_content<'a>(
     resources: &Resources<'a>,
     context: &mut Context<'a>,
     device: &mut impl Device<'a>,
+    indexing: &mut crate::content_index::Indexing,
 ) {
     let num_states = context.num_states();
 
     context.save_state();
+    indexing.set_level(context.num_states());
 
     let mut window = Vec::with_capacity(CONTENT_WINDOW);
     let mut exhausted = false;
     let mut cut = false;
+    // ASDReader patch: the offset of `window[0]` in the decoded content.
+    let mut base = 0_u64;
     loop {
-        let (committed, needs_more) = {
+        let (committed, needs_more, skip) = {
             let mut ops = TypedIter::new_window(&window, exhausted);
-            interpret_window(&mut ops, resources, context, device);
-            (ops.committed(), ops.needs_more())
+            let skip = interpret_window(&mut ops, resources, context, device, indexing, base, &window);
+            (ops.committed(), ops.needs_more(), skip)
         };
+        // ASDReader patch: a group of the content index that can't reach the area being
+        // rendered: its bytes are passed over unread.
+        if let Some((end, replay)) = skip {
+            // What the group set that outlasts it, so that what follows is drawn as before.
+            if !replay.is_empty() {
+                let mut replayed = TypedIter::new(&replay);
+                interpret_window(&mut replayed, resources, context, device, &mut crate::content_index::Indexing::Off, 0, &[]);
+            }
+            let ahead = usize::try_from(end.saturating_sub(base)).unwrap_or(usize::MAX);
+            if ahead <= window.len() {
+                window.drain(..ahead);
+            } else {
+                let rest = ahead - window.len();
+                window.clear();
+                if content.skip(rest) < rest {
+                    exhausted = true;
+                }
+            }
+            base = end;
+            if !exhausted && window.len() < CONTENT_WINDOW {
+                let want = CONTENT_WINDOW - window.len();
+                if content.read_into(&mut window, want) < want {
+                    exhausted = true;
+                }
+            }
+            if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+                break;
+            }
+            continue;
+        }
         window.drain(..committed);
+        base += committed as u64;
 
         let cancelled = context
             .settings
@@ -986,7 +1173,7 @@ fn interpret_content<'a>(
     while context.num_states() > num_states {
         context.restore_state(device);
     }
-    // PdfCraft patch (18): say that content was skipped, so a truncated page isn't a clean render.
+    // ASDReader patch (18): say that content was skipped, so a truncated page isn't a clean render.
     if cut || content.truncated() || crate::context::content_was_truncated() {
         (context.settings.warning_sink)(InterpreterWarning::ContentTruncated);
     }

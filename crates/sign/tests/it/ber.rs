@@ -1,10 +1,10 @@
-//! CMS read as BER: the bounds on what a crafted /Contents can make the reader do.
+//! CMS read as BER: the bounds on what a made /Contents can make the reader do.
 //!
 //! The BER reader itself is `der::Tlv::parse_ber`; these tests go through `SignedData::parse`,
 //! the way a PDF's signature reaches it.
 
-use pdfcraft_sign::cms::SignedData;
-use pdfcraft_sign::der::{self, tag};
+use asdreader_sign::cms::SignedData;
+use asdreader_sign::der::{self, tag};
 
 /// `levels` constructed OCTET STRINGs inside one another, each with a definite length, around one
 /// empty primitive OCTET STRING. Built from the inside out in linear time.

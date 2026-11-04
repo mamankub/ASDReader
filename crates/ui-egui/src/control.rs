@@ -8,7 +8,7 @@
 //! - [`ControlPlugin`], an egui plugin, keeps a copy of the AccessKit tree from every frame's
 //!   output (the widget tree with ids, roles, labels, rects and states) and injects queued input
 //!   events (AccessKit click actions, pointer events, keys, text) at the start of later frames.
-//! - Requests reach the app through a channel; `PdfCraftApp` answers them at the start of a
+//! - Requests reach the app through a channel; `ASDReaderApp` answers them at the start of a
 //!   frame, so they see and change exactly what the user would.
 //!
 //! Methods (JSON in, JSON out):
@@ -120,7 +120,7 @@ pub struct ControlPlugin {
 
 impl egui::Plugin for ControlPlugin {
     fn debug_name(&self) -> &'static str {
-        "pdfcraft-control"
+        "asdreader-control"
     }
 
     fn input_hook(&mut self, ctx: &egui::Context, input: &mut egui::RawInput) {
@@ -178,7 +178,7 @@ pub fn attach(ctx: &egui::Context) -> (Control, ControlClient) {
     (Control { rx, shared, pending: Vec::new(), next_tag: 1 }, ControlClient { tx, ctx: ctx.clone() })
 }
 
-/// What a request needs from the app (implemented by `PdfCraftApp`).
+/// What a request needs from the app (implemented by `ASDReaderApp`).
 pub(crate) trait Host {
     fn state(&self) -> Value;
     fn command(&mut self, id: &str) -> Reply;
@@ -644,7 +644,7 @@ fn screenshot_png(image: &egui::ColorImage, region: Option<egui::Rect>, ppp: f32
     Ok(json!({ "png_base64": base64::engine::general_purpose::STANDARD.encode(out), "width": cw, "height": ch, "pixels_per_point": ppp }))
 }
 
-impl Host for crate::PdfCraftApp {
+impl Host for crate::ASDReaderApp {
     fn dock(&mut self, reset: bool, params: &Value) -> Reply {
         crate::docking::command(self, reset, params)
     }
@@ -747,7 +747,7 @@ impl Host for crate::PdfCraftApp {
     }
 
     fn command(&mut self, id: &str) -> Reply {
-        let spec = pdfcraft_engine::commands::command(id).ok_or_else(|| format!("unknown command {id:?} (see ui.commands)"))?;
+        let spec = asdreader_engine::commands::command(id).ok_or_else(|| format!("unknown command {id:?} (see ui.commands)"))?;
         if !self.command_enabled(spec) {
             return Err(format!("{id} is disabled right now"));
         }
@@ -756,7 +756,7 @@ impl Host for crate::PdfCraftApp {
     }
 
     fn commands(&self) -> Value {
-        let mut list: Vec<Value> = pdfcraft_engine::commands::COMMANDS
+        let mut list: Vec<Value> = asdreader_engine::commands::COMMANDS
             .iter()
             .map(|c| json!({ "id": c.id, "label": c.label, "menu": c.menu, "enabled": self.command_enabled(c), "shortcut": c.shortcut.map(|s| s.label(cfg!(target_os = "macos"))) }))
             .collect();
@@ -938,7 +938,7 @@ fn serve_with(client: ControlClient, limits: Limits) -> std::io::Result<Endpoint
     let expected = token.clone();
     let waiting = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let lingering = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    std::thread::Builder::new().name("pdfcraft-control".into()).spawn(move || {
+    std::thread::Builder::new().name("asdreader-control".into()).spawn(move || {
         for stream in accepted(listener.incoming(), || std::thread::sleep(ACCEPT_RETRY)) {
             let _ = stream.set_write_timeout(Some(limits.write_timeout));
             // Admitted only while fewer than the limit wait to authenticate: refused on the
@@ -952,7 +952,7 @@ fn serve_with(client: ControlClient, limits: Limits) -> std::io::Result<Endpoint
             let client = client.clone();
             let expected = expected.clone();
             let lingering = lingering.clone();
-            let _ = std::thread::Builder::new().name("pdfcraft-control-conn".into()).spawn(move || {
+            let _ = std::thread::Builder::new().name("asdreader-control-conn".into()).spawn(move || {
                 // Held until `auth` succeeds; given back however this thread ends.
                 let mut slot = Some(slot);
                 let Ok(read) = stream.try_clone() else { return };
@@ -1409,7 +1409,7 @@ mod pointer_tests {
         struct Probe {
             control: Option<Control>,
             client: Option<ControlClient>,
-            host: crate::PdfCraftApp,
+            host: crate::ASDReaderApp,
             primary: usize,
             secondary: usize,
             disabled: usize,
@@ -1436,7 +1436,7 @@ mod pointer_tests {
             let state = Probe {
                 control: None,
                 client: None,
-                host: crate::PdfCraftApp::new(),
+                host: crate::ASDReaderApp::new(),
                 primary: 0,
                 secondary: 0,
                 disabled: 0,

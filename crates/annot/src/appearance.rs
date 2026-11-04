@@ -1,4 +1,4 @@
-//! Appearance streams (§12.5.5) for the comment types PdfCraft creates, execution plan M5.2.
+//! Appearance streams (§12.5.5) for the comment types ASDReader creates, execution plan M5.2.
 //!
 //! [`build`] draws a normal appearance (`/AP /N`) from the annotation dictionary alone, so the
 //! same code serves new comments and restyled ones. Drawings are in page space with
@@ -6,13 +6,13 @@
 //! It returns `None` for anything it cannot draw faithfully (cloudy borders, unknown line
 //! endings, indirect geometry), so callers never replace an appearance with a worse one.
 //!
-//! The note icons are PdfCraft's own drawings (AGENTS.md §1). Text boxes use the standard
+//! The note icons are ASDReader's own drawings (AGENTS.md §1). Text boxes use the standard
 //! Helvetica font with WinAnsi encoding; line breaking uses [`text_width`], an approximation of
 //! Helvetica's proportions by character class (no font program or metrics file is bundled).
 
-use pdfcraft_cos::{Dict, Object, PdfString, Stream};
-use pdfcraft_fonts::{first_undrawable, literal, win_ansi};
-pub use pdfcraft_fonts::{helvetica_width as text_width, wrap};
+use asdreader_cos::{Dict, Object, PdfString, Stream};
+use asdreader_fonts::{first_undrawable, literal, win_ansi};
+pub use asdreader_fonts::{helvetica_width as text_width, wrap};
 
 use crate::{NOTE_SIZE, Rgb, n};
 
@@ -301,7 +301,7 @@ pub fn undrawable_text(d: &Dict) -> Option<(&'static str, char)> {
 
 /// Draw the normal appearance of an annotation, or `None` if this subtype/variant isn't supported.
 /// Text the standard fonts can't draw comes out as `?`: [`undrawable_text`] says which, and
-/// [`crate::set_appearance`] marks the annotation with it (`pdfcraft_fonts::UNDRAWN_MARK`).
+/// [`crate::set_appearance`] marks the annotation with it (`asdreader_fonts::UNDRAWN_MARK`).
 pub fn build(d: &Dict) -> Option<Stream> {
     // Imported measurement appearances may include leaders, captions and formatting that
     // this builder cannot reproduce. Preserve them rather than silently losing detail.
@@ -590,13 +590,13 @@ pub fn build(d: &Dict) -> Option<Stream> {
                 let turn = picture_turn(d);
                 if image && turn != 0 {
                     // The page's view matrix without its offset: display axes in user space.
-                    let m = pdfcraft_model::view_matrix_for(turn, [0.0; 4]);
+                    let m = asdreader_model::view_matrix_for(turn, [0.0; 4]);
                     let matrix = [m[0], m[1], m[2], m[3], 0.0, 0.0];
                     stream.dict.set(b"Matrix".to_vec(), Object::Array(matrix.iter().map(|x| Object::Real(*x)).collect()));
                 }
                 return Some(stream);
             }
-            // Only PdfCraft's own Fill & Sign marks are drawn here.
+            // Only ASDReader's own Fill & Sign marks are drawn here.
             let name = d.name(b"Name")?;
             let col = stroke.unwrap_or([0.0; 3]);
             // A mark or stamp placed on a turned page is drawn upright in its displayed box, then
@@ -615,7 +615,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
             };
             let turned = |mut stream: Stream| {
                 if turn != 0 {
-                    let m = pdfcraft_model::view_matrix_for(turn, rect);
+                    let m = asdreader_model::view_matrix_for(turn, rect);
                     stream.dict.set(b"Matrix".to_vec(), Object::Array(m.iter().copied().map(Object::Real).collect()));
                 }
                 stream
@@ -664,7 +664,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
                     n(y0 + h / 2.0)
                 )),
                 other => {
-                    // Only stamps PdfCraft made: others keep their own artwork.
+                    // Only stamps ASDReader made: others keep their own artwork.
                     if !matches!(d.get(b"PCStamp"), Some(Object::Bool(true))) {
                         return None;
                     }
@@ -694,7 +694,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
                 if dw < 1.0 || dh < 1.0 {
                     return None;
                 }
-                ([0.0, 0.0, dw, dh], Some(pdfcraft_model::view_matrix_for(turn, rect)))
+                ([0.0, 0.0, dw, dh], Some(asdreader_model::view_matrix_for(turn, rect)))
             };
             let full = rect;
             let mut rect = rect;
@@ -789,7 +789,7 @@ pub fn build(d: &Dict) -> Option<Stream> {
         }
         _ => return None,
     }
-    // PdfCraft measurement captions are kept separate from the comment's free-form text.
+    // ASDReader measurement captions are kept separate from the comment's free-form text.
     // A restyle regenerates the path and its value together.
     let mut out = c.into_bytes();
     if let Some(value) = d.get(b"PCMeasureValue").and_then(Object::as_string) {
@@ -958,9 +958,9 @@ fn ellipse(x0: f64, y0: f64, x1: f64, y1: f64) -> String {
     s
 }
 
-/// PdfCraft's note icons, drawn in a 20 × 20 box: a speech bubble for `/Comment`, a page
+/// ASDReader's note icons, drawn in a 20 × 20 box: a speech bubble for `/Comment`, a page
 /// with a folded corner for everything else, both filled with the note colour.
-/// File attachment icons in a 20 × 20 box: PdfCraft's own drawings.
+/// File attachment icons in a 20 × 20 box: ASDReader's own drawings.
 fn attach_icon(name: &str, col: Rgb) -> String {
     let mut s = format!("{}{}1.2 w 1 j 1 J\n", rg(col), rg_stroke(col));
     match name {
@@ -1012,7 +1012,7 @@ fn circle_path(x: f64, y: f64, r: f64) -> String {
 
 /// A note's icon in a 20 × 20 box: filled in `col`, outlined in dark grey. Each name of
 /// [`crate::NoteIcon`] has its own shape, so the icon a note names is the one it shows (ISO
-/// 32000-2 §12.5.6.4, Table 175); a name PdfCraft doesn't know draws as `Note`.
+/// 32000-2 §12.5.6.4, Table 175); a name ASDReader doesn't know draws as `Note`.
 fn note_icon(name: &str, col: Rgb) -> String {
     let mut s = format!("{}0.25 0.25 0.25 RG 0.8 w 1 j 1 J\n", rg(col));
     match name {

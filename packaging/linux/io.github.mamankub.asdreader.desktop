@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=ASDReader
+GenericName=PDF Editor
+Comment=Read, organize, combine, split and secure PDFs
+Exec=asdreader %U
+TryExec=asdreader
+Icon=io.github.mamankub.asdreader
+Terminal=false
+StartupNotify=true
+StartupWMClass=io.github.mamankub.asdreader
+Categories=Office;Viewer;
+Keywords=pdf;viewer;editor;annotate;sign;forms;merge;split;
+MimeType=application/pdf;

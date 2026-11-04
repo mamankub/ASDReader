@@ -26,11 +26,11 @@ use std::sync::{Arc, LazyLock, OnceLock};
 pub type ColorComponents = SmallVec<[f32; 4]>;
 
 std::thread_local! {
-    // PdfCraft patch (34): see `tint_transform_runs`.
+    // ASDReader patch (34): see `tint_transform_runs`.
     static TINT_TRANSFORM_RUNS: core::cell::Cell<u64> = const { core::cell::Cell::new(0) };
 }
 
-/// PdfCraft patch (34): how many colours this thread has run through a Separation or DeviceN
+/// ASDReader patch (34): how many colours this thread has run through a Separation or DeviceN
 /// tint transform, for diagnostics and tests. An image converted through patch (28)'s lookup
 /// table runs it once per possible sample value, not once per pixel. Per thread, so a caller
 /// counting its own render is not disturbed by renders on other threads.
@@ -38,7 +38,7 @@ pub fn tint_transform_runs() -> u64 {
     TINT_TRANSFORM_RUNS.with(core::cell::Cell::get)
 }
 
-/// PdfCraft patch (34): count `colours` runs of a tint transform (called once per batch).
+/// ASDReader patch (34): count `colours` runs of a tint transform (called once per batch).
 fn count_tint_transform_runs(colours: usize) {
     let colours = u64::try_from(colours).unwrap_or(u64::MAX);
     TINT_TRANSFORM_RUNS.with(|runs| runs.set(runs.get().saturating_add(colours)));
@@ -122,7 +122,7 @@ pub(crate) enum ColorSpaceType {
     DeviceN(DeviceN),
 }
 
-/// PdfCraft patch (48): what the colour space read from an `/ICCBased` profile stream is cached
+/// ASDReader patch (48): what the colour space read from an `/ICCBased` profile stream is cached
 /// by. hayro keyed it by the stream dictionary's bytes alone, so two different profiles with the
 /// same `/N` and `/Length` shared whichever was read first, and colours in the second were
 /// drawn through the first.
@@ -138,7 +138,7 @@ enum IccProfileKey<'a> {
     Content { dict: u128, data: &'a [u8] },
 }
 
-/// PdfCraft patch (48): the object of the `/ICCBased` profile `stream` that `array` names, or
+/// ASDReader patch (48): the object of the `/ICCBased` profile `stream` that `array` names, or
 /// `None` for a stream written directly in the array (its dictionary lies within the array's
 /// bytes). Such a stream has no object of its own: its dictionary reports the object that
 /// holds the array, which every other stream written there reports too.
@@ -168,7 +168,7 @@ impl ColorSpaceType {
                     let dict = icc_stream.dict();
                     let num_components = dict.get::<usize>(N)?;
 
-                    // PdfCraft patch (48): cached by what the profile is read from (see
+                    // ASDReader patch (48): cached by what the profile is read from (see
                     // `IccProfileKey`), not by the stream dictionary's bytes alone.
                     let read = || {
                         let data = icc_stream.raw_data();
@@ -398,7 +398,7 @@ impl ColorSpace {
             .unwrap_or(AlphaColor::BLACK)
     }
 
-    /// PdfCraft patch (38): whether this space can be the default colour space of `family`
+    /// ASDReader patch (38): whether this space can be the default colour space of `family`
     /// (ISO 32000-2 §8.6.5.6): it has as many components as the device space and is not a
     /// Lab, Indexed or Pattern space. Nor is a device space: a default that names one is
     /// ignored, so substitution never recurses.
@@ -415,7 +415,7 @@ impl ColorSpace {
     }
 }
 
-/// PdfCraft patch (38): a device colour space (ISO 32000-2 §8.6.4), which the resources'
+/// ASDReader patch (38): a device colour space (ISO 32000-2 §8.6.4), which the resources'
 /// default colour space for it replaces wherever content selects it (§8.6.5.6).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeviceFamily {
@@ -477,7 +477,7 @@ impl DeviceFamily {
     }
 }
 
-/// PdfCraft patch (38): the default colour spaces (`/DefaultGray`, `/DefaultRGB` and
+/// ASDReader patch (38): the default colour spaces (`/DefaultGray`, `/DefaultRGB` and
 /// `/DefaultCMYK`, ISO 32000-2 §8.6.5.6) of the resources content is drawn with, each read the
 /// first time the content selects its device space. Like any named resource, a default comes
 /// from those resources' `/ColorSpace` or from the resources they inherit: a form XObject
@@ -917,7 +917,7 @@ impl ToRgb for Lab {
         let [xw, yw, zw] = white_point;
 
         for (input, output) in input.chunks_exact(3).zip(output.chunks_exact_mut(3)) {
-            // PdfCraft patch: `manual_scale` means the components arrive
+            // ASDReader patch: `manual_scale` means the components arrive
             // normalised to [0, 1] (an `/Indexed` palette over Lab looks its
             // bytes up as `byte / 255`). Map them linearly onto L* 0..100 and
             // the a*/b* /Range (ISO 32000-2 §8.6.6.3) before converting.
@@ -1301,7 +1301,7 @@ pub struct Color {
 }
 
 impl Color {
-    /// PdfCraft patch (46): the same colour, fully opaque (see `Pattern::without_opacity`).
+    /// ASDReader patch (46): the same colour, fully opaque (see `Pattern::without_opacity`).
     pub(crate) fn opaque(mut self) -> Self {
         self.opacity = 1.0;
         self

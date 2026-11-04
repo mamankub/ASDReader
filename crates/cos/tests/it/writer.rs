@@ -3,8 +3,8 @@
 
 use std::sync::Arc;
 
-use pdfcraft_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental};
-use pdfcraft_testkit::Pdf;
+use asdreader_cos::{Dict, Document, ObjRef, Object, SaveOptions, Stream, write_full, write_incremental};
+use asdreader_testkit::Pdf;
 
 /// Four pages, a shared font, document info with a non-ASCII title.
 fn fixture() -> Vec<u8> {
@@ -60,8 +60,10 @@ fn incremental_saves_stack_on_an_xref_stream_file() {
     let mut doc = Document::open(packed.clone()).unwrap();
     // Edit an object that lives in an object stream.
     let info = doc.trailer().reference(b"Info").unwrap();
-    doc.update_dict(info, |d: &mut Dict| d.set(b"Title".to_vec(), Object::String(pdfcraft_cos::PdfString { bytes: b"Second".to_vec(), hex: false })))
-        .unwrap();
+    doc.update_dict(info, |d: &mut Dict| {
+        d.set(b"Title".to_vec(), Object::String(asdreader_cos::PdfString { bytes: b"Second".to_vec(), hex: false }))
+    })
+    .unwrap();
     let added = doc.add(Object::Int(42));
     let updated = write_incremental(&doc, &SaveOptions::default()).unwrap();
     assert!(updated.starts_with(&packed), "an incremental save only appends");
@@ -148,10 +150,10 @@ fn classic_table() -> Vec<u8> {
     bytes
 }
 
-fn qpdf_check(qpdf: &pdfcraft_oracle::Oracle, bytes: &[u8]) -> std::process::Output {
+fn qpdf_check(qpdf: &asdreader_oracle::Oracle, bytes: &[u8]) -> std::process::Output {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("pdfcraft-xref-{}-{n}.pdf", std::process::id()));
+    let path = std::env::temp_dir().join(format!("asdreader-xref-{}-{n}.pdf", std::process::id()));
     std::fs::write(&path, bytes).unwrap();
     let check = qpdf.command().arg("--check").arg(&path).output().unwrap();
     let _ = std::fs::remove_file(&path);
@@ -166,7 +168,7 @@ fn page(doc: &Document) -> Dict {
 }
 
 fn assert_qpdf_clean(bytes: &[u8]) {
-    let qpdf = pdfcraft_oracle::or_skip!(pdfcraft_oracle::qpdf());
+    let qpdf = asdreader_oracle::or_skip!(asdreader_oracle::qpdf());
     let check = qpdf_check(&qpdf, bytes);
     let report = format!("{}{}", String::from_utf8_lossy(&check.stdout), String::from_utf8_lossy(&check.stderr));
     assert!(check.status.success() && !report.contains("WARNING"), "{report}");
@@ -219,7 +221,7 @@ fn incremental_save_keeps_a_trailer_only_edit() {
     let input = classic_table();
     let mut doc = Document::open(Arc::new(input)).unwrap();
     assert!(!doc.is_modified());
-    doc.trailer_mut().set(b"Custom".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"keep me".to_vec())));
+    doc.trailer_mut().set(b"Custom".to_vec(), Object::String(asdreader_cos::PdfString::literal(b"keep me".to_vec())));
     let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
     let back = Document::open(Arc::new(saved.clone())).unwrap();
     assert!(back.repair_log().is_empty(), "{:?}", back.repair_log());
@@ -230,10 +232,10 @@ fn incremental_save_keeps_a_trailer_only_edit() {
 
 #[test]
 fn qpdf_accepts_object_stream_output() {
-    let qpdf = pdfcraft_oracle::or_skip!(pdfcraft_oracle::qpdf());
+    let qpdf = asdreader_oracle::or_skip!(asdreader_oracle::qpdf());
     let doc = Document::open(Arc::new(fixture())).unwrap();
     let packed = write_full(&doc, &SaveOptions::default()).unwrap();
-    let path = std::env::temp_dir().join(format!("pdfcraft-objstm-{}.pdf", std::process::id()));
+    let path = std::env::temp_dir().join(format!("asdreader-objstm-{}.pdf", std::process::id()));
     std::fs::write(&path, &packed).unwrap();
     let check = qpdf.command().arg("--check").arg(&path).output().unwrap();
     let _ = std::fs::remove_file(&path);
@@ -254,8 +256,8 @@ fn the_catalog_of_an_encrypted_document_stays_outside_object_streams() {
     let plain = Document::open(Arc::new(fixture())).unwrap();
     assert!(root_is_packed(&write_full(&plain, &SaveOptions::default()).unwrap(), None), "unencrypted: catalog in an object stream");
     let mut enc = plain.clone();
-    enc.set_encryption(&pdfcraft_cos::NewEncryption {
-        algorithm: pdfcraft_cos::Algorithm::Aes256,
+    enc.set_encryption(&asdreader_cos::NewEncryption {
+        algorithm: asdreader_cos::Algorithm::Aes256,
         user_password: "user",
         owner_password: "owner",
         permissions: -4,
@@ -276,8 +278,8 @@ fn objects_referenced_by_the_encrypt_dictionary_stay_outside_object_streams() {
     // do (pdf.js issue7665). A full save must keep them readable before decryption.
     let doc = Document::open(Arc::new(fixture())).unwrap();
     let mut enc = doc.clone();
-    enc.set_encryption(&pdfcraft_cos::NewEncryption {
-        algorithm: pdfcraft_cos::Algorithm::Aes256,
+    enc.set_encryption(&asdreader_cos::NewEncryption {
+        algorithm: asdreader_cos::Algorithm::Aes256,
         user_password: "",
         owner_password: "owner",
         permissions: -4,
@@ -409,7 +411,7 @@ fn incremental_saves_of_a_file_with_bytes_before_its_header_count_from_the_heade
         let input = [prefix.as_slice(), &body].concat();
         let mut doc = Document::open(Arc::new(input.clone())).unwrap();
         assert!(doc.revisions().last().unwrap().header_relative, "{name}");
-        doc.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"en".to_vec())))).unwrap();
+        doc.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(asdreader_cos::PdfString::literal(b"en".to_vec())))).unwrap();
         let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
         assert!(saved.starts_with(&input), "{name}");
 
@@ -446,7 +448,7 @@ fn incremental_saves_of_a_file_whose_offsets_count_from_its_first_byte_keep_coun
     let mut doc = Document::open(Arc::new(input.clone())).unwrap();
     assert!(doc.repair_log().is_empty(), "{:?}", doc.repair_log());
     assert!(!doc.revisions().last().unwrap().header_relative);
-    doc.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(pdfcraft_cos::PdfString::literal(b"en".to_vec())))).unwrap();
+    doc.update_dict(ObjRef::new(1, 0), |d| d.set(b"Lang".to_vec(), Object::String(asdreader_cos::PdfString::literal(b"en".to_vec())))).unwrap();
     let saved = write_incremental(&doc, &SaveOptions::default()).unwrap();
     assert!(saved.get(last_startxref(&saved)..).unwrap_or_default().starts_with(b"xref"));
     let back = Document::open(Arc::new(saved.clone())).unwrap();

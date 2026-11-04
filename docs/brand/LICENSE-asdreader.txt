@@ -1,0 +1,5 @@
+ASDReader wordmark: original document mark by ASDReader contributors, 2026,
+licensed under MIT OR Apache-2.0 (see ../../LICENSE-MIT and ../../LICENSE-APACHE).
+The outlined lettering comes from the bundled Inter SemiBold by Rasmus Andersson,
+under SIL Open Font License 1.1 (see ../../assets/fonts/OFL-Inter.txt).
+Generated from the repository's attributed Inter-SemiBold.ttf using fontTools SVGPathPen.

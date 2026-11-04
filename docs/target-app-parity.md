@@ -1,10 +1,10 @@
-# PdfCraft parity with Adobe Acrobat Pro
+# ASDReader parity with Adobe Acrobat Pro
 
 > **Last reviewed:** 2026-10-20 · **Last updated:** 2026-10-20 · **Change:** minor (M12 #3673: Character encoding CJK mapping routes corrected; scores and estimates unchanged)
 
 > **Last reviewed:** 2026-10-10 · **Last updated:** 2026-10-13 · **Change:** minor (localization ≈59% → ≈68%; weighted readiness 49.25 → 49.7 ≈ 50%) · **Target:** Adobe Acrobat Pro (Acrobat DC, continuous track 26.002.21931, macOS)
 
-The authoritative assessment of how close PdfCraft is to Acrobat Pro. [ROADMAP.md](../ROADMAP.md)
+The authoritative assessment of how close ASDReader is to Acrobat Pro. [ROADMAP.md](../ROADMAP.md)
 summarizes it; [gaps.md](gaps.md) lists every shortfall one by one; the deep-dive checklists are
 [pdf-spec-parity.md](pdf-spec-parity.md), [file-format-parity.md](file-format-parity.md),
 [ui-parity.md](ui-parity.md), [hardware-parity.md](hardware-parity.md) and
@@ -44,7 +44,7 @@ The gap between the numbers is the story of this release: most of what an Acroba
 for *exists*, but much of it is shallower than Acrobat's, rendering is still borrowed, quality has
 never been measured side by side with Acrobat, and the first public releases (0.4.0, 0.5.0) drew
 245 open issues in two days, including one that made our encrypted files unreadable in Acrobat
-([#774](https://github.com/storytold/pdfcraft/issues/774), fixed by #836).
+([#774](https://github.com/mamankub/ASDReader/issues/774), fixed by #836).
 
 ## How this was measured
 
@@ -138,7 +138,7 @@ workflows, exchange edge cases and everything outside the mainstream slice are e
 | Fix a typo in existing text | 5% | 40% | Latin paragraphs only; font may be substituted |
 | Export to Word or images | 5% | 45% | Images good; Word loses layout (#773) |
 | Reduce file size | 3% | 75% | Reduce File Size, Optimizer |
-| Protect with a password | 3% | 30% | Works in PdfCraft; Acrobat DC opens the output since #836 (#774), not yet re-scored |
+| Protect with a password | 3% | 30% | Works in ASDReader; Acrobat DC opens the output since #836 (#774), not yet re-scored |
 | Undo, save, autosave | 2% | 90% | Undo after save, atomic saves, crash recovery |
 
 Weighted depth: **≈ 75%**. Discounts an essentials user hits: launch and stability (54 issues about
@@ -169,7 +169,7 @@ The praise comes overwhelmingly from Reader-class work (view, annotate, fill, si
 the mainstream number is highest; the requests and bugs cluster on editing, CJK, printing,
 conversion and signing tokens, which is where the gaps are. That supports raising the full number
 from 40% to 47% (the double count; restated as 49% by the weighted-sum method) and reporting the mainstream 55% beside it; it does not support
-calling PdfCraft a replacement for Acrobat Pro yet.
+calling ASDReader a replacement for Acrobat Pro yet.
 
 ## By dimension
 
@@ -225,8 +225,7 @@ with evidence when next touched.
 ## Stage
 
 **alpha.** Ready for real work, ≈ 50%, is inside the 40–75% band, and every one of Acrobat Pro's
-six everyday workflows can be completed end to end on macOS. Under the gate rule shared by all the
-Crafting Apps, a workflow blocks only when a typical user can't complete it at all; lossy exchange
+six everyday workflows can be completed end to end on macOS. Under the gate rule, a workflow blocks only when a typical user can't complete it at all; lossy exchange
 or a missing sub-case is a beta item. **Converting and sharing** is therefore partial, not
 blocking: PDFs we save open everywhere, password-protected ones included since #836 (#774), and
 export to Word, RTF, HTML, text and images works, but there is no in-app
@@ -302,7 +301,7 @@ licensed OCR or AI model.
 | 2026-10-10 | minor | Readiness table: hours to ≈ 95% per audience (full 780–1,400, mainstream 500–900, essentials 180–330). Full number restated as the standard's additive weighted sum over dimensions with written weights: 47% → 49%. Method aligned with the standard, no new evidence |
 | 2026-10-10 | minor | Added the essentials-user score (≈ 66%): weighted depth of 13 everyday features, discounted for launch, discoverability and opening others' files |
 | 2026-10-10 | minor | Consistency check across apps: re-judged the convert-and-share gate row with the shared rule (blocking only when the workflow can't be completed at all; lossy exchange and missing sub-cases are beta items). Encrypted output (#774) and Office→PDF are sub-cases, Word export is lossy not absent → partial, not blocking; stage pre-alpha → **alpha**. Numbers unchanged |
-| 2026-10-10 | minor | Second look requested by the owner after practitioners praised PdfCraft: user sentiment gathered (stars, downloads, 23 praising issues, switching reports, issue themes); checklist split into mainstream (497) and specialist (311) features; the 9-point cross-cutting deduction removed as a double count (Windows printing, interop and glyphs were already scored in their areas). Ready for real work 40% → 47%; mainstream practitioner ≈ 55% added. Core-workflow alpha gate applied: convert and share fails → stage alpha → **pre-alpha**, ≈ 40–70 h from alpha |
+| 2026-10-10 | minor | Second look requested by the owner after practitioners praised ASDReader: user sentiment gathered (stars, downloads, 23 praising issues, switching reports, issue themes); checklist split into mainstream (497) and specialist (311) features; the 9-point cross-cutting deduction removed as a double count (Windows printing, interop and glyphs were already scored in their areas). Ready for real work 40% → 47%; mainstream practitioner ≈ 55% added. Core-workflow alpha gate applied: convert and share fails → stage alpha → **pre-alpha**, ≈ 40–70 h from alpha |
 | 2026-10-10 | major | Created from ROADMAP.md §Estimate summary and §Honest assessment (2026-10-05/07). Full re-measure against Acrobat Pro 26.002.21931: checklist recomputed (56.9% unweighted, ≈ 67% tier-weighted), ready for real work ≈ 40%, stage alpha, hours re-calibrated (780–1,400 h to parity, 400–700 h to beta), dimension and area tables |
 | 2026-10-07 | minor | (in ROADMAP.md) 806 tracked features, 51.0% shipped, effort-weighted ≈ 30–35%, 600–1,100 h |
 | 2026-10-05 | major | (in ROADMAP.md) First honest assessment by dimension and area |

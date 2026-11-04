@@ -1,7 +1,7 @@
 //! Editing a button's visible label through the CLI/MCP tool table (#2892).
 
-use pdfcraft_automation::{Automation, Content};
-use pdfcraft_engine::{DocId, Edit, NewField, Session};
+use asdreader_automation::{Automation, Content};
+use asdreader_engine::{DocId, Edit, NewField, Session};
 use serde_json::{Value, json};
 
 fn tool(a: &mut Automation, name: &str, args: Value) -> Value {
@@ -13,7 +13,7 @@ fn tool(a: &mut Automation, name: &str, args: Value) -> Value {
 
 #[test]
 fn button_caption_can_be_changed_after_creation() {
-    let dir = std::env::temp_dir().join(format!("pdfcraft-button-caption-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("asdreader-button-caption-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let mut session = Session::new();
     let bytes = session.create_blank(300.0, 400.0, 1).unwrap();
@@ -46,7 +46,7 @@ fn button_caption_can_be_changed_after_creation() {
     tool(&mut a, "edit_redo", json!({"doc": id}));
     tool(&mut a, "doc_save", json!({"doc": id, "path": "labelled.pdf"}));
     let saved = std::sync::Arc::new(std::fs::read(dir.join("labelled.pdf")).unwrap());
-    let doc = pdfcraft_cos::Document::open(saved).unwrap();
+    let doc = asdreader_cos::Document::open(saved).unwrap();
     let root = doc.get(doc.root().unwrap());
     let form = doc.resolve(root.as_dict().unwrap().get(b"AcroForm").unwrap());
     let fields = doc.resolve(form.as_dict().unwrap().get(b"Fields").unwrap());

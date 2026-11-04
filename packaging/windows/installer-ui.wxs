@@ -1,26 +1,76 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Original, text-only native MSI dialogs. No third-party UI artwork or custom-action DLLs.
-     Full UI gets welcome (with the desktop-shortcut and PDF context-menu checkboxes)/progress/outcome screens; /qn and /qb stay unattended. -->
+     Full UI gets welcome (with the desktop-shortcut and PDF context-menu checkboxes), install folder (with Browse),
+     progress and outcome screens; /qn and /qb stay unattended (INSTALLFOLDER=... sets the folder there). -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Fragment>
-    <UI Id="PdfcraftInstallerUI">
+    <UI Id="ASDReaderInstallerUI">
       <TextStyle Id="InstallerNormal" FaceName="Segoe UI" Size="9" />
       <TextStyle Id="InstallerTitle" FaceName="Segoe UI" Size="12" Bold="yes" />
       <Property Id="DefaultUIFont" Value="InstallerNormal" />
+      <!-- The folder controls edit INSTALLFOLDER through this indirection, as Windows Installer's
+           PathEdit, DirectoryList and DirectoryCombo controls require. -->
+      <Property Id="_BrowseProperty" Value="INSTALLFOLDER" />
 
-      <Dialog Id="InstallWelcome" Width="370" Height="180" Title="[ProductName] Setup">
+      <Dialog Id="InstallWelcome" Width="370" Height="200" Title="[ProductName] Setup">
         <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="25" Text="{\InstallerTitle}Install [ProductName]" />
         <Control Id="Description" Type="Text" X="20" Y="55" Width="330" Height="40"
-            Text="Setup will install [ProductName] for all users and add it to the Start menu. Click Install to continue." />
+            Text="Setup will install [ProductName] for all users and add it to the Start menu. Click Next to choose where to install it." />
         <Control Id="DesktopShortcut" Type="CheckBox" X="20" Y="105" Width="330" Height="17"
             Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="Create a &amp;desktop shortcut" />
         <Control Id="PdfContextMenu" Type="CheckBox" X="20" Y="123" Width="330" Height="17"
-            Property="INSTALLPDFCONTEXTMENU" CheckBoxValue="1" Text="Add &quot;&amp;Edit with PdfCraft&quot; to the right-click menu of PDF files" />
+            Property="INSTALLPDFCONTEXTMENU" CheckBoxValue="1" Text="Add &quot;&amp;Edit with ASDReader&quot; to the right-click menu of PDF files" />
+        <Control Id="PdfPrinter" Type="CheckBox" X="20" Y="141" Width="330" Height="17"
+            Property="INSTALLPDFPRINTER" CheckBoxValue="1" Text="Install the &amp;ASD PDF Printer (saves what you print as a PDF with correct Thai text)" />
+        <Control Id="Next" Type="PushButton" X="195" Y="165" Width="75" Height="23" Default="yes" Text="&amp;Next &gt;">
+          <Publish Event="NewDialog" Value="InstallFolder" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="280" Y="165" Width="70" Height="23" Cancel="yes" Text="Cancel">
+          <Publish Event="EndDialog" Value="Exit" />
+        </Control>
+      </Dialog>
+
+      <!-- Where to install: C:\Program Files\ASDReader unless the user picks another folder. -->
+      <Dialog Id="InstallFolder" Width="370" Height="180" Title="[ProductName] Setup">
+        <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="25" Text="{\InstallerTitle}Choose the install folder" />
+        <Control Id="Description" Type="Text" X="20" Y="50" Width="330" Height="22"
+            Text="[ProductName] will be installed in this folder. To install it somewhere else, click Browse." />
+        <Control Id="Folder" Type="PathEdit" X="20" Y="80" Width="255" Height="18" Property="_BrowseProperty" Indirect="yes" />
+        <Control Id="Browse" Type="PushButton" X="280" Y="78" Width="70" Height="22" Text="B&amp;rowse...">
+          <Publish Event="SpawnDialog" Value="BrowseFolder" />
+        </Control>
+        <Control Id="Back" Type="PushButton" X="110" Y="145" Width="75" Height="23" Text="&lt; &amp;Back">
+          <Publish Event="NewDialog" Value="InstallWelcome" />
+        </Control>
         <Control Id="Install" Type="PushButton" X="195" Y="145" Width="75" Height="23" Default="yes" ElevationShield="yes" Text="&amp;Install">
-          <Publish Event="EndDialog" Value="Return" />
+          <Publish Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
         </Control>
         <Control Id="Cancel" Type="PushButton" X="280" Y="145" Width="70" Height="23" Cancel="yes" Text="Cancel">
           <Publish Event="EndDialog" Value="Exit" />
+        </Control>
+      </Dialog>
+
+      <Dialog Id="BrowseFolder" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="20" Text="{\InstallerTitle}Choose a folder" />
+        <Control Id="LookInLabel" Type="Text" X="20" Y="45" Width="48" Height="12" Text="&amp;Look in:" />
+        <Control Id="LookIn" Type="DirectoryCombo" X="70" Y="42" Width="218" Height="80" Property="_BrowseProperty" Indirect="yes" Fixed="yes" Remote="yes" />
+        <Control Id="Up" Type="PushButton" X="294" Y="41" Width="26" Height="19" Text="Up" ToolTip="Up one level">
+          <Publish Event="DirectoryListUp" Value="0" />
+        </Control>
+        <Control Id="NewFolder" Type="PushButton" X="324" Y="41" Width="26" Height="19" Text="New" ToolTip="Create a new folder">
+          <Publish Event="DirectoryListNew" Value="0" />
+        </Control>
+        <Control Id="Folders" Type="DirectoryList" X="20" Y="66" Width="330" Height="118" Property="_BrowseProperty" Indirect="yes" Sunken="yes" />
+        <Control Id="PathLabel" Type="Text" X="20" Y="195" Width="60" Height="12" Text="&amp;Folder:" />
+        <Control Id="Path" Type="PathEdit" X="80" Y="192" Width="270" Height="18" Property="_BrowseProperty" Indirect="yes" />
+        <Control Id="OK" Type="PushButton" X="195" Y="235" Width="75" Height="23" Default="yes" Text="OK">
+          <Publish Event="SetTargetPath" Value="[_BrowseProperty]" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
+        </Control>
+        <Control Id="Cancel" Type="PushButton" X="280" Y="235" Width="70" Height="23" Cancel="yes" Text="Cancel">
+          <Publish Event="Reset" Value="0" Order="1" />
+          <Publish Event="EndDialog" Value="Return" Order="2" />
         </Control>
       </Dialog>
 
@@ -92,7 +142,7 @@
       </Dialog>
 
       <!-- Shown by Windows Installer (Restart Manager) when an upgrade or repair must replace files
-           that a running PdfCraft holds open. OK closes those programs (MSIRMSHUTDOWN=2) and
+           that a running ASDReader holds open. OK closes those programs (MSIRMSHUTDOWN=2) and
            continues; Cancel ends setup. -->
       <Dialog Id="MsiRMFilesInUse" Width="370" Height="200" Title="[ProductName] Setup" KeepModeless="yes">
         <Control Id="Title" Type="Text" X="20" Y="15" Width="330" Height="25" Text="{\InstallerTitle}Files in use" />

@@ -1,7 +1,7 @@
 //! Synthetic search microbenchmark, including normalization and glyph-range mapping.
-//! Run with `cargo run -p pdfcraft-render --example search_bench --locked` on both revisions
+//! Run with `cargo run -p asdreader-render --example search_bench --locked` on both revisions
 //! with the same toolchain/profile. Timings are diagnostic, never a CI deadline.
-use pdfcraft_render::{PageText, TextGlyph};
+use asdreader_render::{PageText, TextGlyph};
 use std::{hint::black_box, time::Instant};
 
 fn main() {

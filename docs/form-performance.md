@@ -9,12 +9,12 @@ not fresh measurements on upstream main. No private document is needed for the b
 - `crates/ui-egui/src/forms_ui.rs` queues `Edit::SetFieldValue` for a text commit or checkbox
   toggle. `crates/automation/src/forms.rs::form_fill` uses the same edit API.
 - `crates/engine/src/lib.rs::Session::apply` runs edits on a copy, preserving rollback and undo.
-  `run_edit` calls `pdfcraft_forms::set_value_with` with an engine `JsRunner`.
+  `run_edit` calls `asdreader_forms::set_value_with` with an engine `JsRunner`.
 - `crates/forms/src/lib.rs` validates and writes the edited value, then runs one calculation
   pass. `/CO` precedes calculated fields omitted from `/CO`. Each script sees prior writes.
   There is no dependency graph or dependency-based filtering: dynamic references and script
   side effects are evaluated on every pass.
-- `crates/engine/src/js.rs::JsRunner::run` snapshots the fields, invokes `pdfcraft_js::run_shared`,
+- `crates/engine/src/js.rs::JsRunner::run` snapshots the fields, invokes `asdreader_js::run_shared`,
   then converts changed JavaScript field states into form updates.
 - `crates/js/src/lib.rs::run_shared` starts a scoped worker per script. `run_here` builds a fresh Boa
   context, installs the API, evaluates document scripts and evaluates the action. No script or
@@ -51,7 +51,7 @@ All calculation actions still execute in the same order. No dependency filtering
 removal, context reuse, bytecode caching or recursive scheduling changes were introduced.
 Equal calculated values already skipped appearance regeneration; this behavior remains.
 The Release investigation also found a full field-state copy inside the JavaScript host on
-**every** script invocation. `pdfcraft_js::run_shared` now accepts an immutable shared snapshot;
+**every** script invocation. `asdreader_js::run_shared` now accepts an immutable shared snapshot;
 `Arc::make_mut` detaches it on the first field write. The engine retains the initial snapshot
 for comparing effects. Read-only calculations no longer copy every field again. Each script
 still gets a fresh context and thread; exceptions, globals and uncommitted writes remain
@@ -172,8 +172,8 @@ profile optimizes workspace crates at level 1 and dependencies at level 2. Build
 and a separate target directory, then run the benchmark without concurrent compilation:
 
 ```sh
-CARGO_TARGET_DIR=target/acroform-benchmark cargo test -p pdfcraft-engine -j 2 --lib acroform_interaction_benchmark --no-run
-CARGO_TARGET_DIR=target/acroform-benchmark cargo test -p pdfcraft-engine -j 2 --lib acroform_interaction_benchmark -- --ignored --nocapture
+CARGO_TARGET_DIR=target/acroform-benchmark cargo test -p asdreader-engine -j 2 --lib acroform_interaction_benchmark --no-run
+CARGO_TARGET_DIR=target/acroform-benchmark cargo test -p asdreader-engine -j 2 --lib acroform_interaction_benchmark -- --ignored --nocapture
 ```
 
 The benchmark creates a six-page, 3,129-field/190-calculation workload from contributor-original
@@ -181,7 +181,7 @@ PDF objects in memory and times five synchronous edits with `Instant`. It also c
 calculated chain and an independent field. Widgets overlap on page one; this is an engine stress
 test, not a realistic page layout. There is no machine-dependent timing threshold in CI.
 
-To export a synthetic fixture for a standalone comparison, set `PDFCRAFT_BENCH_EXPORT` to a new
+To export a synthetic fixture for a standalone comparison, set `ASDREADER_BENCH_EXPORT` to a new
 filename when running the ignored benchmark. Its parent must exist; export refuses to overwrite
 any existing file. The ordinary benchmark writes no PDF.
 
@@ -205,7 +205,7 @@ Cargo target directory, offline locked dependencies and two build jobs:
 - All five focused regressions passed separately: duplicate names, warm/new-edit display
   caches, ordered checkbox/rank dependents, dynamic lookup/side effects and shared-snapshot
   write/error/global isolation.
-- `cargo test -p pdfcraft-js -p pdfcraft-engine -p pdfcraft-forms -j 2`: engine 285 unit
+- `cargo test -p asdreader-js -p asdreader-engine -p asdreader-forms -j 2`: engine 285 unit
   and 9 integration tests, JavaScript 47 tests, and forms 80 tests passed. Two unit timing
   probes and two private-file acceptance tests were ignored in the regular suite.
 - The ignored 3,129-field/190-calculation benchmark was then run explicitly and passed;

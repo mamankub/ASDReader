@@ -25,7 +25,7 @@ use work_queue::{ResultReceiver, WorkQueue};
 
 use hayro::hayro_interpret::font::{FontData, FontQuery};
 use hayro::hayro_interpret::hayro_cmap::CidFamily;
-use hayro::hayro_interpret::{InterpreterSettings, InterpreterWarning};
+use hayro::hayro_interpret::{ContentIndex, ContentIndexMode, InterpreterSettings, InterpreterWarning};
 use hayro::hayro_syntax::Pdf;
 use hayro::vello_cpu::color::AlphaColor;
 use hayro::vello_cpu::color::palette::css::{TRANSPARENT, WHITE};
@@ -85,10 +85,10 @@ impl RenderConfig {
     }
 }
 
-/// A Japanese face from craft-fonts for a CID font of the Adobe-Japan1 collection that the PDF
+/// A Japanese face from asdesign-fonts for a CID font of the Adobe-Japan1 collection that the PDF
 /// doesn't embed (`HeiseiMin-W3`, `KozGoPro-Medium`, …). hayro's own substitutes for fonts that
 /// aren't embedded are the Latin standard 14, so such text drew nothing. `None` for every other
-/// font, and when PdfCraft was built without craft-fonts. Only Japanese: no other CJK face is
+/// font, and when ASDReader was built without asdesign-fonts. Only Japanese: no other CJK face is
 /// embedded whole.
 fn japanese_fallback(query: &FontQuery) -> Option<(FontData, u32)> {
     let FontQuery::Fallback(f) = query else { return None };
@@ -99,12 +99,12 @@ fn japanese_fallback(query: &FontQuery) -> Option<(FontData, u32)> {
         // BIZ UDMincho before the document face (Shippori Mincho): it covers half-width katakana
         // (U+FF61–U+FF9F), which Shippori Mincho lacks, and a character the substitute lacks is
         // drawn as .notdef.
-        JapaneseFace::Mincho => pdfcraft_fonts::ui_japanese_fonts()
+        JapaneseFace::Mincho => asdreader_fonts::ui_japanese_fonts()
             .into_iter()
             .find(|c| c.family == "BIZ UDMincho" && c.style == "Regular")
-            .or_else(pdfcraft_fonts::document_japanese_font),
+            .or_else(asdreader_fonts::document_japanese_font),
         JapaneseFace::Gothic { bold } => {
-            let faces = pdfcraft_fonts::ui_japanese_fonts();
+            let faces = asdreader_fonts::ui_japanese_fonts();
             let style = if bold { "Bold" } else { "Regular" };
             faces.iter().find(|c| c.family == "BIZ UDPGothic" && c.style == style).or(faces.first()).copied()
         }
@@ -220,6 +220,9 @@ pub struct RenderedPage {
 pub enum RenderWarning {
     /// Content was skipped after the per-page decoded-content budget was exhausted.
     ContentTruncated,
+    /// The render is still running: this is a picture of what it has drawn so far, and the
+    /// finished page follows (see `RenderPool::set_progressive`).
+    Partial,
 }
 
 /// Counters for work performed by a renderer or render pool.
@@ -302,12 +305,124 @@ pub fn device_pixels(pt: f32, scale: f32) -> u32 {
 /// and reported as `Err((message, panicked))`.
 type Output = (u32, u32, Pixels, Option<Arc<crate::text::PageText>>);
 
+/// Where a render sends pictures of a page it is still drawing: width, height and premultiplied
+/// RGBA8 (see `RenderPool::set_progressive`).
+pub(crate) type PartialSink = Arc<dyn Fn(u32, u32, &[u8]) + Send + Sync>;
+
+/// When a running render shows its first picture, and how often it shows another: a page that
+/// takes longer than this comes in as it is drawn, as in other readers, instead of after a blank
+/// wait.
+const PARTIAL_FIRST: std::time::Duration = std::time::Duration::from_millis(350);
+const PARTIAL_EVERY: std::time::Duration = std::time::Duration::from_millis(700);
+
+/// The content index of each page (see `hayro_interpret::ContentIndex`): a tile, or the page at
+/// another scale, passes over the content that cannot reach it. A page that took long to draw
+/// (`HEAVY_MILLIS`) gets its index from a thread of its own that interprets the page without
+/// drawing it, so the render that showed it first paid nothing for it; until the index is ready,
+/// renders read all of the content as before. The indexes belong to one document and one
+/// `RenderConfig`, as a pool does.
+#[derive(Default)]
+pub(crate) struct ContentIndexes {
+    slots: Mutex<std::collections::HashMap<usize, IndexSlot>>,
+    /// Pages whose index is being made.
+    building: Arc<Mutex<std::collections::HashSet<usize>>>,
+    /// Set when the pool goes: index threads stop at their next content operator.
+    pub(crate) closing: Arc<AtomicBool>,
+    /// A render at least this long makes its page worth an index; `HEAVY_MILLIS` until set.
+    heavy_millis: std::sync::atomic::AtomicU32,
+}
+
+/// The decoded images of a pool's document, shared by its workers: an image is decoded once for
+/// all of them, and one up to `POOL_IMAGE_BUDGET` bytes is kept for later renders. A tile of a
+/// page drawn over a scanned plan decoded the whole scan again; with its own cache per worker and
+/// 64 MiB each, a large scan (an 8000 × 5600 underlay is 134 MB) was never kept at all.
+struct PoolImages(hayro::hayro_interpret::SharedImageCache);
+
+/// The pixel bytes a pool keeps decoded.
+const POOL_IMAGE_BUDGET: usize = 512 << 20;
+
+impl Default for PoolImages {
+    fn default() -> Self {
+        Self(hayro::hayro_interpret::SharedImageCache::new(POOL_IMAGE_BUDGET))
+    }
+}
+
+impl std::ops::Deref for PoolImages {
+    type Target = hayro::hayro_interpret::SharedImageCache;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Where a page's index goes once it is made.
+type IndexSlot = Arc<Mutex<Option<Arc<ContentIndex>>>>;
+
+/// A render at least this long makes its page worth an index.
+const HEAVY_MILLIS: u32 = 250;
+/// The most index threads a pool runs at once.
+const MAX_INDEXING: usize = 2;
+
+impl ContentIndexes {
+    /// What a render of `req` does with its page's index.
+    fn mode(&self, req: &RenderRequest) -> ContentIndexMode {
+        if req.kind != RequestKind::Pixels {
+            return ContentIndexMode::Off;
+        }
+        let slot = lock(&self.slots).get(&req.page).cloned();
+        match slot.and_then(|slot| lock(&slot).clone()) {
+            Some(index) => ContentIndexMode::Use(index),
+            None => ContentIndexMode::Off,
+        }
+    }
+
+    /// After a render of `req` that took `millis`: start making the page's index if the page is
+    /// heavy and has none yet.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn consider(&self, pdf: &Arc<Pdf>, req: &RenderRequest, millis: u32, config: &RenderConfig) {
+        let heavy = match self.heavy_millis.load(Ordering::Relaxed) {
+            0 => HEAVY_MILLIS,
+            set => set.saturating_sub(1),
+        };
+        if req.kind != RequestKind::Pixels || millis < heavy || self.closing.load(Ordering::Acquire) {
+            return;
+        }
+        let slot = lock(&self.slots).entry(req.page).or_default().clone();
+        if lock(&slot).is_some() {
+            return;
+        }
+        {
+            let mut building = lock(&self.building);
+            if building.len() >= MAX_INDEXING || !building.insert(req.page) {
+                return;
+            }
+        }
+        let (pdf, page) = (pdf.clone(), req.page);
+        let settings =
+            InterpreterSettings { cancelled: Some(self.closing.clone()), content_index: ContentIndexMode::Record(slot), ..config.settings() };
+        let building = self.building.clone();
+        let spawned = std::thread::Builder::new().name("asdreader-index".into()).spawn(move || {
+            let _ = catch_unwind(AssertUnwindSafe(|| {
+                let pages = pdf.pages();
+                if let Some(p) = pages.get(page) {
+                    hayro::interpret_only(p, &settings);
+                }
+            }));
+            lock(&building).remove(&page);
+        });
+        if spawned.is_err() {
+            lock(&self.building).remove(&page);
+        }
+    }
+}
+
 fn render_page<'a>(
     pdf: &'a Pdf,
     cache: &RenderCache<'a>,
     settings: &InterpreterSettings,
     config: &RenderConfig,
     req: RenderRequest,
+    indexes: &ContentIndexes,
+    partial: Option<PartialSink>,
 ) -> Result<Output, (String, bool)> {
     let reading = request_reading(config, &req);
     if req.kind == RequestKind::Text {
@@ -345,6 +460,7 @@ fn render_page<'a>(
                     y_offset: t.y as f32,
                     bg_color,
                     color_replacement,
+                    threads: raster_threads(),
                 }
             }
             None => {
@@ -366,6 +482,7 @@ fn render_page<'a>(
                     height: Some(side(h)),
                     bg_color,
                     color_replacement,
+                    threads: raster_threads(),
                     ..Default::default()
                 }
             }
@@ -379,7 +496,23 @@ fn render_page<'a>(
         // Previews render at low detail (tiny images are skipped); finals always draw all.
         let mut preview_settings = settings.clone();
         preview_settings.preview = req.preview;
-        render_into(page, cache, &preview_settings, &rs, pixels.bytes_mut());
+        preview_settings.content_index = indexes.mode(&req);
+        match partial.filter(|_| req.tile.is_none()) {
+            Some(sink) => {
+                let (pw, ph) = (u32::from(w), u32::from(h));
+                hayro::render_into_progressive(
+                    page,
+                    cache,
+                    &preview_settings,
+                    &rs,
+                    pixels.bytes_mut(),
+                    Box::new(move |bytes: &[u8]| sink(pw, ph, bytes)),
+                    PARTIAL_FIRST,
+                    PARTIAL_EVERY,
+                );
+            }
+            None => render_into(page, cache, &preview_settings, &rs, pixels.bytes_mut()),
+        }
         Ok((w.into(), h.into(), pixels, None))
     }));
     match result {
@@ -387,6 +520,20 @@ fn render_page<'a>(
         Ok(Err(e)) => Err((e, false)),
         Err(panic) => Err((format!("renderer crashed on page {}: {}", req.page + 1, panic_message(&panic)), true)),
     }
+}
+
+/// Threads that rasterize one page's paths while its content stream is interpreted (vello_cpu's
+/// multi-threaded dispatcher), for pages and tiles alike. The interpreter stays the critical
+/// path, so a few are enough: on a 40 MB engineering sheet two cut the render from 7.1 s to 4.4 s
+/// and more did not help. Up to half the machine's threads, at most three; none on a machine
+/// with fewer than four (where the render pool's own workers already use them). The output is
+/// identical either way.
+fn raster_threads() -> u16 {
+    static THREADS: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+    *THREADS.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        if cfg!(target_arch = "wasm32") || cores < 4 { 0 } else { (cores / 2).min(3) as u16 }
+    })
 }
 
 fn finish(req: RenderRequest, start: Stopwatch, r: Result<Output, (String, bool)>, warnings: Vec<RenderWarning>) -> RenderedPage {
@@ -425,13 +572,14 @@ pub struct PageRenderer {
     pdf: Option<Pdf>,
     settings: InterpreterSettings,
     stats: RenderStats,
+    indexes: ContentIndexes,
 }
 
 impl PageRenderer {
     pub fn new(bytes: Arc<Vec<u8>>, config: RenderConfig) -> Self {
         let pdf = parse(&bytes, config.password.as_deref());
         let settings = config.settings();
-        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() } }
+        Self { bytes, config, pdf, settings, stats: RenderStats { parser_builds: 1, ..RenderStats::default() }, indexes: ContentIndexes::default() }
     }
 
     pub fn page_count(&self) -> usize {
@@ -473,7 +621,7 @@ impl PageRenderer {
         let cache = RenderCache::new();
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let settings = warning_settings(&self.settings, warnings.clone());
-        let r = render_page(pdf, &cache, &settings, &self.config, req);
+        let r = render_page(pdf, &cache, &settings, &self.config, req, &self.indexes, None);
         let warnings = take_warnings(&warnings);
         if matches!(r, Err((_, true))) {
             self.pdf = parse(&self.bytes, self.config.password.as_deref());
@@ -544,6 +692,12 @@ struct ParseGate {
 /// State shared by the pool and its workers.
 #[derive(Default)]
 struct Shared {
+    /// The pages' content indexes, shared by the workers.
+    indexes: ContentIndexes,
+    /// The document's decoded images, shared by the workers (see `PoolImages`).
+    images: PoolImages,
+    /// Whether whole pages still being drawn send pictures (`RenderPool::set_progressive`).
+    progressive: AtomicBool,
     /// Desired requests, active jobs and bounded completed results share one deduplication key.
     queue: Arc<WorkQueue>,
     /// Per worker id: the request it is rendering and since when.
@@ -784,7 +938,8 @@ impl RenderPool {
             };
             let (wtx, wrx) = sync_channel::<()>(1);
             let (shared, out, bytes, config) = (self.shared.clone(), self.results_tx.clone(), self.bytes.clone(), self.config.clone());
-            match std::thread::Builder::new().name(format!("pdfcraft-render-{id}")).spawn(move || worker(id, bytes, config, shared, wrx, out, stop)) {
+            match std::thread::Builder::new().name(format!("asdreader-render-{id}")).spawn(move || worker(id, bytes, config, shared, wrx, out, stop))
+            {
                 Ok(h) => {
                     lock(&self.wake).push(wtx);
                     lock(&self._workers).push(h);
@@ -806,6 +961,32 @@ impl RenderPool {
     /// `true` when rendering happens on the caller's thread (no worker threads available).
     pub fn is_inline(&self) -> bool {
         self.inline.is_some()
+    }
+
+    /// Whether `page` has its content index yet (see `ContentIndexes`): from then on, tiles and
+    /// renders at other scales pass over the content that can't reach them.
+    pub fn has_content_index(&self, page: usize) -> bool {
+        lock(&self.shared.indexes.slots).get(&page).is_some_and(|slot| lock(slot).is_some())
+    }
+
+    /// Index pages whose render took at least `millis` (tests and benchmarks; 0 indexes every page).
+    pub fn set_content_index_threshold(&self, millis: u32) {
+        self.shared.indexes.heavy_millis.store(millis.saturating_add(1), Ordering::Relaxed);
+    }
+
+    /// Send pictures of whole pages that are still being drawn, as results marked
+    /// `RenderWarning::Partial`, before the finished page. A page that takes more than a third of
+    /// a second shows what it has every 0.7 s, as other readers show a heavy page coming in. Off
+    /// by default: only a consumer that expects them (the document view) turns it on. A partial
+    /// result completes nothing; the request stays queued until its finished page arrives.
+    pub fn set_progressive(&self, on: bool) {
+        self.shared.progressive.store(on, Ordering::Relaxed);
+    }
+
+    /// How many images the pool's workers have decoded so far (their shared cache's misses), for
+    /// diagnostics and tests.
+    pub fn decoded_images(&self) -> usize {
+        self.shared.images.decodes()
     }
 
     /// Snapshot the work counters collected by this pool.
@@ -993,7 +1174,36 @@ impl Drop for RenderPool {
         for s in lock(&self.shared.stop).iter() {
             s.store(true, std::sync::atomic::Ordering::Relaxed);
         }
+        self.shared.indexes.closing.store(true, Ordering::Release);
     }
+}
+
+/// Where the render of `req` sends pictures of itself, when the pool wants them: to the
+/// consumer, through `out`, as `RenderWarning::Partial` results.
+#[cfg(not(target_arch = "wasm32"))]
+fn partial_sink(shared: &Shared, out: &Arc<WorkQueue>, req: RenderRequest) -> Option<PartialSink> {
+    if !shared.progressive.load(Ordering::Relaxed) || req.kind != RequestKind::Pixels || req.tile.is_some() {
+        return None;
+    }
+    let out = out.clone();
+    let start = Stopwatch::start();
+    Some(Arc::new(move |width: u32, height: u32, bytes: &[u8]| {
+        let Some(mut rgba) = Pixels::zeroed(width as usize, height as usize) else { return };
+        if rgba.bytes_mut().len() != bytes.len() {
+            return;
+        }
+        rgba.bytes_mut().copy_from_slice(bytes);
+        out.send_partial(RenderedPage {
+            request: req,
+            width,
+            height,
+            rgba,
+            error: None,
+            text: None,
+            warnings: vec![RenderWarning::Partial],
+            millis: start.millis(),
+        });
+    }))
 }
 
 /// A worker's interpreter settings: the document's, stopping once the request is cancelled.
@@ -1109,7 +1319,7 @@ fn worker(
                         }) {
                             Some(pdf) => {
                                 let shared_generation = pdf.is_some();
-                                (pdf, RenderCache::new(), shared_generation)
+                                (pdf, RenderCache::with_images(&shared.images), shared_generation)
                             }
                             None => {
                                 let pdf = if !request_cancelled.load(Ordering::Acquire)
@@ -1120,7 +1330,7 @@ fn worker(
                                 } else {
                                     None
                                 };
-                                (pdf, RenderCache::new(), false)
+                                (pdf, RenderCache::with_images(&shared.images), false)
                             }
                         }
                     };
@@ -1203,7 +1413,7 @@ fn worker(
                         panic!("injected page panic");
                     }
                     match pdf {
-                        Some(pdf) => render_page(pdf, cache, &settings, &config, req),
+                        Some(pdf) => render_page(pdf, cache, &settings, &config, req, &shared.indexes, partial_sink(&shared, &out, req)),
                         None => Err(("the document could not be parsed".into(), false)),
                     }
                 }))
@@ -1231,6 +1441,11 @@ fn worker(
                 }
                 if *shared_generation && !shared.parser.valid.load(Ordering::Acquire) {
                     break Some((finish(req, start, r, request_warnings), valid));
+                }
+                if r.is_ok()
+                    && let Some(pdf) = pdf
+                {
+                    shared.indexes.consider(pdf, &req, start.millis(), &config);
                 }
                 if out.send_valid_with_tokens(finish(req, start, r, request_warnings), valid).is_err() {
                     return;
@@ -3238,7 +3453,7 @@ trailer << /Root 1 0 R >>
 
     /// A Highlight annotation without an appearance stream (common in older and generated files)
     /// was not drawn at all. Vendored hayro-interpret patch: its /QuadPoints are filled with /C at
-    /// /CA, blended with Multiply, as PdfCraft draws its own highlights (pdfcraft-annot); MuPDF,
+    /// /CA, blended with Multiply, as ASDReader draws its own highlights (asdreader-annot); MuPDF,
     /// Poppler and PDFium draw these fixtures the same way. An /AP still wins, malformed
     /// /QuadPoints or no /C draw nothing, and Hidden, NoView and "Hide all comments" still apply.
     #[test]
@@ -4744,7 +4959,7 @@ trailer << /Root 1 0 R >>
         }
     }
 
-    /// Item 1 of storytold/pdfcraft#623: a page's content used to be cut at `MAX_DECODED_STREAM`,
+    /// Item 1 of mamankub/ASDReader#623: a page's content used to be cut at `MAX_DECODED_STREAM`,
     /// so everything after the cut was lost (the text and the title block of the A1 sample). Content
     /// that expands by a few times over is read to its end, however large it is.
     #[test]
@@ -4888,6 +5103,372 @@ trailer << /Root 1 0 R >>
         pdf.extend_from_slice(stream);
         pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
         pdf
+    }
+
+    /// The value of the red channel of pixel (`x`, `y`) of `page` (white background).
+    fn red_at(page: &RenderedPage, x: u32, y: u32) -> u8 {
+        page.rgba[((y * page.width + x) * 4) as usize]
+    }
+
+    fn render_content(content: &[u8], dict: &str, scale: f32) -> RenderedPage {
+        let mut r = PageRenderer::new(Arc::new(one_page_pdf(content, dict)), RenderConfig::default());
+        let page = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale, tag: 0, ..Default::default() });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        page
+    }
+
+    /// A line thinner than a pixel is drawn one pixel wide on the pixel grid, at full strength
+    /// (hayro patch: `hairline_on_grid`). Its centre (y = 19.7 from the top) used to spread it over
+    /// two rows at 80% and 20%, which read as grey, soft lines in engineering drawings.
+    #[test]
+    fn a_hairline_covers_one_row_at_full_strength() {
+        let page = render_content(b"0 0 0 RG 0.1 w 1 J 1 j 5 20.3 m 35 20.3 l S", "", 1.0);
+        assert_eq!(red_at(&page, 20, 19), 0, "the row under the line is black");
+        assert_eq!(red_at(&page, 20, 18), 255, "the row above is untouched");
+        assert_eq!(red_at(&page, 20, 20), 255, "the row below is untouched");
+        // The square end reaches half a pixel past the snapped end points (5.5 and 35.5).
+        assert_eq!(red_at(&page, 5, 19), 0);
+        assert_eq!(red_at(&page, 35, 19), 0);
+        assert_eq!(red_at(&page, 3, 19), 255);
+        assert_eq!(red_at(&page, 37, 19), 255);
+        // A vertical one covers one column.
+        let page = render_content(b"0 0 0 RG 0 w 20.3 5 m 20.3 35 l S", "", 1.0);
+        assert_eq!(red_at(&page, 20, 20), 0);
+        assert_eq!((red_at(&page, 19, 20), red_at(&page, 21, 20)), (255, 255));
+        // So does a dashed one, with its dashes scaled with the page: 4 pt on, 4 pt off at 2×.
+        let page = render_content(b"0 0 0 RG 0.1 w [4 4] 0 d 2 20.3 m 38 20.3 l S", "", 2.0);
+        let row = 80 - 41; // y = 40.6 device pixels from the bottom, snapped into row 39 from the top
+        assert_eq!(red_at(&page, 6, row), 0, "inside the first dash");
+        assert_eq!(red_at(&page, 14, row), 255, "inside the first gap");
+        assert_eq!(red_at(&page, 22, row), 0, "inside the second dash");
+    }
+
+    /// A stroke wider than a pixel keeps its place and its anti-aliased edges.
+    #[test]
+    fn a_wide_line_is_not_moved_to_the_grid() {
+        let page = render_content(b"0 0 0 RG 3 w 5 20.3 m 35 20.3 l S", "", 1.0);
+        // From y = 18.2 to 21.2 from the top: row 21 is a fifth covered.
+        let edge = red_at(&page, 20, 21);
+        assert!(edge > 150 && edge < 255, "row 21 is partly covered: {edge}");
+        assert_eq!(red_at(&page, 20, 19), 0);
+    }
+
+    /// The page's paths are rasterized on several threads (hayro patch: `RenderSettings::threads`)
+    /// with exactly the pixels one thread draws, through clips, groups, blending and text.
+    #[test]
+    fn threads_draw_the_pixels_one_thread_draws() {
+        let mut content = String::from("q 1 0 0 rg 2 2 30 30 re f 0.5 0 0 0.5 0 0 cm 10 10 50 50 re W n 0 0 1 RG 3 w 1 j 1 J\n");
+        for i in 0..400 {
+            let (x, y) = ((i * 37) % 70, (i * 53) % 70);
+            content.push_str(&format!("{x} {y} m {} {} l {} {y} l S\n", x + 7, y + 3, x + 2));
+        }
+        content.push_str("Q /GS0 gs 0 1 0 rg 15 15 20 20 re f BT /F1 9 Tf 4 30 Td (Threads) Tj ET 0.2 w 0 0 0 RG 1 1 m 39 39 l S");
+        let dict = "";
+        let pdf = format!(
+            "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /ExtGState << /GS0 << /ca 0.5 /BM /Multiply >> >> /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >> endobj\n4 0 obj << {dict} /Length {} >> stream\n{content}\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n",
+            content.len()
+        );
+        let pdf = Pdf::new(Arc::new(pdf.into_bytes())).expect("parses");
+        let pages = pdf.pages();
+        let page = pages.first().expect("a page");
+        let settings = RenderConfig::default().settings();
+        let draw = |threads: u16| {
+            let rs =
+                RenderSettings { x_scale: 7.0, y_scale: 7.0, width: Some(280), height: Some(280), bg_color: WHITE, threads, ..Default::default() };
+            hayro::render(page, &RenderCache::new(), &settings, &rs).data_as_u8_slice().to_vec()
+        };
+        let one = draw(0);
+        assert!(one.chunks(4).any(|p| p[0] < 128 && p[2] > 128), "the strokes are drawn");
+        for threads in [1, 2, 3] {
+            assert!(draw(threads) == one, "{threads} threads");
+        }
+    }
+
+    /// A page that uses everything the content index has to get right: a stray `Q` first, colours,
+    /// line widths, dashes, `gs` and `cm` set between the blocks they apply to, a colour space
+    /// chosen once and colours set in it later, a hidden and a visible layer, fonts set outside
+    /// the text objects that use them, text that clips, clips inside and outside `q … Q`, forms,
+    /// images (inline too), a shading, and entities with and without a `q … Q` of their own.
+    fn index_torture_pdf() -> Vec<u8> {
+        let mut rng = 0x2545_F491_4F6C_DD1D_u64;
+        let mut next = move |n: u64| {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            rng % n
+        };
+        let mut c = String::from("Q\n/CS1 CS /CS1 cs\n");
+        for i in 0..900_u64 {
+            let (x, y) = (next(560) + 10, next(360) + 10);
+            if i % 7 == 0 {
+                c.push_str(&format!("{} {} {} RG\n", next(10) as f32 / 10.0, next(10) as f32 / 10.0, next(10) as f32 / 10.0));
+            }
+            if i % 9 == 0 {
+                c.push_str(&format!("{} {} {} sc\n", next(10) as f32 / 10.0, next(10) as f32 / 10.0, next(10) as f32 / 10.0));
+            }
+            if i % 11 == 0 {
+                c.push_str(if i % 22 == 0 { "/G1 gs\n" } else { "/G2 gs\n" });
+            }
+            if i % 13 == 0 {
+                c.push_str(if i % 26 == 0 { "[4 2] 1 d\n" } else { "[] 0 d\n" });
+            }
+            if i % 17 == 0 {
+                c.push_str(&format!("{} w {} J {} j\n", next(30) as f32 / 10.0, next(3), next(3)));
+            }
+            if i % 31 == 0 {
+                c.push_str(&format!("/F1 {} Tf {} Tc\n", 6 + next(10), next(3)));
+            }
+            if i == 450 {
+                c.push_str("1 0 0 1 3 -2 cm\n");
+            }
+            match next(16) {
+                0 => c.push_str(&format!("q {x} {y} m {} {} l {} {} l S Q\n", x + next(30), y + next(30), x + next(40), y)),
+                1 => c.push_str(&format!("{x} {y} m {} {} l S\n", x + next(50), y + next(20))),
+                2 => c.push_str(&format!("{x} {y} {} {} re f\n", next(20) + 1, next(20) + 1)),
+                3 => c.push_str(&format!("/OC /oc1 BDC q 1 0 0 RG 4 w {x} {y} m {} {} l S Q EMC\n", x + 40, y + 30)),
+                4 => c.push_str(&format!("/OC /oc0 BDC {x} {y} m {} {} l S 0.1 0.6 0.2 RG EMC\n", x + 25, y + 10)),
+                5 => c.push_str(&format!("BT {x} {y} Td (Ab{i}) Tj ET\n")),
+                6 => c.push_str(&format!("BT /F1 9 Tf {x} {y} Td 2 Tr (Hi) Tj 0 Tr ET\n")),
+                7 => c.push_str(&format!("q BT 7 Tr /F1 30 Tf {x} {y} Td (W) Tj ET 0 0 1 rg {x} {y} 30 30 re f Q\n")),
+                8 => c.push_str(&format!("q {x} {y} 30 20 re W n 1 0 0 rg {} {} 60 60 re f Q\n", x - 10, y - 10)),
+                9 => c.push_str(&format!("q 1 0 0 1 {x} {y} cm /Fm1 Do Q\n")),
+                10 => c.push_str(&format!("q 12 0 0 12 {x} {y} cm /Im1 Do Q\n")),
+                11 => c.push_str(&format!("q 6 0 0 6 {x} {y} cm BI /W 2 /H 2 /CS /G /BPC 8 /F /AHx ID 00FFFF00> EI Q\n")),
+                12 => c.push_str(&format!("q {x} {y} 40 25 re W n 1 0 0 1 {x} {y} cm /Sh1 sh Q\n")),
+                13 => c.push_str(&format!("/OC /oc1 BDC BT {x} {y} Td (Hidden) Tj ET EMC\n")),
+                14 => c.push_str(&format!(
+                    "q 2 0 0 2 0 0 cm {} {} m {} {} {} {} {} {} c S Q\n",
+                    x / 2,
+                    y / 2,
+                    x / 2 + 10,
+                    y / 2 + 20,
+                    x / 2 + 20,
+                    y / 2 - 5,
+                    x / 2 + 30,
+                    y / 2
+                )),
+                _ => c.push_str(&format!("{x} {y} m {} {} l h B\n", x + 15, y + 15)),
+            }
+        }
+        // A clip at the page's own level, near the end: everything after it is cut to it.
+        c.push_str("100 50 400 300 re W n 0 0 0 RG 1 w 0 0 m 600 400 l S\n");
+        let objects = [
+            "<< /Type /Catalog /Pages 2 0 R /OCProperties << /OCGs [6 0 R 7 0 R] /D << /OFF [7 0 R] >> >> >>".to_string(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".to_string(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 400] /Contents 4 0 R /Resources << \
+             /ExtGState << /G1 << /LW 2.5 /CA 0.6 >> /G2 << /LW 0.2 /CA 1 /D [[1 1] 0] >> >> \
+             /Font << /F1 5 0 R >> /ColorSpace << /CS1 /DeviceRGB >> \
+             /XObject << /Fm1 8 0 R /Im1 9 0 R >> /Properties << /oc0 6 0 R /oc1 7 0 R >> \
+             /Shading << /Sh1 << /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 40 0] \
+             /Function << /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >> >> >> >> >>"
+                .to_string(),
+            format!("<< /Length {} >>\nstream\n{c}\nendstream", c.len()),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".to_string(),
+            "<< /Type /OCG /Name (On) >>".to_string(),
+            "<< /Type /OCG /Name (Off) >>".to_string(),
+            "<< /Type /XObject /Subtype /Form /BBox [0 0 20 20] /Length 23 >>\nstream\n0 0 1 rg 0 0 20 20 re f\nendstream".to_string(),
+            "<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 \
+             /Filter /ASCIIHexDecode /Length 26 >>\nstream\nFF000000FF000000FFFFFFFF>\nendstream"
+                .to_string(),
+        ];
+        let mut pdf = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(pdf.len());
+            pdf.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+            pdf.extend_from_slice(o.as_bytes());
+            pdf.extend_from_slice(b"\nendobj\n");
+        }
+        let xref = pdf.len();
+        pdf.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            pdf.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        pdf.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        pdf
+    }
+
+    /// Tiles, and the page at other scales, drawn with the page's content index (passing over
+    /// what can't reach them) have exactly the pixels drawn without it.
+    #[test]
+    fn renders_with_the_content_index_are_the_renders_without_it() {
+        let bytes = Arc::new(index_torture_pdf());
+        let mut reference = PageRenderer::new(bytes.clone(), RenderConfig::default());
+        let pool = RenderPool::new(bytes, 2, RenderConfig::default());
+        pool.set_content_index_threshold(0);
+        pool.set_queue(vec![RenderRequest { page: 0, scale: 1.0, ..Default::default() }]);
+        let first = receive_before_deadline(&pool);
+        assert!(first.error.is_none(), "{:?}", first.error);
+        let since = std::time::Instant::now();
+        while !pool.has_content_index(0) {
+            assert!(since.elapsed() < std::time::Duration::from_secs(20), "the page gets its index");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let mut requests = Vec::new();
+        for (scale, side) in [(0.5_f32, 97_u32), (1.0, 128), (1.7, 160), (2.5, 256), (4.0, 300)] {
+            let (w, h) = (device_pixels(600.0, scale), device_pixels(400.0, scale));
+            let mut y = 0;
+            while y < h {
+                let mut x = 0;
+                while x < w {
+                    requests.push(RenderRequest {
+                        page: 0,
+                        scale,
+                        tile: Some(Tile { x, y, w: side.min(w - x), h: side.min(h - y) }),
+                        tag: u64::from(scale.to_bits()) << 20 | u64::from(x) << 10 | u64::from(y),
+                        ..Default::default()
+                    });
+                    x += side;
+                }
+                y += side;
+            }
+        }
+        requests.push(RenderRequest { page: 0, scale: 1.3, tag: 1, ..Default::default() });
+        requests.push(RenderRequest { page: 0, scale: 0.2, tag: 2, preview: true, ..Default::default() });
+        for chunk in requests.chunks(24) {
+            pool.set_queue(chunk.to_vec());
+            let mut got: Vec<RenderedPage> = (0..chunk.len()).map(|_| receive_before_deadline(&pool)).collect();
+            got.sort_by_key(|p| p.request.tag);
+            for page in got {
+                assert!(page.error.is_none(), "{:?}", page.error);
+                let expected = reference.render(page.request);
+                assert!(
+                    (page.width, page.height) == (expected.width, expected.height) && page.rgba == expected.rgba,
+                    "{:?} differs with the index",
+                    page.request
+                );
+            }
+        }
+    }
+
+    /// The workers of a pool share decoded images: tiles drawn at once on four workers decode the
+    /// page's image once, and later renders not at all. An image that is its own soft mask is
+    /// drawn without waiting for itself.
+    #[test]
+    fn a_pools_workers_decode_an_image_once() {
+        use std::io::Write as _;
+        let (w, h) = (900_usize, 700_usize);
+        let pixels: Vec<u8> = (0..w * h * 3).map(|i| (i * 7 % 251) as u8).collect();
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::fast());
+        z.write_all(&pixels).expect("compresses");
+        let data = z.finish().expect("compresses");
+        let content = b"q 400 0 0 300 0 0 cm /Im1 Do Q q 50 0 0 50 300 200 cm /Im2 Do Q";
+        let mut pdf = b"%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 400 300] /Contents 4 0 R /Resources << /XObject << /Im1 5 0 R /Im2 6 0 R >> >> >> endobj\n".to_vec();
+        pdf.extend_from_slice(format!("4 0 obj << /Length {} >> stream\n", content.len()).as_bytes());
+        pdf.extend_from_slice(content);
+        pdf.extend_from_slice(b"\nendstream endobj\n");
+        pdf.extend_from_slice(
+            format!("5 0 obj << /Type /XObject /Subtype /Image /Width {w} /Height {h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >> stream\n", data.len())
+                .as_bytes(),
+        );
+        pdf.extend_from_slice(&data);
+        pdf.extend_from_slice(b"\nendstream endobj\n6 0 obj << /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8 /SMask 6 0 R /Length 4 >> stream\n\x00\x80\xc0\xff\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
+        let pool = RenderPool::new(Arc::new(pdf), 4, RenderConfig::default());
+        let tiles: Vec<RenderRequest> = (0..8)
+            .map(|i| RenderRequest {
+                page: 0,
+                scale: 3.0,
+                tile: Some(Tile { x: (i % 4) * 300, y: (i / 4) * 450, w: 300, h: 450 }),
+                tag: i.into(),
+                ..Default::default()
+            })
+            .collect();
+        pool.set_queue(tiles.clone());
+        for _ in 0..tiles.len() {
+            let page = receive_before_deadline(&pool);
+            assert!(page.error.is_none(), "{:?}", page.error);
+        }
+        let after_tiles = pool.decoded_images();
+        pool.set_queue(vec![RenderRequest { page: 0, scale: 1.5, tag: 99, ..Default::default() }]);
+        assert!(receive_before_deadline(&pool).error.is_none());
+        // The large image once; the small one (and its mask, decoded without the cache when it
+        // asks for itself) at most twice more.
+        assert!((1..=3).contains(&after_tiles), "{after_tiles} decodes for eight tiles");
+        assert_eq!(pool.decoded_images(), after_tiles, "a later render decodes nothing");
+    }
+
+    /// A page drawn flat for pictures of its progress (without its page group) has the pixels of
+    /// the page drawn with it, give or take a few units of rounding where translucent paint
+    /// overlaps (6% of this page's pixels, which strokes at 60% opacity cross, by 3 at most);
+    /// a page with a blend mode other than Normal is drawn again with its group, exactly.
+    #[test]
+    fn a_page_drawn_with_pictures_of_its_progress_ends_as_it_would_without() {
+        // Three threads rasterize, as in the app: a page drawn again for its group must first let
+        // them finish, or a worker sends to a dropped dispatcher and the process aborts.
+        let draw = |pdf: &[u8], progressive: bool| -> (Vec<u8>, usize) {
+            let pdf = Pdf::new(Arc::new(pdf.to_vec())).expect("parses");
+            let pages = pdf.pages();
+            let page = pages.first().expect("a page");
+            let rs =
+                RenderSettings { x_scale: 1.5, y_scale: 1.5, width: Some(900), height: Some(600), bg_color: WHITE, threads: 3, ..Default::default() };
+            let settings = RenderConfig::default().settings();
+            let mut buf = vec![0u8; 900 * 600 * 4];
+            let pictures = Arc::new(Mutex::new(0usize));
+            if progressive {
+                let count = pictures.clone();
+                hayro::render_into_progressive(
+                    page,
+                    &RenderCache::new(),
+                    &settings,
+                    &rs,
+                    &mut buf,
+                    Box::new(move |bytes: &[u8]| {
+                        assert_eq!(bytes.len(), 900 * 600 * 4);
+                        *lock(&count) += 1;
+                    }),
+                    std::time::Duration::ZERO,
+                    std::time::Duration::ZERO,
+                );
+            } else {
+                render_into(page, &RenderCache::new(), &settings, &rs, &mut buf);
+            }
+            let n = *lock(&pictures);
+            (buf, n)
+        };
+        let pdf = index_torture_pdf();
+        let (grouped, _) = draw(&pdf, false);
+        let (flat, pictures) = draw(&pdf, true);
+        assert!(pictures > 0, "pictures were sent while the page was drawn");
+        // Rounding only: a few units where translucent anti-aliased paint overlaps.
+        let worst = grouped.iter().zip(&flat).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        let differing = grouped.chunks(4).zip(flat.chunks(4)).filter(|(a, b)| a != b).count();
+        assert!(worst <= 4, "flat differs from grouped by {worst}");
+        assert!(differing * 10 < 900 * 600, "{differing} pixels differ");
+        // A blend mode other than Normal needs the page group: drawn again with it, exactly.
+        let mut late_blend = String::new();
+        for i in 0..3000 {
+            late_blend.push_str(&format!("{} {} m {} {} l S\n", i % 37, i % 29, i % 31 + 3, i % 23 + 2));
+        }
+        late_blend.push_str("/GS1 gs 1 0 0 rg 10 10 20 20 re f");
+        let blended = one_page_pdf(late_blend.as_bytes(), "");
+        let blended = String::from_utf8_lossy(&blended)
+            .replace("/MediaBox [0 0 40 40]", "/MediaBox [0 0 40 40] /Resources << /ExtGState << /GS1 << /BM /Screen >> >> >>")
+            .into_bytes();
+        let (grouped, _) = draw(&blended, false);
+        let (flat, _) = draw(&blended, true);
+        assert!(grouped == flat, "a page with a blend mode is drawn with its group");
+    }
+
+    /// A Flate content stream that turns bad partway is drawn as far as it decodes, as before the
+    /// streaming decoder moved to flate2 (hayro-syntax patch: `flate::fast`).
+    #[test]
+    fn a_damaged_flate_content_stream_draws_what_decodes() {
+        use std::io::Write as _;
+        let mut content = String::from("0 0 1 rg 2 2 6 6 re f\n");
+        for i in 0..20_000 {
+            content.push_str(&format!("{} {} 1 1 re f\n", 20 + i % 15, 20 + i % 13));
+        }
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        z.write_all(content.as_bytes()).expect("compresses");
+        let mut stream = z.finish().expect("compresses");
+        let whole = render_content(&stream, "/Filter /FlateDecode", 1.0);
+        assert!(red_at(&whole, 4, 35) < 64, "the first square");
+        let at = stream.len() * 3 / 4;
+        for b in stream.get_mut(at..at + 8).expect("long enough") {
+            *b ^= 0xA5;
+        }
+        let damaged = render_content(&stream, "/Filter /FlateDecode", 1.0);
+        assert!(red_at(&damaged, 4, 35) < 64, "what came before the damage is drawn");
     }
 
     /// A document whose `pages` page dictionaries all live in one (uncompressed) object stream,
@@ -7335,9 +7916,12 @@ endstream endobj
         let pdf = parse(&Arc::new(pdf), None).expect("parses");
         let cache = RenderCache::new();
         let settings = InterpreterSettings::default();
-        let preview = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true)).expect("preview renders");
-        let fin = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false)).expect("final renders");
-        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false)).expect("final renders");
+        let preview =
+            render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true), &ContentIndexes::default(), None).expect("preview renders");
+        let fin =
+            render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false), &ContentIndexes::default(), None).expect("final renders");
+        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false), &ContentIndexes::default(), None)
+            .expect("final renders");
         assert_eq!(rgb_at(&preview.2, w, 35, 35), [0, 0, 255]);
         assert_eq!(&fin.2[..], &fresh.2[..], "a final render after a preview matches one with a fresh cache");
     }
@@ -7591,10 +8175,10 @@ endstream endobj
 
     /// A Japanese CID font that isn't embedded (Adobe-Japan1, as `HeiseiMin-W3` with
     /// `UniJIS-UCS2-H` in #260's test file) drew nothing: hayro's substitutes for fonts that
-    /// aren't embedded are Latin-only. With craft-fonts (the build input release builds embed),
+    /// aren't embedded are Latin-only. With asdesign-fonts (the build input release builds embed),
     /// such text now draws in a Japanese face; without it, nothing changes.
     #[test]
-    fn non_embedded_japanese_cid_fonts_draw_with_a_craft_fonts_face() {
+    fn non_embedded_japanese_cid_fonts_draw_with_a_asdesign_fonts_face() {
         let pdf = |base_font: &str| {
             let content = "BT /F1 40 Tf 5 15 Td <65E5672C> Tj ET";
             format!(
@@ -7619,8 +8203,8 @@ trailer << /Root 1 0 R >>
             let p = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale: 1.0, tag: 0, ..Default::default() });
             assert!(p.error.is_none(), "{base_font}: {:?}", p.error);
             let inked = p.rgba.as_chunks::<4>().0.iter().filter(|c| c[0] < 128).count();
-            if pdfcraft_fonts::document_japanese_font().is_none() {
-                eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+            if asdreader_fonts::document_japanese_font().is_none() {
+                eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
                 continue;
             }
             // 日本 at 40 pt covers a few hundred dark pixels; a blank or missing-glyph run doesn't.
@@ -7652,8 +8236,8 @@ trailer << /Root 1 0 R >>
 
     #[test]
     fn japanese_substitute_missing_spaces_draw_no_ink() {
-        if pdfcraft_fonts::document_japanese_font().is_none() {
-            eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+        if asdreader_fonts::document_japanese_font().is_none() {
+            eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
             return;
         }
         let out = render_first_page(japanese_spacing_pdf("BT /F1 20 Tf 10 30 Td <002000200020> Tj ET", "/W [231 [500]]"));
@@ -7662,8 +8246,8 @@ trailer << /Root 1 0 R >>
 
     #[test]
     fn japanese_substitute_spaces_keep_pdf_widths_and_unicode() {
-        if pdfcraft_fonts::document_japanese_font().is_none() {
-            eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+        if asdreader_fonts::document_japanese_font().is_none() {
+            eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
             return;
         }
         for (widths, second_x) in [("/W [231 [500]]", 50), ("", 70)] {
@@ -7697,23 +8281,23 @@ trailer << /Root 1 0 R >>
             ..FallbackFontQuery::default()
         });
         let Some((data, index)) = super::japanese_fallback(&query) else {
-            eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+            eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
             return;
         };
-        let font = skrifa::FontRef::from_index((*data).as_ref(), index).expect("a craft-fonts face parses");
+        let font = skrifa::FontRef::from_index((*data).as_ref(), index).expect("a asdesign-fonts face parses");
         let charmap = font.charmap();
         let missing: Vec<char> = ('\u{FF61}'..='\u{FF9F}').chain(['日', '本']).filter(|&c| charmap.map(c).is_none()).collect();
         assert!(missing.is_empty(), "the Mincho substitute lacks {missing:?}");
     }
 
-    /// 𠮷 (U+20BB7, Adobe-Japan1 CID 13706) in a non-embedded Japanese font: neither craft-fonts
+    /// 𠮷 (U+20BB7, Adobe-Japan1 CID 13706) in a non-embedded Japanese font: neither asdesign-fonts
     /// substitute has it, and hayro drew the substitute's glyph 13706 instead, which is
     /// unrelated (in BIZ UDPGothic, "Ｑ"). It draws the substitute's .notdef now, while 吉, which
     /// the substitutes have, still draws.
     #[test]
     fn cids_a_substitute_lacks_are_not_drawn_as_other_glyphs() {
-        if pdfcraft_fonts::document_japanese_font().is_none() {
-            eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+        if asdreader_fonts::document_japanese_font().is_none() {
+            eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
             return;
         }
         let render = |base_font: &str, encoding: &str, code: &str| {
@@ -7776,8 +8360,8 @@ trailer << /Root 1 0 R >>
     /// draws the substitute's glyph for that form now, and its 噂 for a form it doesn't have.
     #[test]
     fn variation_sequences_draw_their_kanji_in_a_substitute() {
-        if pdfcraft_fonts::document_japanese_font().is_none() {
-            eprintln!("built without craft-fonts (CRAFT_FONTS_DIR unset): no Japanese face to check");
+        if asdreader_fonts::document_japanese_font().is_none() {
+            eprintln!("built without asdesign-fonts (ASDESIGN_FONTS_DIR unset): no Japanese face to check");
             return;
         }
         let render = |base_font: &str, encoding: &str, to_unicode: &str, code: &str| {
