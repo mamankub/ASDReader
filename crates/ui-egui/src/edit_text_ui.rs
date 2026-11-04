@@ -222,6 +222,39 @@ impl TextBackground {
 const MAX_OUTLINES: usize = 250;
 
 /// A paragraph being edited.
+/// User space turned the way the page shows on screen: x to the right, y up. The editor lays its
+/// text out across the screen, so a paragraph's boxes and baselines are measured in this frame.
+/// A page with `/Rotate` (Microsoft Print to PDF prints a landscape sheet as a portrait page
+/// turned a quarter, its text drawn turned back so it reads upright) or a turned view has its
+/// lines running along user-space y; measured in user space, a line's height was taken for its
+/// length, and the editor's text came out several times too large and squeezed together.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(crate) struct ScreenFrame(u16);
+
+impl ScreenFrame {
+    /// The frame of `page` shown through `xf`: its `/Rotate` and the view's turn, clockwise.
+    pub(crate) fn of(info: &DocInfo, page: usize, xf: &PageXform) -> Self {
+        let rotate = info.pages.get(page).map_or(0, |p| p.rotation);
+        Self(((u32::from(rotate) + u32::from(xf.rot)) % 360) as u16)
+    }
+
+    /// A user-space point in this frame.
+    pub(crate) fn point(self, [x, y]: [f64; 2]) -> [f64; 2] {
+        match self.0 {
+            90 => [y, -x],
+            180 => [-x, -y],
+            270 => [-y, x],
+            _ => [x, y],
+        }
+    }
+
+    /// A user-space box `[x0, y0, x1, y1]` in this frame.
+    pub(crate) fn rect(self, r: [f64; 4]) -> [f64; 4] {
+        let ([ax, ay], [bx, by]) = (self.point([r[0], r[1]]), self.point([r[2], r[3]]));
+        [ax.min(bx), ay.min(by), ax.max(bx), ay.max(by)]
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct LineEditor {
     pub selection: Option<std::ops::Range<usize>>,
@@ -234,6 +267,8 @@ pub struct LineEditor {
     /// The original PDF rectangle, in user space. It is converted again each frame so the editor
     /// stays attached while the page is zoomed, scrolled, or rotated.
     source_rect: [f32; 4],
+    /// How the page shows on screen; the source boxes and baselines are measured in it.
+    frame: ScreenFrame,
     multiline: bool,
     source: Option<(asdreader_engine::TextBlock, Vec<asdreader_engine::TextLine>)>,
     pub(crate) fonts: BTreeMap<String, String>,
@@ -1176,8 +1211,10 @@ fn open_editor(
     let _ = crate::files::installed_font_files(ui.ctx());
     let source_lines = doc.text_lines(page);
     let text = l.editor_text.clone();
-    // Screen pixels per point, from the box's width.
-    let scale = (b.width() - 4.0) / ((l.rect[2] - l.rect[0]).max(1.0) as f32);
+    // Screen pixels per point, from the box's width (along the screen, however the page is turned).
+    let frame = ScreenFrame::of(&doc.info, page, xf);
+    let along = frame.rect(l.rect);
+    let scale = (b.width() - 4.0) / ((along[2] - along[0]).max(1.0) as f32);
     // How far the editor box may grow: a single-line paragraph's rewrite grows to the
     // page's right edge, a multi-line paragraph rewraps to its own width.
     let right = xf.rect.right().min(view.viewport_rect().right()) - 6.0;
@@ -1191,6 +1228,7 @@ fn open_editor(
         original: text,
         rect: *b,
         source_rect: l.rect.map(|v| v as f32),
+        frame,
         multiline: l.rows.len() > 1,
         source: Some((l.clone(), source_lines)),
         fonts: install_source_fonts(ui.ctx(), doc, page),
@@ -1403,7 +1441,9 @@ fn editor_job(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: f32
     // because font rounding or a fallback face measures a fraction of a pixel wider.
     job.wrap.max_width = if text == ed.original && ed.look == ed.look0 && ed.extras == ed.extras0 { f32::INFINITY } else { width };
     if let Some((block, lines)) = &ed.source {
-        let lefts: Vec<_> = block.rows.iter().filter_map(|r| r.first().and_then(|i| lines.get(*i)).map(|l| l.rect[0])).collect();
+        let frame = ed.frame;
+        let block_rect = frame.rect(block.rect);
+        let lefts: Vec<_> = block.rows.iter().filter_map(|r| r.first().and_then(|i| lines.get(*i)).map(|l| frame.rect(l.rect)[0])).collect();
         let left_span = lefts.iter().copied().fold(f64::NEG_INFINITY, f64::max) - lefts.iter().copied().fold(f64::INFINITY, f64::min);
         let centered = block.rows.len() > 1
             && left_span > block.size * 0.5
@@ -1411,9 +1451,9 @@ fn editor_job(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: f32
                 let rect = row
                     .iter()
                     .filter_map(|i| lines.get(*i))
-                    .map(|l| l.rect)
+                    .map(|l| frame.rect(l.rect))
                     .reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])]);
-                rect.is_some_and(|r| ((r[0] + r[2] - block.rect[0] - block.rect[2]) / 2.0).abs() < block.size)
+                rect.is_some_and(|r| ((r[0] + r[2] - block_rect[0] - block_rect[2]) / 2.0).abs() < block.size)
             });
         if centered {
             job.halign = egui::Align::Center;
@@ -1445,7 +1485,8 @@ fn editor_job(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: f32
                 font.family = FontFamily::Name(name.clone().into());
             }
             let native_width = ui.fonts_mut(|f| f.layout_no_wrap(line.text.clone(), font.clone(), Color32::BLACK).size().x);
-            let target_width = ((line.rect[2] - line.rect[0]) * look.size / line.size.max(0.01)) as f32 * scale;
+            let line_rect = frame.rect(line.rect);
+            let target_width = ((line_rect[2] - line_rect[0]) * look.size / line.size.max(0.01)) as f32 * scale;
             let spacing = if original_face { (target_width - native_width) / line.text.chars().count().saturating_sub(1).max(1) as f32 } else { 0.0 };
             job.append(
                 text.get(range).unwrap_or_default(),
@@ -1492,6 +1533,8 @@ fn editor_galley(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: 
     job.halign = egui::Align::LEFT;
     let mut galley = ui.fonts_mut(|fonts| fonts.layout_job(job));
     let Some((block, lines)) = &ed.source else { return galley };
+    let frame = ed.frame;
+    let block_rect = frame.rect(block.rect);
     let sources: Vec<_> = block
         .rows
         .iter()
@@ -1500,9 +1543,9 @@ fn editor_galley(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: 
             let rect = row
                 .iter()
                 .filter_map(|i| lines.get(*i))
-                .map(|l| l.rect)
+                .map(|l| frame.rect(l.rect))
                 .reduce(|a, b| [a[0].min(b[0]), a[1].min(b[1]), a[2].max(b[2]), a[3].max(b[3])])?;
-            Some((first.baseline()[1], rect))
+            Some((frame.point(first.baseline())[1], rect))
         })
         .collect();
     let Some((first_baseline, first_rect)) = sources.first().copied() else { return galley };
@@ -1529,10 +1572,10 @@ fn editor_galley(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: 
         let ratio = if changed_size { ed.look.size / ed.look0.size.max(0.01) } else { 1.0 };
         let ascent = (source_rect[3] - sources.get(index).map_or(last_baseline, |s| s.0)) as f32 * scale * ratio as f32;
         let descent = (sources.get(index).map_or(last_baseline, |s| s.0) - source_rect[1]) as f32 * scale * ratio as f32;
-        let base_y = (block.rect[3] - baseline) as f32 * scale;
+        let base_y = (block_rect[3] - baseline) as f32 * scale;
         let row = Arc::make_mut(&mut placed.row);
         placed.pos.y = base_y - ascent;
-        placed.pos.x = if centered { (width - row.size.x) / 2.0 } else { (source_rect[0] - block.rect[0]) as f32 * scale };
+        placed.pos.x = if centered { (width - row.size.x) / 2.0 } else { (source_rect[0] - block_rect[0]) as f32 * scale };
         for glyph in &mut row.glyphs {
             let dy = ascent - glyph.pos.y;
             glyph.pos.y = ascent;
@@ -1594,7 +1637,9 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
     }
     ed.rect = xf.user_rect(info, ed.page, ed.source_rect);
     ed.max_width = ed.rect.width();
-    let scale = (ed.rect.width() / (ed.source_rect[2] - ed.source_rect[0]).abs().max(0.01)).max(0.01);
+    ed.frame = ScreenFrame::of(info, ed.page, &xf);
+    let along = ed.frame.rect(ed.source_rect.map(f64::from));
+    let scale = (ed.rect.width() / (along[2] - along[0]).abs().max(0.01) as f32).max(0.01);
     ed.size = (ed.look.size as f32 * scale).clamp(1.0, 300.0);
     // egui draws the caret at least one row of this font tall. Each row already has its source
     // row's height, so the font stays below every row (half the region's smallest size): on a
@@ -1793,6 +1838,7 @@ mod tests {
             original: block.text.clone(),
             rect: Rect::NOTHING,
             source_rect: block.rect.map(|v| v as f32),
+            frame: ScreenFrame::default(),
             multiline: block.rows.len() > 1,
             source: None,
             fonts: BTreeMap::new(),
@@ -1807,6 +1853,102 @@ mod tests {
             extras0: Extras::default(),
         };
         (app, ed)
+    }
+
+    /// A one-page PDF of `objects` (the page is object 3), its cross-reference table computed.
+    fn pdf(objects: &[String]) -> Vec<u8> {
+        let mut out = b"%PDF-1.7\n".to_vec();
+        let mut offsets = Vec::new();
+        for (i, o) in objects.iter().enumerate() {
+            offsets.push(out.len());
+            out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+        }
+        let xref = out.len();
+        out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).as_bytes());
+        for o in offsets {
+            out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+        }
+        out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
+        out
+    }
+
+    #[test]
+    fn the_screen_frame_turns_user_space_the_way_the_page_shows() {
+        let xf = |rot| PageXform { rect: Rect::from_min_size(Pos2::ZERO, egui::vec2(100.0, 100.0)), rot, pw: 100.0, ph: 100.0 };
+        let info = |rotation| DocInfo {
+            pages: vec![asdreader_render::PageInfo { width: 100.0, height: 100.0, label: "1".into(), crop: [0.0, 0.0, 100.0, 100.0], rotation }],
+            ..Default::default()
+        };
+        // Shown turned a quarter clockwise, user-space up points right and x points down.
+        let frame = ScreenFrame::of(&info(90), 0, &xf(0));
+        assert_eq!(frame.point([0.0, 1.0]), [1.0, 0.0]);
+        assert_eq!(frame.point([1.0, 0.0]), [0.0, -1.0]);
+        assert_eq!(frame.rect([10.0, 20.0, 14.0, 120.0]), [20.0, -14.0, 120.0, -10.0], "a line up the page runs across the screen");
+        // The page's /Rotate and the view's turn add up.
+        assert_eq!(ScreenFrame::of(&info(90), 0, &xf(270)), ScreenFrame::default());
+        assert_eq!(ScreenFrame::of(&info(180), 0, &xf(0)).point([1.0, 2.0]), [-1.0, -2.0]);
+        assert_eq!(ScreenFrame::of(&info(270), 0, &xf(0)).point([1.0, 2.0]), [-2.0, 1.0]);
+        assert_eq!(ScreenFrame::of(&info(0), 0, &xf(0)).rect([1.0, 2.0, 3.0, 4.0]), [1.0, 2.0, 3.0, 4.0]);
+    }
+
+    #[test]
+    fn text_on_a_page_printed_turned_keeps_its_size_in_the_editor() {
+        // Microsoft Print to PDF prints a landscape sheet as a portrait page with /Rotate 90 and
+        // its text drawn turned back, so it reads upright. Measured in user space, the line's
+        // height was taken for its length: the typed text came out many times too large, squeezed
+        // together, and the editor's box and caret ran off the line.
+        let content = "BT /F1 12 Tf 0 1 -1 0 100 40 Tm (Hello rotated page) Tj ET";
+        let bytes = pdf(&[
+            "<< /Type /Catalog /Pages 2 0 R >>".into(),
+            "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Rotate 90 /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+            format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+            "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>".into(),
+        ]);
+        let mut app = crate::ASDReaderApp::new();
+        app.open_bytes("turned.pdf", None, bytes).unwrap();
+        let doc = app.session.get(app.views[0].id).unwrap();
+        let lines = doc.text_lines(0);
+        let block = doc.text_blocks(0).remove(0);
+        assert_eq!(block.text, "Hello rotated page");
+        // On screen the page is 400 wide and 300 tall, one pixel per point.
+        let xf = PageXform { rect: Rect::from_min_size(Pos2::ZERO, egui::vec2(400.0, 300.0)), rot: 0, pw: 300.0, ph: 400.0 };
+        let frame = ScreenFrame::of(&doc.info, 0, &xf);
+        let along = frame.rect(block.rect);
+        assert!(along[2] - along[0] > 5.0 * block.size, "the line runs across the screen: {along:?}");
+        let mut ed = LineEditor {
+            selection: None,
+            font_resource: None,
+            page: 0,
+            block: 0,
+            text: block.text.clone(),
+            original: block.text.clone(),
+            rect: Rect::NOTHING,
+            source_rect: block.rect.map(|v| v as f32),
+            frame,
+            multiline: false,
+            source: Some((block.clone(), lines)),
+            fonts: BTreeMap::new(),
+            overflow: false,
+            max_width: 400.0,
+            size: block.size as f32,
+            focus: true,
+            look: look_of(&block),
+            look0: look_of(&block),
+            family_chosen: false,
+            extras: Extras::default(),
+            extras0: Extras::default(),
+        };
+        ed.text.push_str(" and more");
+        let ctx = egui::Context::default();
+        let mut size = egui::Vec2::ZERO;
+        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+            size = editor_galley(ui, &ed, &ed.text, 1.0, f32::INFINITY).rect.size();
+        });
+        // 12 pt Helvetica, one pixel per point: a row about 12 tall, and the 27 letters about
+        // half an em each.
+        assert!(size.y > 8.0 && size.y < 20.0, "one row of 12 pt text: {size:?}");
+        assert!(size.x > 100.0 && size.x < 220.0, "27 letters of 12 pt text: {size:?}");
     }
 
     #[test]
