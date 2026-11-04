@@ -18,6 +18,10 @@
 //! - `text`: the text layer of page 1.
 //! - `sweep`: whole pages and tiles at six scales, the broadest identity check.
 //!
+//! A scenario named `prog-NAME` turns on pictures of running renders (`set_progressive`) and
+//! prints how many came and when the first did (`partials`, `first_partial_ms`); they are not
+//! counted as answers.
+//!
 //! A scenario named `warm-NAME` renders page 1 whole at the `fit` scale first, untimed, as the
 //! canvas does when a document opens, and waits for the page's content index that a heavy page
 //! then gets (at most a minute): the timed requests of `NAME` use it.
@@ -64,13 +68,18 @@ fn main() -> Result<(), Box<dyn Error>> {
         let pages = pdf.pages();
         pages.first().ok_or("the document has no pages")?.render_dimensions()
     };
-    let (warm, name) = match scenario.strip_prefix("warm-") {
-        Some(name) => (true, name),
+    let (progressive, scenario_rest) = match scenario.strip_prefix("prog-") {
+        Some(rest) => (true, rest),
         None => (false, scenario.as_str()),
+    };
+    let (warm, name) = match scenario_rest.strip_prefix("warm-") {
+        Some(name) => (true, name),
+        None => (false, scenario_rest),
     };
     let requests = scenario_requests(name, width, height)?;
 
     let pool = RenderPool::new(bytes, threads, RenderConfig::default());
+    pool.set_progressive(progressive);
     if warm {
         run(&pool, &scenario_requests("fit", width, height)?)?;
         let since = Instant::now();
@@ -80,7 +89,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("index_ready={} after_ms={}", pool.has_content_index(0), since.elapsed().as_millis());
     }
     for round in 0..rounds {
-        let (mut results, first, wall) = run(&pool, &requests)?;
+        let (mut results, first, wall, partials) = run(&pool, &requests)?;
         results.sort_by_key(|r| (r.request.page, r.request.scale.to_bits(), r.request.tile.map(|t| (t.x, t.y, t.w, t.h))));
         let slowest = results.iter().map(|r| r.millis).max().unwrap_or(0);
         let glyphs: usize = results.iter().filter_map(|r| r.text.as_ref()).map(|t| t.glyphs.len()).sum();
@@ -102,6 +111,9 @@ fn main() -> Result<(), Box<dyn Error>> {
             wall.as_millis(),
             errors.len()
         );
+        if let Some(first_partial) = partials.1 {
+            println!("partials={} first_partial_ms={}", partials.0, first_partial.as_millis());
+        }
         if let Some(first_error) = errors.first() {
             println!("first_error={first_error}");
         }
@@ -156,13 +168,21 @@ fn scenario_requests(scenario: &str, width: f32, height: f32) -> Result<Vec<Rend
 
 /// Queues `requests` as the canvas does and waits for every answer. Returns the answers, the time
 /// to the first one, and the wall time.
-fn run(pool: &RenderPool, requests: &[RenderRequest]) -> Result<(Vec<RenderedPage>, Duration, Duration), String> {
+/// Pictures of running renders are counted apart: how many, and when the first came.
+type Partials = (usize, Option<Duration>);
+
+fn run(pool: &RenderPool, requests: &[RenderRequest]) -> Result<(Vec<RenderedPage>, Duration, Duration, Partials), String> {
     let start = Instant::now();
     pool.set_queue(requests.to_vec());
     let mut results = Vec::with_capacity(requests.len());
     let mut first = None;
+    let mut partials: Partials = (0, None);
     while results.len() < requests.len() {
         match pool.try_recv() {
+            Some(page) if page.warnings.contains(&asdreader_render::RenderWarning::Partial) => {
+                partials.0 += 1;
+                partials.1.get_or_insert_with(|| start.elapsed());
+            }
             Some(page) => {
                 first.get_or_insert_with(|| start.elapsed());
                 results.push(page);
@@ -173,7 +193,7 @@ fn run(pool: &RenderPool, requests: &[RenderRequest]) -> Result<(Vec<RenderedPag
             None => std::thread::sleep(Duration::from_millis(1)),
         }
     }
-    Ok((results, first.unwrap_or_default(), start.elapsed()))
+    Ok((results, first.unwrap_or_default(), start.elapsed(), partials))
 }
 
 /// The canvas's tag for a scale: equal tags mean the same scale to 1/65536.

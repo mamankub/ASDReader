@@ -836,4 +836,12 @@ impl<'a, D: Device<'a>> Device<'a> for BoundsDevice<'_, D> {
     fn end_knockout_erase(&mut self) {
         self.inner.end_knockout_erase();
     }
+
+    fn checkpoint(&mut self) {
+        self.inner.checkpoint();
+    }
+
+    fn stop_requested(&self) -> bool {
+        self.inner.stop_requested()
+    }
 }

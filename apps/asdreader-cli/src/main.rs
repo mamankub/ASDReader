@@ -694,6 +694,8 @@ fn render(args: &[String]) -> Result<(), CliError> {
             asdreader_render::RenderWarning::ContentTruncated => {
                 let _ = writeln!(std::io::stderr().lock(), "warning: page {page}: content past the page's safety budget was skipped");
             }
+            // Pictures of a running render only reach pools that ask for them.
+            asdreader_render::RenderWarning::Partial => {}
         }
     }
     Ok(())

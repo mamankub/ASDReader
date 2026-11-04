@@ -627,6 +627,9 @@ pub struct DocView {
     /// Pages whose raster proved slow (see `SLOW_MILLIS`): only these get the zoom/pan
     /// settle holds. Fast pages render straight through, with no added latency.
     slow_pages: HashSet<usize>,
+    /// Pages whose whole-page raster is a picture of a render still running (see
+    /// `receive_partial`), shown until the finished page replaces it.
+    partial_pages: HashSet<usize>,
 }
 
 /// The page grid's zoom range and the step of its buttons and keys.
@@ -832,6 +835,7 @@ impl DocView {
             page_widget: None,
             pan_hold_until: 0.0,
             slow_pages: HashSet::new(),
+            partial_pages: HashSet::new(),
             comments: Default::default(),
             measure: Default::default(),
             forms: Default::default(),
@@ -1777,6 +1781,7 @@ impl DocView {
     pub(crate) fn suspend_rendering(&mut self, pool: &RenderPool) {
         self.begin_render_frame();
         self.pages.clear();
+        self.partial_pages.clear();
         self.tiles.clear();
         self.thumbs.clear();
         self.grid_pages.clear();
@@ -1890,6 +1895,7 @@ impl DocView {
             }
         }
         self.pages.retain(|p, _| pages.contains(p));
+        self.partial_pages.retain(|p| pages.contains(p));
         // Tiles of an earlier zoom (not a demanded scale) stay while the canvas keeps them, a
         // bounded few under a page whose current tiles are still missing (OLD_TILES). Tiles of a
         // page on screen stay too even when this frame does not demand them (#2196): the viewport
@@ -1991,6 +1997,8 @@ impl DocView {
     /// Pull a bounded batch of current results into textures. Demand is committed first, so
     /// offscreen results and obsolete scale/configuration tags never allocate a ColorImage.
     pub fn receive(&mut self, ctx: &egui::Context, pool: &RenderPool) {
+        // Heavy pages come in as they are drawn (see `receive_partial`).
+        pool.set_progressive(true);
         let budget = if pool.is_inline() { 1 } else { RESULTS_PER_FRAME };
         let mut uploaded = 0usize;
         #[cfg(not(target_arch = "wasm32"))]
@@ -2007,6 +2015,33 @@ impl DocView {
                 break;
             }
         }
+    }
+
+    /// A picture of a whole page still being drawn: shown, as other readers show a heavy page
+    /// coming in, while the page has nothing better on screen (no raster, or an earlier picture).
+    /// A finished raster at another scale stays: it shows all of the page. The picture is kept
+    /// as out of date, so the page goes on asking for its finished raster.
+    fn receive_partial(&mut self, ctx: &egui::Context, r: asdreader_render::RenderedPage) -> usize {
+        let page = r.request.page;
+        let whole_page = r.request.kind == RequestKind::Pixels
+            && r.request.tile.is_none()
+            && r.request.tag & (PRINT_TAG | GRID_TAG | THUMB_TAG) == 0
+            && r.error.is_none();
+        let better_shown = self.pages.contains_key(&page) && !self.partial_pages.contains(&page);
+        let max_side = ctx.input(|i| i.max_texture_side);
+        if !whole_page || better_shown || r.width == 0 || r.height == 0 || r.width as usize > max_side || r.height as usize > max_side {
+            return 0;
+        }
+        let bytes = rgba_bytes(r.width as usize, r.height as usize);
+        if bytes != r.rgba.len() || !self.admit_texture(r.request, bytes) {
+            return 0;
+        }
+        let img = texture_image([r.width as usize, r.height as usize], r.rgba);
+        let tex = ctx.load_texture(format!("page-{:?}-{page}", self.id), img, TextureOptions::LINEAR);
+        self.pages.insert(page, PageTex { tag: STALE_TAG, tex });
+        self.partial_pages.insert(page);
+        ctx.request_repaint();
+        bytes
     }
 
     fn receive_result(&mut self, ctx: &egui::Context, r: asdreader_render::RenderedPage) -> usize {
@@ -2035,6 +2070,9 @@ impl DocView {
                 }
             }
             return 0;
+        }
+        if r.warnings.contains(&asdreader_render::RenderWarning::Partial) {
+            return self.receive_partial(ctx, r);
         }
         if let Some(e) = r.error {
             log::warn!("page {}: {e}", r.request.page + 1);
@@ -2088,6 +2126,7 @@ impl DocView {
         } else {
             let tex = ctx.load_texture(format!("page-{:?}-{page}", self.id), img, TextureOptions::LINEAR);
             self.pages.insert(page, PageTex { tag: r.request.tag, tex });
+            self.partial_pages.remove(&page);
             self.signature_drag.page_received(page);
             self.move_background.page_received(page);
             if !self.page_out_of_date(page) {
@@ -6286,6 +6325,40 @@ trailer << /Root 1 0 R >>
         v.suspend_rendering(&pool);
         assert_eq!(v.receive_result(&ctx, obsolete()), 0);
         assert!(v.thumbs.is_empty(), "nor after the tab was suspended");
+    }
+
+    /// A heavy page comes in as it is drawn: a picture of its running render shows while the page
+    /// has nothing else, keeps it asking for its finished raster, and gives way to that raster. A
+    /// finished raster at another scale is not replaced by a picture, nor are thumbnails.
+    #[test]
+    fn pictures_of_a_running_render_show_until_the_page_arrives() {
+        let ctx = egui::Context::default();
+        let info = thumbnail_info(1);
+        let mut v = DocView::new(DocId(1), &info, ViewDefaults::default());
+        let partial = |req: RenderRequest| asdreader_render::RenderedPage {
+            warnings: vec![asdreader_render::RenderWarning::Partial],
+            ..solid_result(req, 10, 10)
+        };
+        let req = RenderRequest { scale: 1.0, tag: 1000, ..Default::default() };
+        v.last_queue = vec![req];
+        assert!(v.receive_result(&ctx, partial(req)) > 0, "the picture is shown");
+        assert_eq!(v.pages.get(&0).map(|p| p.tag), Some(STALE_TAG), "and the page still asks for its raster");
+        v.frame_queue = vec![req];
+        assert_eq!(v.prepare_render_queue(&info, 1.0), vec![req]);
+        assert!(v.receive_result(&ctx, partial(req)) > 0, "a later picture replaces it");
+        assert!(v.receive_result(&ctx, solid_result(req, 10, 10)) > 0, "the finished page");
+        assert_eq!(v.pages.get(&0).map(|p| p.tag), Some(1000));
+        assert!(v.partial_pages.is_empty());
+        // At another scale, the finished raster stays until the new one is done.
+        let zoomed = RenderRequest { scale: 2.0, tag: 2000, ..Default::default() };
+        v.last_queue = vec![zoomed];
+        assert_eq!(v.receive_result(&ctx, partial(zoomed)), 0, "a picture doesn't replace a finished page");
+        assert_eq!(v.pages.get(&0).map(|p| p.tag), Some(1000));
+        // Thumbnails take finished rasters only.
+        let thumb = RenderRequest { scale: 0.2, tag: THUMB_TAG | 7, ..Default::default() };
+        v.last_queue = vec![thumb];
+        assert_eq!(v.receive_result(&ctx, partial(thumb)), 0);
+        assert!(v.thumbs.is_empty());
     }
 
     #[test]

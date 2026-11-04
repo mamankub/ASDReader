@@ -416,6 +416,7 @@ fn interpret_window<'a>(
     let defaults = DefaultColorSpaces::new(resources, &context.interpreter_cache.object_cache);
     let indexed = !matches!(indexing, crate::content_index::Indexing::Off);
     let recording = indexing.recording();
+    let mut since_checkpoint = 0_u32;
     loop {
         let pos = base + ops.committed() as u64;
         if indexed
@@ -424,9 +425,16 @@ fn interpret_window<'a>(
             return Some(skip);
         }
         let Some(op) = ops.next() else { break };
-        // ASDReader patch: stop when the caller cancelled (see `InterpreterSettings::cancelled`).
-        if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) {
+        // ASDReader patch: stop when the caller cancelled (see `InterpreterSettings::cancelled`),
+        // or the device asked to.
+        if context.settings.cancelled.as_ref().is_some_and(|c| c.load(Ordering::Relaxed)) || device.stop_requested() {
             break;
+        }
+        // ASDReader patch: a moment for a device that shows the page as it is drawn.
+        since_checkpoint += 1;
+        if since_checkpoint >= CHECKPOINT_EVERY {
+            since_checkpoint = 0;
+            device.checkpoint();
         }
         let (kind, clean_before) = if recording {
             (index_op(&op), context.path_is_empty() && !context.clip_pending())
@@ -975,6 +983,9 @@ fn interpret_window<'a>(
     }
     None
 }
+
+/// ASDReader patch: content operators between two `Device::checkpoint` calls.
+const CHECKPOINT_EVERY: u32 = 2048;
 
 /// ASDReader patch: what `op` is to the content index (see `content_index`).
 fn index_op(op: &TypedInstruction<'_, '_>) -> crate::content_index::Op {

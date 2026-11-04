@@ -464,6 +464,21 @@ pub(crate) struct Renderer {
     pub(crate) preview: bool,
     // TODO: Remove this once vello_cpu bug with non-transparent images is fixed
     image_transparency_stack: Vec<bool>,
+    /// ASDReader patch: pictures of the page while it is drawn (see `render_into_progressive`).
+    pub(crate) progress: Option<Progress>,
+    /// ASDReader patch: the page is drawn without its page group, which only a blend mode other
+    /// than Normal needs; one turned up, so the page must be drawn again with it.
+    pub(crate) flat: bool,
+    pub(crate) needs_page_group: bool,
+}
+
+/// ASDReader patch: when and where a renderer sends pictures of the page it is drawing.
+pub(crate) struct Progress {
+    pub(crate) sink: Box<dyn FnMut(&[u8])>,
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) next: std::time::Instant,
+    pub(crate) every: std::time::Duration,
+    pub(crate) buffer: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
@@ -502,6 +517,17 @@ impl Renderer {
             scaler: Scaler::new(ResamplingFunction::CatmullRom),
             preview,
             image_transparency_stack: Vec::new(),
+            progress: None,
+            flat: false,
+            needs_page_group: false,
+        }
+    }
+
+    /// ASDReader patch: a page drawn flat (without its page group) needs it after all for a
+    /// blend mode other than Normal.
+    fn note_blend_mode(&mut self, blend_mode: BlendMode) {
+        if self.flat && !matches!(blend_mode, BlendMode::Normal) {
+            self.needs_page_group = true;
         }
     }
 
@@ -625,6 +651,9 @@ impl Renderer {
                 scaler: self.scaler,
                 preview: self.preview,
                 image_transparency_stack: Vec::new(),
+                progress: None,
+                flat: false,
+                needs_page_group: false,
             };
             let mut mask_pix = Pixmap::new(self.ctx.width(), self.ctx.height());
             let rgb_data = ImageData::Rgb(RgbData {
@@ -1293,6 +1322,9 @@ impl Renderer {
                                 scaler: self.scaler,
                                 preview: self.preview,
                                 image_transparency_stack: Vec::new(),
+                                progress: None,
+                                flat: false,
+                                needs_page_group: false,
                             };
                             let initial_transform = Affine::translate((BORDER, BORDER))
                                 * Affine::scale_non_uniform(xs as f64, ys as f64)
@@ -1350,6 +1382,9 @@ impl Renderer {
                             scaler: self.scaler,
                             preview: self.preview,
                             image_transparency_stack: Vec::new(),
+                            progress: None,
+                            flat: false,
+                            needs_page_group: false,
                         };
                         let mut initial_transform = Affine::scale_non_uniform(xs as f64, ys as f64)
                             * Affine::translate((-bbox.x0, -bbox.y0));
@@ -1665,6 +1700,9 @@ impl<'a> Device<'a> for Renderer {
                                         scaler: self.scaler,
                                         preview: self.preview,
                                         image_transparency_stack: Vec::new(),
+                                        progress: None,
+                                        flat: false,
+                                        needs_page_group: false,
                                     };
                                     let mut sub_pix = Pixmap::new(width, height);
                                     sub_renderer.ctx.set_transform(transform);
@@ -1734,6 +1772,7 @@ impl<'a> Device<'a> for Renderer {
         mask: Option<SoftMask<'_>>,
         blend_mode: BlendMode,
     ) {
+        self.note_blend_mode(blend_mode);
         // ASDReader patch (22): nothing is layered in a knockout erase pass.
         if self.erasing {
             self.erase_groups += 1;
@@ -1871,6 +1910,38 @@ impl<'a> Device<'a> for Renderer {
         }
     }
 
+    fn stop_requested(&self) -> bool {
+        self.needs_page_group
+    }
+
+    /// ASDReader patch: a picture of the page so far, when one is due and no transparency group
+    /// is open (a picture can only be taken of finished layers).
+    fn checkpoint(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if !self.knockout.is_empty() || self.erasing || self.needs_page_group {
+                return;
+            }
+            let Some(mut progress) = self.progress.take() else { return };
+            if std::time::Instant::now() >= progress.next {
+                let (width, height) = (self.ctx.width(), self.ctx.height());
+                let len = usize::from(width) * usize::from(height) * 4;
+                progress.buffer.clear();
+                progress.buffer.resize(len, 0);
+                self.ctx.flush();
+                let mut resources = vello_cpu::Resources::default();
+                self.ctx.render_to_buffer(&mut resources, &mut progress.buffer, width, height, vello_cpu::RenderMode::OptimizeSpeed);
+                (progress.sink)(&progress.buffer);
+                progress.next = std::time::Instant::now() + progress.every;
+                // vello_cpu's multi-threaded dispatcher starts its workers again on the next path
+                // it is given, but a clip pushed or popped before that path finds them stopped
+                // and panics. An empty rectangle, which paints nothing, starts them now.
+                self.ctx.fill_rect(&Rect::new(0.0, 0.0, 0.0, 0.0));
+            }
+            self.progress = Some(progress);
+        }
+    }
+
     fn draw_path(
         &mut self,
         path: &BezPath,
@@ -1956,6 +2027,7 @@ impl<'a> Device<'a> for Renderer {
     }
 
     fn set_blend_mode(&mut self, blend_mode: BlendMode) {
+        self.note_blend_mode(blend_mode);
         // ASDReader patch (22): inside a knockout group every element replaces what it covers.
         let mode = if self.in_knockout() {
             knockout_blend_mode()
@@ -2057,6 +2129,9 @@ fn draw_soft_mask(mask: &SoftMask<'_>, settings: RenderSettings, width: u16, hei
         scaler: Scaler::new(ResamplingFunction::CatmullRom),
         preview,
         image_transparency_stack: Vec::new(),
+        progress: None,
+        flat: false,
+        needs_page_group: false,
     };
 
     let bg_color = mask.background_color().to_rgba();

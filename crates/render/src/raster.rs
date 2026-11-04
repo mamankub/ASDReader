@@ -220,6 +220,9 @@ pub struct RenderedPage {
 pub enum RenderWarning {
     /// Content was skipped after the per-page decoded-content budget was exhausted.
     ContentTruncated,
+    /// The render is still running: this is a picture of what it has drawn so far, and the
+    /// finished page follows (see `RenderPool::set_progressive`).
+    Partial,
 }
 
 /// Counters for work performed by a renderer or render pool.
@@ -301,6 +304,16 @@ pub fn device_pixels(pt: f32, scale: f32) -> u32 {
 /// Render one page with a caller-owned parser and cache. Panics inside the renderer are caught
 /// and reported as `Err((message, panicked))`.
 type Output = (u32, u32, Pixels, Option<Arc<crate::text::PageText>>);
+
+/// Where a render sends pictures of a page it is still drawing: width, height and premultiplied
+/// RGBA8 (see `RenderPool::set_progressive`).
+pub(crate) type PartialSink = Arc<dyn Fn(u32, u32, &[u8]) + Send + Sync>;
+
+/// When a running render shows its first picture, and how often it shows another: a page that
+/// takes longer than this comes in as it is drawn, as in other readers, instead of after a blank
+/// wait.
+const PARTIAL_FIRST: std::time::Duration = std::time::Duration::from_millis(350);
+const PARTIAL_EVERY: std::time::Duration = std::time::Duration::from_millis(700);
 
 /// The content index of each page (see `hayro_interpret::ContentIndex`): a tile, or the page at
 /// another scale, passes over the content that cannot reach it. A page that took long to draw
@@ -409,6 +422,7 @@ fn render_page<'a>(
     config: &RenderConfig,
     req: RenderRequest,
     indexes: &ContentIndexes,
+    partial: Option<PartialSink>,
 ) -> Result<Output, (String, bool)> {
     let reading = request_reading(config, &req);
     if req.kind == RequestKind::Text {
@@ -483,7 +497,22 @@ fn render_page<'a>(
         let mut preview_settings = settings.clone();
         preview_settings.preview = req.preview;
         preview_settings.content_index = indexes.mode(&req);
-        render_into(page, cache, &preview_settings, &rs, pixels.bytes_mut());
+        match partial.filter(|_| req.tile.is_none()) {
+            Some(sink) => {
+                let (pw, ph) = (u32::from(w), u32::from(h));
+                hayro::render_into_progressive(
+                    page,
+                    cache,
+                    &preview_settings,
+                    &rs,
+                    pixels.bytes_mut(),
+                    Box::new(move |bytes: &[u8]| sink(pw, ph, bytes)),
+                    PARTIAL_FIRST,
+                    PARTIAL_EVERY,
+                );
+            }
+            None => render_into(page, cache, &preview_settings, &rs, pixels.bytes_mut()),
+        }
         Ok((w.into(), h.into(), pixels, None))
     }));
     match result {
@@ -592,7 +621,7 @@ impl PageRenderer {
         let cache = RenderCache::new();
         let warnings = Arc::new(Mutex::new(Vec::new()));
         let settings = warning_settings(&self.settings, warnings.clone());
-        let r = render_page(pdf, &cache, &settings, &self.config, req, &self.indexes);
+        let r = render_page(pdf, &cache, &settings, &self.config, req, &self.indexes, None);
         let warnings = take_warnings(&warnings);
         if matches!(r, Err((_, true))) {
             self.pdf = parse(&self.bytes, self.config.password.as_deref());
@@ -667,6 +696,8 @@ struct Shared {
     indexes: ContentIndexes,
     /// The document's decoded images, shared by the workers (see `PoolImages`).
     images: PoolImages,
+    /// Whether whole pages still being drawn send pictures (`RenderPool::set_progressive`).
+    progressive: AtomicBool,
     /// Desired requests, active jobs and bounded completed results share one deduplication key.
     queue: Arc<WorkQueue>,
     /// Per worker id: the request it is rendering and since when.
@@ -943,6 +974,15 @@ impl RenderPool {
         self.shared.indexes.heavy_millis.store(millis.saturating_add(1), Ordering::Relaxed);
     }
 
+    /// Send pictures of whole pages that are still being drawn, as results marked
+    /// `RenderWarning::Partial`, before the finished page. A page that takes more than a third of
+    /// a second shows what it has every 0.7 s, as other readers show a heavy page coming in. Off
+    /// by default: only a consumer that expects them (the document view) turns it on. A partial
+    /// result completes nothing; the request stays queued until its finished page arrives.
+    pub fn set_progressive(&self, on: bool) {
+        self.shared.progressive.store(on, Ordering::Relaxed);
+    }
+
     /// How many images the pool's workers have decoded so far (their shared cache's misses), for
     /// diagnostics and tests.
     pub fn decoded_images(&self) -> usize {
@@ -1136,6 +1176,34 @@ impl Drop for RenderPool {
         }
         self.shared.indexes.closing.store(true, Ordering::Release);
     }
+}
+
+/// Where the render of `req` sends pictures of itself, when the pool wants them: to the
+/// consumer, through `out`, as `RenderWarning::Partial` results.
+#[cfg(not(target_arch = "wasm32"))]
+fn partial_sink(shared: &Shared, out: &Arc<WorkQueue>, req: RenderRequest) -> Option<PartialSink> {
+    if !shared.progressive.load(Ordering::Relaxed) || req.kind != RequestKind::Pixels || req.tile.is_some() {
+        return None;
+    }
+    let out = out.clone();
+    let start = Stopwatch::start();
+    Some(Arc::new(move |width: u32, height: u32, bytes: &[u8]| {
+        let Some(mut rgba) = Pixels::zeroed(width as usize, height as usize) else { return };
+        if rgba.bytes_mut().len() != bytes.len() {
+            return;
+        }
+        rgba.bytes_mut().copy_from_slice(bytes);
+        out.send_partial(RenderedPage {
+            request: req,
+            width,
+            height,
+            rgba,
+            error: None,
+            text: None,
+            warnings: vec![RenderWarning::Partial],
+            millis: start.millis(),
+        });
+    }))
 }
 
 /// A worker's interpreter settings: the document's, stopping once the request is cancelled.
@@ -1345,7 +1413,7 @@ fn worker(
                         panic!("injected page panic");
                     }
                     match pdf {
-                        Some(pdf) => render_page(pdf, cache, &settings, &config, req, &shared.indexes),
+                        Some(pdf) => render_page(pdf, cache, &settings, &config, req, &shared.indexes, partial_sink(&shared, &out, req)),
                         None => Err(("the document could not be parsed".into(), false)),
                     }
                 }))
@@ -5319,6 +5387,68 @@ trailer << /Root 1 0 R >>
         assert_eq!(pool.decoded_images(), after_tiles, "a later render decodes nothing");
     }
 
+    /// A page drawn flat for pictures of its progress (without its page group) has the pixels of
+    /// the page drawn with it, give or take a few units of rounding where translucent paint
+    /// overlaps (6% of this page's pixels, which strokes at 60% opacity cross, by 3 at most);
+    /// a page with a blend mode other than Normal is drawn again with its group, exactly.
+    #[test]
+    fn a_page_drawn_with_pictures_of_its_progress_ends_as_it_would_without() {
+        // Three threads rasterize, as in the app: a page drawn again for its group must first let
+        // them finish, or a worker sends to a dropped dispatcher and the process aborts.
+        let draw = |pdf: &[u8], progressive: bool| -> (Vec<u8>, usize) {
+            let pdf = Pdf::new(Arc::new(pdf.to_vec())).expect("parses");
+            let pages = pdf.pages();
+            let page = pages.first().expect("a page");
+            let rs =
+                RenderSettings { x_scale: 1.5, y_scale: 1.5, width: Some(900), height: Some(600), bg_color: WHITE, threads: 3, ..Default::default() };
+            let settings = RenderConfig::default().settings();
+            let mut buf = vec![0u8; 900 * 600 * 4];
+            let pictures = Arc::new(Mutex::new(0usize));
+            if progressive {
+                let count = pictures.clone();
+                hayro::render_into_progressive(
+                    page,
+                    &RenderCache::new(),
+                    &settings,
+                    &rs,
+                    &mut buf,
+                    Box::new(move |bytes: &[u8]| {
+                        assert_eq!(bytes.len(), 900 * 600 * 4);
+                        *lock(&count) += 1;
+                    }),
+                    std::time::Duration::ZERO,
+                    std::time::Duration::ZERO,
+                );
+            } else {
+                render_into(page, &RenderCache::new(), &settings, &rs, &mut buf);
+            }
+            let n = *lock(&pictures);
+            (buf, n)
+        };
+        let pdf = index_torture_pdf();
+        let (grouped, _) = draw(&pdf, false);
+        let (flat, pictures) = draw(&pdf, true);
+        assert!(pictures > 0, "pictures were sent while the page was drawn");
+        // Rounding only: a few units where translucent anti-aliased paint overlaps.
+        let worst = grouped.iter().zip(&flat).map(|(a, b)| a.abs_diff(*b)).max().unwrap_or(0);
+        let differing = grouped.chunks(4).zip(flat.chunks(4)).filter(|(a, b)| a != b).count();
+        assert!(worst <= 4, "flat differs from grouped by {worst}");
+        assert!(differing * 10 < 900 * 600, "{differing} pixels differ");
+        // A blend mode other than Normal needs the page group: drawn again with it, exactly.
+        let mut late_blend = String::new();
+        for i in 0..3000 {
+            late_blend.push_str(&format!("{} {} m {} {} l S\n", i % 37, i % 29, i % 31 + 3, i % 23 + 2));
+        }
+        late_blend.push_str("/GS1 gs 1 0 0 rg 10 10 20 20 re f");
+        let blended = one_page_pdf(late_blend.as_bytes(), "");
+        let blended = String::from_utf8_lossy(&blended)
+            .replace("/MediaBox [0 0 40 40]", "/MediaBox [0 0 40 40] /Resources << /ExtGState << /GS1 << /BM /Screen >> >> >>")
+            .into_bytes();
+        let (grouped, _) = draw(&blended, false);
+        let (flat, _) = draw(&blended, true);
+        assert!(grouped == flat, "a page with a blend mode is drawn with its group");
+    }
+
     /// A Flate content stream that turns bad partway is drawn as far as it decodes, as before the
     /// streaming decoder moved to flate2 (hayro-syntax patch: `flate::fast`).
     #[test]
@@ -7786,9 +7916,11 @@ endstream endobj
         let pdf = parse(&Arc::new(pdf), None).expect("parses");
         let cache = RenderCache::new();
         let settings = InterpreterSettings::default();
-        let preview = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true), &ContentIndexes::default()).expect("preview renders");
-        let fin = render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false), &ContentIndexes::default()).expect("final renders");
-        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false), &ContentIndexes::default())
+        let preview =
+            render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(true), &ContentIndexes::default(), None).expect("preview renders");
+        let fin =
+            render_page(&pdf, &cache, &settings, &RenderConfig::default(), req(false), &ContentIndexes::default(), None).expect("final renders");
+        let fresh = render_page(&pdf, &RenderCache::new(), &settings, &RenderConfig::default(), req(false), &ContentIndexes::default(), None)
             .expect("final renders");
         assert_eq!(rgb_at(&preview.2, w, 35, 35), [0, 0, 255]);
         assert_eq!(&fin.2[..], &fresh.2[..], "a final render after a preview matches one with a fresh cache");

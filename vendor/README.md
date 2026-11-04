@@ -145,3 +145,21 @@ patches do the same for zooming and scrolling through large documents:
   zoomed tiles in 2.0 s; now 0.9 s the first time and 0.2 s after. An image that is its own soft
   mask is decoded without the cache instead of waiting for itself.
   `raster::tests::a_pools_workers_decode_an_image_once`.
+
+## Pages that come in as they are drawn
+
+- `hayro`: `render_into_progressive` sends pictures of the page while it is drawn, as other
+  readers show a heavy page coming in. `hayro-interpret` calls `Device::checkpoint` every 2,048
+  content operators; the renderer takes a picture when one is due (vello_cpu can flush, render
+  and go on drawing) and no transparency group is open. For that the page is drawn *flat*,
+  without its page group, which only a blend mode other than Normal needs: the renderer then
+  asks to stop (`Device::stop_requested`) and the page is drawn again with its group. A flat
+  page differs from a grouped one by rounding where translucent paint overlaps (3 units at most
+  on `raster::tests::a_page_drawn_with_pictures_of_its_progress_ends_as_it_would_without`).
+- `asdreader-render`: `RenderPool::set_progressive` sends those pictures as results marked
+  `RenderWarning::Partial` (the first after 0.35 s, then every 0.7 s) for whole pages; they
+  complete nothing (`work_queue::tests::pictures_of_a_running_render_complete_nothing`). The
+  document view turns it on and shows a picture while the page has nothing better on screen
+  (`canvas::tests::pictures_of_a_running_render_show_until_the_page_arrives`). On the 40 MB sheet
+  the first picture shows after 0.36 s instead of a blank 4.5 s, and the page takes as long as
+  before.

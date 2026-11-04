@@ -1,106 +1,113 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/asdreader-logo-white.svg">
-    <img src="docs/brand/asdreader-logo.svg" alt="ASDReader — โลโก้เอกสารสีแดงนีออนและขาว" width="420">
+    <img src="docs/brand/asdreader-logo.svg" alt="โลโก้ ASDReader" width="420">
   </picture>
 </p>
 
 <h1 align="center">ASDReader</h1>
-<p align="center"><b>อ่านและจัดการ PDF พร้อมการแสดงผลภาษาไทย</b><br>พัฒนาด้วย Rust ต่อยอดจาก ASDReader · ใช้งานบนเดสก์ท็อปและเว็บ</p>
+<p align="center"><b>โปรแกรมอ่านและแก้ไข PDF ที่ใช้งานภาษาไทยได้เต็มรูปแบบ</b><br>
+Windows และ Linux · ทำงานบนเครื่องของคุณ ไม่อัปโหลดเอกสาร · โอเพนซอร์ส</p>
 
-![ASDReader เปิดเอกสารตัวอย่างภาษาไทยพร้อมเมนูภาษาไทย](docs/images/asdreader-thai.png)
+<p align="center">
+  <a href="https://github.com/mamankub/asdreader-help/releases/latest"><b>ดาวน์โหลด</b></a> ·
+  <a href="https://mamankub.github.io/asdreader-help/manual/">คู่มือ</a> ·
+  <a href="https://mamankub.github.io/asdreader-help/support/">ช่วยเหลือ</a> ·
+  <a href="https://mamankub.github.io/asdreader-help/changelog/">มีอะไรใหม่</a>
+</p>
 
-ASDReader เป็นโปรแกรมอ่านและแก้ไข PDF แบบโอเพนซอร์ส สำหรับเปิดเอกสาร ค้นหาข้อความ จัดหน้า ใส่คำอธิบาย และทำงานกับเอกสารในเครื่อง โดยไม่ต้องสมัครบัญชี ตัวโปรแกรมต่อยอดจาก [ASDReader](https://github.com/mamankub/ASDReader) ภายใต้สิทธิ์ `MIT OR Apache-2.0` และใช้แบรนด์ ASDReader ของตนเอง
+![ASDReader เปิดเอกสารภาษาไทยพร้อมเมนูภาษาไทย](docs/images/asdreader-thai.png)
 
-ภาพประกอบใน README นี้เป็นภาพที่ render จาก **UI ของ ASDReader จริง** พร้อมเอกสารสังเคราะห์ที่สร้างด้วย PDF writer ของโปรเจกต์ ใช้ฟอนต์เปิด Inter และ Noto Sans Thai ไม่มีภาพจากโปรแกรม PDF อื่นหรือเอกสารของผู้ใช้
+ASDReader เป็นโปรแกรมอ่านและแก้ไขไฟล์ PDF สำหรับงานเอกสารและงานแบบ (CAD) ใช้เปิด ค้นหา แก้ไขข้อความไทย
+จัดหน้า กรอกฟอร์ม เซ็นเอกสาร และพิมพ์ ทุกอย่างทำบนเครื่องของคุณ ไม่ต้องสมัครบัญชีและไม่ส่งเอกสารไปที่ใด
 
-## ความสามารถหลัก
+## จุดเด่น
 
-| งาน | สิ่งที่ทำได้ |
+| | |
 |---|---|
-| อ่านเอกสาร | ซูม หมุนหน้า บุ๊กมาร์ก ภาพย่อ โหมดอ่าน สองหน้าคู่ โหมดสว่างและมืด |
-| ค้นหาและเลือกข้อความ | ค้นหา เลือก และคัดลอกข้อความจาก PDF ที่มี text layer |
-| จัดหน้า | ย้าย หมุน ลบ แทรก แยกหน้า รวมเอกสาร และปรับกล่องขอบหน้า |
-| แก้ไขและใส่คำอธิบาย | เพิ่มข้อความ ไฮไลต์ โน้ต รูปร่าง เส้นวาด และการตอบความคิดเห็น |
-| แบบฟอร์มและการเซ็น | กรอกฟอร์ม ใส่ลายเซ็น และเครื่องมือเกี่ยวกับลายเซ็นดิจิทัลตามที่ engine รองรับ |
-| ปกป้องเอกสาร | รหัสผ่าน สิทธิ์เอกสาร การปิดทับข้อมูล และการล้างข้อมูลแฝง |
-| เครื่องมืออัตโนมัติ | CLI, JSON scripts และ MCP ที่เปิดใช้งานเมื่อผู้ใช้เรียกเอง |
+| **ภาษาไทยครบ** | เมนูภาษาไทยด้วยฟอนต์ไทยแบบมีหัว แก้ไขข้อความไทยในไฟล์ PDF ได้ วรรณยุกต์และสระอยู่ถูกตำแหน่ง รวมถึงไฟล์ที่ใช้ฟอนต์ไทยแบบเก่า (TH SarabunPSK, Cordia, Angsana) |
+| **ไฟล์ใหญ่และไฟล์งานแบบ** | เปิดแบบแปลนขนาดใหญ่ที่มีเส้นนับล้านเส้นและหลายเลเยอร์ได้เร็ว หน้าที่หนักทยอยแสดงขณะวาด ซูมและเลื่อนแล้ววาดเฉพาะส่วนที่อยู่ในจอ เส้นบางคมชัด |
+| **ใช้ฟอนต์ในเครื่อง** | เลือกฟอนต์ที่ติดตั้งในคอมพิวเตอร์ (รวมไฟล์ `.ttc`) มาใช้กับข้อความที่แก้ไข |
+| **ASD PDF Printer** | เครื่องพิมพ์ PDF ในรายการของ Windows พิมพ์จากโปรแกรมใดก็ได้แล้วได้ไฟล์ PDF ที่ข้อความไทยถูกต้อง ค้นหาและคัดลอกได้ |
+| **พิมพ์ตามเครื่องพิมพ์** | ใช้ความละเอียดและคุณภาพที่ตั้งไว้ใน Printing Preferences ของ Windows |
+| **งานเอกสารครบ** | ค้นหา ไฮไลต์ โน้ต วาด จัดหน้า (ย้าย หมุน ลบ แทรก แยก รวม) กรอกฟอร์ม ลายเซ็นดิจิทัล รหัสผ่าน การปิดทับข้อมูล |
 
-โปรเจกต์ยังอยู่ระหว่างพัฒนา ความสามารถบางส่วนมีข้อจำกัด โดยเฉพาะการแก้ข้อความเดิมใน PDF ที่ฝังฟอนต์มาเพียงบางตัวอักษร การแปลงไฟล์ Office, OCR ภาษาไทย และฟอร์ม XFA โปรดดู [สถานะความสามารถ](docs/target-app-parity.md) ซึ่งเก็บข้อมูลประเมินจากต้นทาง และ [รายการช่องว่าง](docs/gaps.md)
+![จัดหน้าเอกสาร](docs/images/asdreader-organize.png)
 
-## ภาษาไทยและฟอนต์
+## ดาวน์โหลดและติดตั้ง
 
-ASDReader ใช้ **Noto Sans Thai** จากชุด [asdesign-fonts](https://github.com/mamankub/asdesign-fonts) ที่ตรึง revision ไว้ รองรับพยัญชนะไทย รวมถึง ฃ ฅ สระ วรรณยุกต์ เครื่องหมาย และเลขไทย โดยใช้ OpenType shaping เพื่อวางรูปอักษรและเครื่องหมายประกอบ
+ดาวน์โหลดรุ่นล่าสุดได้ที่ **[หน้า Releases](https://github.com/mamankub/asdreader-help/releases/latest)**
 
-การปรับใน fork นี้ครอบคลุม:
+| ไฟล์ | ใช้กับ |
+|---|---|
+| `asdreader-<รุ่น>-windows-x64.msi` | **ตัวติดตั้ง Windows** (แนะนำ) เลือกโฟลเดอร์ติดตั้งได้ ค่าเริ่มต้น `C:\Program Files\ASDReader` และเลือกติดตั้ง ASD PDF Printer ได้ |
+| `ASDReader-<รุ่น>-windows-x64-portable.zip` | Windows แบบพกพา แตกไฟล์แล้วเปิด `ASDReader.exe` |
+| `ASDReader-<รุ่น>-linux-x86_64.tar.gz` | Linux x86_64 (glibc 2.35 ขึ้นไป) |
+| `SHA256SUMS.txt` | ค่าตรวจความถูกต้องของไฟล์ |
 
-- จัดรูปข้อความไทยแยกจากข้อความอังกฤษที่อยู่ในบรรทัดเดียวกัน เพื่อให้สระอำและวรรณยุกต์ใช้กฎภาษาไทย
-- เก็บสระบน สระล่าง และวรรณยุกต์ไว้กับตัวฐาน พร้อมป้องกันสระหน้า `เ แ โ ใ ไ` และสระหลัง `ะ า ำ ๅ` แยกบรรทัดออกจากตัวฐานขณะเพิ่มข้อความ
-- เก็บ Unicode ต้นฉบับไว้สำหรับการอ่านและแก้ไขหลังบันทึก แยกจากรูปอักษรที่ใช้วาดบนหน้า
-- ใช้ฟอนต์ไทยที่ฝังมากับ build ทั้งบนเดสก์ท็อปและ WebAssembly เพื่อไม่พึ่งฟอนต์ที่ติดตั้งอยู่ในเครื่อง
-- ตรวจว่ามีฟอนต์ไทยก่อน build ผ่าน `cargo xtask asdreader` และตรวจตัวอักษรในทุกตระกูลฟอนต์ UI
+ต้องใช้ Windows 10 ขึ้นไปแบบ 64 บิต ขั้นตอนติดตั้ง การติดตั้งแบบเงียบสำหรับหลายเครื่อง และการตรวจไฟล์ อยู่ใน
+[หน้าดาวน์โหลด](https://mamankub.github.io/asdreader-help/download/)
 
-**ขอบเขตที่ต้องเข้าใจ:** การตัดบรรทัดแบบนี้รักษาชุดอักษรและสระ แต่ยังไม่ใช่การตัดคำด้วยพจนานุกรมภาษาไทย PDF เก่าที่ไม่มีฟอนต์หรือแผนที่ Unicode ที่ถูกต้องอาจค้นหา/คัดลอกไม่ได้ตามต้นฉบับ ฟอนต์ของช่องแบบฟอร์มและ annotation เป็นอีกเส้นทางหนึ่งที่ยังต้องตรวจตามเอกสาร ไม่ได้อ้างว่าทุก PDF หรือทุกฟอนต์ภายนอกจะถูกต้องทั้งหมด
+ตัวติดตั้งรุ่นปัจจุบันยังไม่มีลายเซ็นดิจิทัลที่ Windows รู้จัก Windows จึงอาจเตือนตอนติดตั้ง
+สำหรับองค์กรที่ใช้ใบรับรองของตัวเอง ดู [packaging/windows/trust](packaging/windows/trust/README-TH.md)
 
-เลือกเมนู **Edit → Preferences… → Language → ไทย** หรือใช้ตัวเลือก `--language th` ตอนเริ่มโปรแกรม การเปลี่ยนภาษาหน้าจอไม่แปลเนื้อหาเอกสาร ชื่อไฟล์ หรือข้อมูลของผู้ใช้
+## ภาษาไทย
 
-![ASDReader โหมดมืดพร้อมชุดตัวอย่างสระและวรรณยุกต์](docs/images/asdreader-dark.png)
+- เมนูและข้อความในโปรแกรมเป็นภาษาไทย เลือกได้ที่ **การตั้งค่า… ▸ ภาษาของโปรแกรม** หรือเปิดด้วย `--language th`
+- เมนูใช้ฟอนต์ไทยแบบมีหัวที่ติดตั้งในเครื่อง (Tahoma, Leelawadee UI, TH Sarabun ฯลฯ) ถ้าไม่มีจะใช้ Noto Sans Thai ที่มากับโปรแกรม
+- แก้ไขข้อความไทยในไฟล์ PDF: จัดรูปอักษรด้วย OpenType วางสระบน สระล่าง และวรรณยุกต์ถูกตำแหน่ง
+  และอ่านไฟล์ที่ใช้ฟอนต์ไทยแบบเก่าซึ่งเก็บวรรณยุกต์ไว้ในพื้นที่ส่วนตัวของฟอนต์ (PUA)
+- เมื่อพิมพ์ตัวอักษรที่ฟอนต์ในไฟล์ไม่มี โปรแกรมจะหาฟอนต์ตัวเต็มชื่อเดียวกันในเครื่องให้อัตโนมัติ
+- ค้นหาและคัดลอกข้อความไทยเรียงสระและวรรณยุกต์ถูกต้อง รวมถึงสระอำที่ถูกเก็บแยกส่วน ("นํ้า" อ่านเป็น "น้ำ")
+- ซ่อมข้อความไทยในไฟล์ที่พิมพ์ด้วย "Microsoft Print to PDF": `asdreader-cli edit ไฟล์.pdf --repair-thai --out ใหม่.pdf`
 
-## ดาวน์โหลดรุ่นแรก
+**ข้อจำกัด:** การตัดบรรทัดยังไม่ใช้พจนานุกรมภาษาไทย ข้อความที่เพิ่มใหม่ (Add text) ยังเลือกได้เฉพาะ Helvetica, Times และ Courier
+และไฟล์ PDF ที่ไม่มีข้อมูล Unicode ของฟอนต์อาจค้นหาหรือคัดลอกข้อความไทยไม่ได้
 
-[ASDReader v0.13.1](https://github.com/mamankub/ASDReader/releases/tag/v0.13.1) เป็นรุ่นแรกของ fork นี้ โดยต่อเลขเวอร์ชันจาก ASDReader 0.13.0 เพื่อไม่ชน tag ที่นำเข้าจากต้นทาง
+## สร้างจากซอร์ส
 
-- **Windows x64:** แตกไฟล์ `ASDReader-0.13.1-windows-x64-portable.zip` แล้วเปิด `ASDReader.exe` ไม่ต้องติดตั้ง MSI; การตั้งค่าอยู่ข้างโปรแกรมใน `ASDReaderData`
-- **Linux x86_64:** แตกไฟล์ `ASDReader-0.13.1-linux-x86_64.tar.gz` แล้วเรียก `bin/asdreader --language th` ต้องมี glibc 2.35 ขึ้นไป, ระบบหน้าต่าง X11/Wayland, libxkbcommon และไดรเวอร์ Vulkan/EGL
-- ทั้งสองแพ็กเกจมีฟอนต์ไทย, CLI, OCR models รูปแบบ ONNX จากผู้พัฒนาต้นทาง และไฟล์สิทธิ์การใช้งาน; ไม่ได้เพิ่ม OCR ภาษาไทย
-- ตรวจความครบถ้วนด้วย `SHA256SUMS.txt` จากหน้า release; Windows portable ยังไม่มีลายเซ็นดิจิทัล และรุ่นนี้ยังไม่มีแพ็กเกจ macOS/Web/ARM64
-
-Repository นี้ยังเป็น private: ผู้ดาวน์โหลดต้องมีสิทธิ์ GitHub ของ repo และการตรวจอัปเดตจากในแอปแบบไม่ล็อกอินอาจเข้าถึง release ไม่ได้
-
-ดู [บันทึก v0.13.1 และวิธีสร้าง release](docs/releases/v0.13.1.md) สำหรับขอบเขตการทดสอบและข้อจำกัด
-
-## เริ่มใช้งานจากซอร์ส
-
-ต้องมี **Rust 1.95 ขึ้นไป**, Git และเครื่องมือคอมไพล์ของระบบ บน Linux ต้องมีแพ็กเกจพัฒนาสำหรับ X11/Wayland และ `libxkbcommon` ตาม [คู่มือพัฒนา](docs/development.md)
+ต้องมี **Rust 1.95 ขึ้นไป**, Git และเครื่องมือคอมไพล์ของระบบ บน Linux ต้องมีแพ็กเกจพัฒนาของ X11/Wayland และ `libxkbcommon`
+(ดู [คู่มือพัฒนา](docs/development.md))
 
 ```sh
 git clone https://github.com/mamankub/ASDReader.git
 cd ASDReader
 
-# ชุดฟอนต์เป็น build input ภายนอก ไม่คัดลอกฟอนต์เข้า repo นี้
+# ชุดฟอนต์เป็น build input แยกต่างหาก ไม่ได้เก็บไฟล์ฟอนต์ไว้ใน repo นี้
 git clone https://github.com/mamankub/asdesign-fonts.git ../asdesign-fonts
 git -C ../asdesign-fonts checkout c76dcbc93b13d3b6981c12602bc545ea7ec3e67a
 
-# ตรวจฟอนต์ไทยก่อนเริ่มแอป
+# รันโปรแกรม (ตรวจว่ามีฟอนต์ไทยก่อน build)
 cargo xtask asdreader run -- --language th
 
-# เปิดเอกสาร หรือสร้าง binary แบบ release
-cargo xtask asdreader run -- document.pdf --language th
+# เปิดเอกสาร หรือสร้างรุ่น release
+cargo xtask asdreader run -- เอกสาร.pdf --language th
 cargo xtask asdreader build --release
 ```
 
-คำสั่ง `asdreader` จะหา `../asdesign-fonts` โดยอัตโนมัติ หรือใช้ตำแหน่งจาก `ASDESIGN_FONTS_DIR` แล้วเปิด `ASDESIGN_FONTS_REQUIRED=1` และ `ASDREADER_REQUIRE_THAI=1` เพื่อให้ build ล้มพร้อมข้อความชัดเจนหากไม่มีชุดฟอนต์หรือไม่มี face ภาษาไทย
+คำสั่ง `cargo xtask asdreader` หาชุดฟอนต์ที่ `../asdesign-fonts` หรือที่ `ASDESIGN_FONTS_DIR`
+และจะหยุด build พร้อมแจ้งสาเหตุถ้าไม่มีฟอนต์ไทย ไฟล์โปรแกรมที่ได้คือ `ASDReader` (Windows: `ASDReader.exe`) และ `asdreader-cli`
 
-ชื่อ Cargo package, binary และ ID สำหรับ packaging บางส่วนยังใช้ `asdreader` เพื่อให้ทำงานกับโครงสร้างเดิมได้ เช่น `target/release/asdreader` และ `asdreader-cli` ชื่อที่แสดงในแอปและ artwork เป็น ASDReader ส่วนข้อมูลการตั้งค่าที่เก็บไว้ยังใช้ตำแหน่งเดิม
+ตัวติดตั้ง Windows (MSI) สร้างด้วย WiX ผ่าน GitHub Actions ([release.yml](.github/workflows/release.yml))
+รายละเอียดอยู่ใน [docs/releasing.md](docs/releasing.md) และ [docs/asd-pdf-printer.md](docs/asd-pdf-printer.md)
 
-ดูไฟล์ที่มีเผยแพร่ได้ที่ [Releases ของ ASDReader](https://github.com/mamankub/ASDReader/releases) ตัวติดตั้งและการลงลายมือชื่อของ ASDReader ต้นทางไม่ใช่ตัวติดตั้งหรือใบรับรองของ ASDReader
-
-## CLI และการควบคุมด้วย agent
+## CLI และงานอัตโนมัติ
 
 ```sh
-# แสดงเครื่องมือที่ engine มี
-cargo run -p asdreader-cli -- tools
+cargo run -p asdreader-cli -- info เอกสาร.pdf
+cargo run -p asdreader-cli -- render เอกสาร.pdf --page 1 --dpi 150 --out หน้า1.png
+cargo run -p asdreader-cli -- text เอกสาร.pdf
 
-# ทำงานตาม JSON script โดยจำกัดพื้นที่อ่าน/เขียน
+# รายการเครื่องมือ และการทำงานตาม JSON script ที่จำกัดโฟลเดอร์อ่าน/เขียน
+cargo run -p asdreader-cli -- tools
 cargo run -p asdreader-cli -- run --script steps.json --root ./work
 
-# เปิด MCP เฉพาะเมื่อมีผู้เรียก ไม่เปิด listener โดยอัตโนมัติ
+# เซิร์ฟเวอร์ MCP สำหรับ AI agent (เปิดเมื่อสั่งเท่านั้น)
 cargo run -p asdreader-cli -- mcp
 ```
 
-หาก script เขียนข้อความไทย ต้องตั้ง `ASDESIGN_FONTS_DIR=../asdesign-fonts ASDREADER_REQUIRE_THAI=1` ตอน build CLI ด้วย รายละเอียดอยู่ใน [คู่มือ automation](crates/automation/README.md)
-
-แอปเดสก์ท็อปมี control channel แบบ opt-in ผ่าน `--control FILE` สำหรับ `inspect`, `click`, `type` และ `screenshot` โดยผูกกับ loopback และใช้ token ใหม่ทุกครั้ง ไม่เปิดใช้งานเอง
+ดูรายละเอียดใน [คู่มือ automation](crates/automation/README.md) โปรแกรมเดสก์ท็อปมีช่องทางควบคุมแบบ opt-in ผ่าน `--control FILE`
+(ผูกกับ loopback และใช้ token ใหม่ทุกครั้ง)
 
 ## พัฒนาและทดสอบ
 
@@ -111,42 +118,35 @@ export ASDREADER_REQUIRE_THAI=1
 export ASDREADER_SYSTEM_FONTS=0
 
 cargo fmt --all --check
-cargo xtask asdreader test
-cargo test -p asdreader-ui-egui --features eframe/x11 --test it thai -j 2 --locked
-cargo clippy -p asdreader-fonts -p asdreader-edit -j 2 --all-targets -- -D warnings
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo test --workspace --locked
 cargo xtask layers
 cargo xtask assets
 ```
 
-ตัวเลือก `eframe/x11` ในตัวอย่างใช้สำหรับเครื่องทดสอบ Linux แบบ headless ให้เลือก backend ให้ตรงกับแพลตฟอร์มเมื่อทดสอบที่อื่น ฟอนต์ระบบถูกปิดในขั้นตอนถ่ายภาพและทดสอบชุดนี้ เพื่อไม่ให้ผลผ่านจากฟอนต์ที่ไม่ได้ส่งไปกับแอป
+| ส่วน | หน้าที่ |
+|---|---|
+| `crates/render` | วาดหน้า (render pool, ดัชนีเนื้อหาหน้า, ภาพที่ถอดรหัสแล้วใช้ร่วมกัน) และดึงข้อความ |
+| `crates/fonts` | ฟอนต์ การจัดรูปอักษรไทย และการซ่อมข้อความไทย |
+| `crates/edit` | แก้ไขเนื้อหา PDF |
+| `crates/engine` | เอกสารที่เปิด, undo/redo และชุดคำสั่ง |
+| `crates/ui-egui` | หน้าจอโปรแกรม |
+| `crates/automation`, `apps/asdreader-cli` | CLI, script และ MCP |
+| `vendor/` | ไลบรารีที่แก้เพิ่มสำหรับ ASDReader (ดู [vendor/README.md](vendor/README.md)) |
 
-โครงสร้างหลักประกอบด้วย `crates/fonts` สำหรับฟอนต์และ shaping, `crates/edit` สำหรับแก้เนื้อหา PDF, `crates/render` สำหรับ render/ดึงข้อความ, `crates/engine` สำหรับ session และ undo, `crates/ui-egui` สำหรับ UI และ `crates/automation` สำหรับ CLI/MCP
+วัดความเร็วการวาดหน้าด้วย `crates/render/examples/page_timing.rs` และไฟล์แบบแปลนทดสอบจาก `crates/render/examples/synth_sheet.rs`
+ขอบเขตการทดสอบและสิ่งที่ยังไม่ได้ยืนยันอยู่ใน [รายงานตรวจ ASDReader](docs/asdreader-validation.md)
 
-ดูคำสั่ง ผลทดสอบ และขอบเขตที่ยังไม่ยืนยันใน [รายงานตรวจ ASDReader](docs/asdreader-validation.md)
+## แจ้งปัญหา
 
-![หน้าแรกของ ASDReader พร้อมไอคอนและเมนูภาษาไทย](docs/images/asdreader-home.png)
+แจ้งได้ที่ [Issues](https://github.com/mamankub/asdreader-help/issues/new/choose) โปรดระบุรุ่นโปรแกรม รุ่น Windows
+ขั้นตอนที่ทำให้เกิดปัญหา และถ้าเป็นไปได้ ให้แนบไฟล์ตัวอย่างที่ไม่มีข้อมูลส่วนตัวหรือข้อมูลลับ
 
-## สร้างภาพประกอบใหม่จาก ASDReader
+## สิทธิ์การใช้งาน
 
-```sh
-export ASDESIGN_FONTS_DIR="$PWD/../asdesign-fonts"
-export ASDREADER_REQUIRE_THAI=1
-export ASDREADER_SYSTEM_FONTS=0
+ซอร์สโค้ดใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก
+ASDReader พัฒนาต่อจากโค้ดโอเพนซอร์สภายใต้สิทธิ์เดียวกัน ประกาศลิขสิทธิ์ของผู้เขียนเดิมและของไลบรารีที่ใช้อยู่ใน [NOTICE](NOTICE)
 
-cargo run -p asdreader-edit --example asdreader_demo --locked
-cargo build -p asdreader-ui-egui --example shot --features eframe/x11 -j 2 --locked
-
-target/debug/examples/shot docs/images/asdreader-thai.png dist/demo/asdreader-thai.pdf --language th --panel none --zoom 75 --size 1440x1000 --scale 2 --width 1600
-target/debug/examples/shot docs/images/asdreader-dark.png dist/demo/asdreader-thai.pdf --language th --theme dark --page 2 --panel none --zoom 75 --size 1440x1000 --scale 2 --width 1600
-target/debug/examples/shot docs/images/asdreader-home.png --language th --size 1440x1000 --scale 2 --width 1600
-```
-
-หลังสร้าง asset ใหม่ให้อัปเดต SHA-256 ใน `ATTRIBUTION.toml` แล้วรัน `cargo xtask assets --write` ตาม [กฎของโปรเจกต์](AGENTS.md) ภาพทั้งหมดต้องมาจากแอปนี้และเอกสารสังเคราะห์ที่ใช้ asset ภายใต้สิทธิ์ที่อนุญาต
-
-## สิทธิ์และเครดิต
-
-ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของผู้เขียนโค้ดต้นทาง, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
-
-logo/icon ของ ASDReader เป็นรูปทรงต้นฉบับสีแดงนีออน `#FF1744` และขาว `#FFFFFF` ส่วน wordmark ใช้เส้นอักษรจาก Inter ที่มีสิทธิ์ OFL ฟอนต์ Lucide icons และ asset อื่นคงสิทธิ์ของเจ้าของตาม [ATTRIBUTION.md](ATTRIBUTION.md) ฟอนต์จาก build input มีรายละเอียดใน [asdesign-fonts attribution](https://github.com/mamankub/asdesign-fonts/blob/c76dcbc93b13d3b6981c12602bc545ea7ec3e67a/ATTRIBUTION.md)
-
-แจ้งปัญหาได้ที่ [Issues ของ ASDReader](https://github.com/mamankub/ASDReader/issues) พร้อมรุ่นโปรแกรม ขั้นตอนทำซ้ำ และ PDF ตัวอย่างที่ไม่มีข้อมูลส่วนบุคคล
+โลโก้ ASDReader ([docs/brand](docs/brand/)) ฟอนต์ ไอคอน และไฟล์อื่น ๆ เป็นไปตามสิทธิ์ของแต่ละรายการใน
+[ATTRIBUTION.md](ATTRIBUTION.md) ส่วนฟอนต์จาก build input ดูที่
+[asdesign-fonts](https://github.com/mamankub/asdesign-fonts/blob/c76dcbc93b13d3b6981c12602bc545ea7ec3e67a/ATTRIBUTION.md)

@@ -107,6 +107,14 @@ pub trait Device<'a> {
     fn begin_knockout_erase(&mut self) {}
     /// ASDReader patch (39): see `knockout_erase_wanted`.
     fn end_knockout_erase(&mut self) {}
+    /// ASDReader patch: called every so many content operators, between two of them: a device
+    /// that shows a page as it is drawn can take a picture of what it has so far.
+    fn checkpoint(&mut self) {}
+    /// ASDReader patch: whether the device wants interpretation to stop now (its output will be
+    /// thrown away, and the page drawn again).
+    fn stop_requested(&self) -> bool {
+        false
+    }
 }
 
 /// A device that discards all drawing operations.

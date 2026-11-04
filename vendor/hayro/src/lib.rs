@@ -232,6 +232,48 @@ pub fn render_into<'a>(
     render_settings: &RenderSettings,
     buffer: &mut [u8],
 ) {
+    draw_into(page, cache, interpreter_settings, render_settings, buffer, None);
+}
+
+/// ASDReader patch: [`render_into`], sending `sink` a picture of the page (premultiplied RGBA8
+/// of the same size) as it is drawn: the first after `first`, then every `every`, as other readers
+/// show a heavy page coming in. The pictures come from a page drawn without its page group,
+/// which only a blend mode other than Normal needs: a page that has one is drawn again with it,
+/// and sends nothing more. The final pixels are those of a page drawn flat or with its group, as
+/// it needs; a flat page can differ from the one [`render_into`] draws by a unit of rounding
+/// where anti-aliased edges overlap.
+pub fn render_into_progressive<'a>(
+    page: &'a Page<'a>,
+    cache: &RenderCache<'a>,
+    interpreter_settings: &InterpreterSettings,
+    render_settings: &RenderSettings,
+    buffer: &mut [u8],
+    sink: Box<dyn FnMut(&[u8])>,
+    first: std::time::Duration,
+    every: std::time::Duration,
+) {
+    let progress = renderer::Progress {
+        sink,
+        #[cfg(not(target_arch = "wasm32"))]
+        next: std::time::Instant::now() + first,
+        every,
+        buffer: Vec::new(),
+    };
+    #[cfg(target_arch = "wasm32")]
+    let _ = first;
+    draw_into(page, cache, interpreter_settings, render_settings, buffer, Some(progress));
+}
+
+/// ASDReader patch: [`render_into`] and [`render_into_progressive`]. With `progress` the page is
+/// first drawn flat (without its page group), and again with it if it needs one.
+fn draw_into<'a>(
+    page: &'a Page<'a>,
+    cache: &RenderCache<'a>,
+    interpreter_settings: &InterpreterSettings,
+    render_settings: &RenderSettings,
+    buffer: &mut [u8],
+    progress: Option<renderer::Progress>,
+) {
     let (x_scale, y_scale) = (render_settings.x_scale, render_settings.y_scale);
     let initial_transform = Affine::translate((-render_settings.x_offset as f64, -render_settings.y_offset as f64))
         * Affine::scale_non_uniform(x_scale as f64, y_scale as f64)
@@ -244,79 +286,96 @@ pub fn render_into<'a>(
     if expected != Some(buffer.len()) {
         return;
     }
-    let mut state = Context::new(
-        initial_transform,
-        Rect::new(0.0, 0.0, pix_width as f64, pix_height as f64),
-        &cache.interpreter_cache,
-        page.xref(),
-        interpreter_settings.clone(),
-    );
-
     let vc_settings = vello_cpu::RenderSettings {
         level: Level::new(),
         num_threads: render_settings.threads,
         render_mode: RenderMode::OptimizeSpeed,
     };
 
-    let mut device = Renderer::new(
-        pix_width,
-        pix_height,
-        vc_settings,
-        cache,
-        render_settings.color_replacement,
-        interpreter_settings.preview,
-    );
+    let mut progress = progress;
+    loop {
+        let flat = progress.is_some();
+        let mut state = Context::new(
+            initial_transform,
+            Rect::new(0.0, 0.0, pix_width as f64, pix_height as f64),
+            &cache.interpreter_cache,
+            page.xref(),
+            interpreter_settings.clone(),
+        );
 
-    // ASDReader patch (18): the page renders as one transparency group (the page group). Its
-    // objects composite with an initially transparent backdrop, and the group is then put on
-    // the paper (ISO 32000-2, page group), so a blend mode only blends where something was
-    // drawn: a /BM /Screen fill over an empty part of the page keeps its colour (#2970).
-    // Under reading colours the background is painted *inside* the group instead, as its
-    // initial backdrop, so a Multiply highlight blends with the dark background: outside it,
-    // the highlight kept its own flat colour and the words under it vanished into the band
-    // (#1548). Reading colours replace the page's colours anyway; for document colours the
-    // background stays outside, or every separable mode but Normal, Multiply, Darken and
-    // HardLight would blend with the white paper.
-    let backdrop_inside = render_settings.color_replacement.is_some();
-    if backdrop_inside {
-        device.push_transparency_group(1.0, None, BlendMode::Normal);
+        let mut device = Renderer::new(
+            pix_width,
+            pix_height,
+            vc_settings,
+            cache,
+            render_settings.color_replacement,
+            interpreter_settings.preview,
+        );
+        device.flat = flat;
+        device.progress = progress.take();
+
+        // ASDReader patch (18): the page renders as one transparency group (the page group). Its
+        // objects composite with an initially transparent backdrop, and the group is then put on
+        // the paper (ISO 32000-2, page group), so a blend mode only blends where something was
+        // drawn: a /BM /Screen fill over an empty part of the page keeps its colour (#2970).
+        // Under reading colours the background is painted *inside* the group instead, as its
+        // initial backdrop, so a Multiply highlight blends with the dark background: outside it,
+        // the highlight kept its own flat colour and the words under it vanished into the band
+        // (#1548). Reading colours replace the page's colours anyway; for document colours the
+        // background stays outside, or every separable mode but Normal, Multiply, Darken and
+        // HardLight would blend with the white paper. ASDReader patch: with Normal blending
+        // alone, the group composites as its objects would on the paper, so a flat page (drawn
+        // for pictures of its progress) leaves it out.
+        let group = !flat;
+        let backdrop_inside = render_settings.color_replacement.is_some();
+        if group && backdrop_inside {
+            device.push_transparency_group(1.0, None, BlendMode::Normal);
+        }
+
+        device.ctx.set_paint(render_settings.bg_color);
+        device
+            .ctx
+            .fill_rect(&Rect::new(0.0, 0.0, pix_width as f64, pix_height as f64));
+        let mut clip_path = page.intersected_crop_box().to_kurbo().to_path(0.1);
+        clip_path.apply_affine(initial_transform);
+        device.push_clip_path(&ClipPath {
+            path: clip_path,
+            fill: FillRule::NonZero,
+        });
+        if group && !backdrop_inside {
+            device.push_transparency_group(1.0, None, BlendMode::Normal);
+        }
+
+        interpret_page(page, &mut state, &mut device);
+
+        if device.needs_page_group {
+            // A blend mode other than Normal: draw the page again, with its group. The
+            // multi-threaded dispatcher's workers finish what they were given first: dropped
+            // while they still send, they panic, and rayon aborts the process.
+            device.ctx.flush();
+            continue;
+        }
+        if group && !backdrop_inside {
+            device.pop_transparency_group();
+        }
+        device.pop_clip_path();
+        if group && backdrop_inside {
+            device.pop_transparency_group();
+        }
+
+        // ASDReader patch: the multi-threaded dispatcher must finish its queued paths first; a
+        // no-op on one thread.
+        device.ctx.flush();
+        let mut resources = vello_cpu::Resources::default();
+        device.ctx.render_to_buffer(
+            &mut resources,
+            buffer,
+            pix_width,
+            pix_height,
+            vc_settings.render_mode,
+        );
+        return;
     }
-
-    device.ctx.set_paint(render_settings.bg_color);
-    device
-        .ctx
-        .fill_rect(&Rect::new(0.0, 0.0, pix_width as f64, pix_height as f64));
-    let mut clip_path = page.intersected_crop_box().to_kurbo().to_path(0.1);
-    clip_path.apply_affine(initial_transform);
-    device.push_clip_path(&ClipPath {
-        path: clip_path,
-        fill: FillRule::NonZero,
-    });
-    if !backdrop_inside {
-        device.push_transparency_group(1.0, None, BlendMode::Normal);
-    }
-
-    interpret_page(page, &mut state, &mut device);
-
-    if !backdrop_inside {
-        device.pop_transparency_group();
-    }
-    device.pop_clip_path();
-    if backdrop_inside {
-        device.pop_transparency_group();
-    }
-
-    // ASDReader patch: the multi-threaded dispatcher must finish its queued paths first; a no-op
-    // on one thread.
-    device.ctx.flush();
-    let mut resources = vello_cpu::Resources::default();
-    device.ctx.render_to_buffer(
-        &mut resources,
-        buffer,
-        pix_width,
-        pix_height,
-        vc_settings.render_mode,
-    );
 }
 
 /// ASDReader patch: interpret `page` without drawing it, for what `interpreter_settings` collects

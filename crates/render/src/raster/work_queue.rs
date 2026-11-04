@@ -73,7 +73,13 @@ struct State {
     results: VecDeque<Completed>,
     bytes: usize,
     closed: bool,
+    /// Pictures of renders still running (`RenderWarning::Partial`), at most one per request and
+    /// `MAX_PARTIALS` in all. They never complete a request.
+    partials: VecDeque<RenderedPage>,
 }
+
+/// The most pictures of running renders held for the consumer; older ones are dropped.
+const MAX_PARTIALS: usize = 4;
 
 impl State {
     fn retry(&mut self, req: RenderRequest) {
@@ -88,6 +94,17 @@ impl State {
             let index = self.pending.partition_point(|r| self.desired.get(&Key::from(*r)).copied().unwrap_or(usize::MAX) > priority);
             self.pending.insert(index, req);
         }
+    }
+
+    /// The next picture of a render still running, for a request still wanted.
+    fn take_partial(&mut self) -> Option<RenderedPage> {
+        while let Some(page) = self.partials.pop_front() {
+            let key = Key::from(page.request);
+            if self.desired.contains_key(&key) && self.active.contains(&key) {
+                return Some(page);
+            }
+        }
+        None
     }
 
     fn take(&mut self) -> Option<RenderedPage> {
@@ -139,6 +156,7 @@ impl WorkQueue {
         let mut desired = HashSet::with_capacity(requests.len());
         let requests: Vec<_> = requests.into_iter().filter(|r| desired.insert(Key::from(*r))).collect();
         state.results.retain(|r| desired.contains(&Key::from(r.page.request)) && valid(&r.valid));
+        state.partials.retain(|p| desired.contains(&Key::from(p.request)));
         state.bytes = state.results.iter().fold(0usize, |n, r| n.saturating_add(r.bytes));
         let completed: HashSet<_> = state.results.iter().map(|r| Key::from(r.page.request)).collect();
         let obsolete = state.active.iter().filter(|key| !desired.contains(key)).copied().map(Key::request).collect();
@@ -211,6 +229,7 @@ impl WorkQueue {
                 return Ok(());
             }
             if state.results.len() < self.max_count && (state.results.is_empty() || state.bytes.saturating_add(bytes) <= self.max_bytes) {
+                state.partials.retain(|p| Key::from(p.request) != key);
                 state.active.remove(&key);
                 state.bytes = state.bytes.saturating_add(bytes);
                 state.results.push_back(Completed { page, bytes, valid: tokens });
@@ -222,6 +241,24 @@ impl WorkQueue {
             // wait so failed generations are released even while the consumer is paused.
             state = self.changed.wait_timeout(state, Duration::from_millis(25)).unwrap_or_else(|p| p.into_inner()).0;
         }
+    }
+
+    /// Offer a picture of a render still running. Never waits: it is dropped when the request is
+    /// no longer wanted or running, and replaces an earlier picture of the same request.
+    #[cfg(any(test, not(target_arch = "wasm32")))]
+    pub(super) fn send_partial(&self, page: RenderedPage) {
+        let key = Key::from(page.request);
+        let mut state = lock(&self.state);
+        if state.closed || !state.desired.contains_key(&key) || !state.active.contains(&key) {
+            return;
+        }
+        state.partials.retain(|p| Key::from(p.request) != key);
+        if state.partials.len() >= MAX_PARTIALS {
+            state.partials.pop_front();
+        }
+        state.partials.push_back(page);
+        drop(state);
+        self.changed.notify_all();
     }
 
     /// A shared-parser timeout may belong to another page holding a cold-load gate.
@@ -261,6 +298,7 @@ impl WorkQueue {
         state.pending.clear();
         state.desired.clear();
         state.results.clear();
+        state.partials.clear();
         state.bytes = 0;
         drop(state);
         self.changed.notify_all();
@@ -272,7 +310,7 @@ pub(super) struct ResultReceiver(pub(super) Arc<WorkQueue>);
 impl ResultReceiver {
     pub(super) fn try_recv(&self) -> Result<RenderedPage, std::sync::mpsc::TryRecvError> {
         let mut state = lock(&self.0.state);
-        let result = state.take();
+        let result = state.take().or_else(|| state.take_partial());
         let closed = state.closed;
         drop(state);
         self.0.changed.notify_all();
@@ -320,6 +358,37 @@ mod tests {
             warnings: Vec::new(),
             millis: 0,
         }
+    }
+
+    fn partial(req: RenderRequest) -> RenderedPage {
+        RenderedPage { warnings: vec![super::super::RenderWarning::Partial], ..page(req, 4) }
+    }
+
+    /// Pictures of a running render reach the consumer without completing anything: the
+    /// request stays running, a newer picture replaces an older one, the finished page replaces
+    /// both, and a request no longer wanted or not running gets none.
+    #[test]
+    fn pictures_of_a_running_render_complete_nothing() {
+        let q = Arc::new(WorkQueue::default());
+        let recv = ResultReceiver(q.clone());
+        q.replace(vec![req(0), req(1)]);
+        q.send_partial(partial(req(0)));
+        assert!(recv.try_recv().is_err(), "a request not running yet gets no picture");
+        assert_eq!(q.pop(), Some(req(0)));
+        q.send_partial(RenderedPage { millis: 1, ..partial(req(0)) });
+        q.send_partial(RenderedPage { millis: 2, ..partial(req(0)) });
+        let got = recv.try_recv().expect("the newest picture");
+        assert_eq!((got.request, got.millis), (req(0), 2));
+        assert!(recv.try_recv().is_err(), "one picture per request");
+        assert_eq!(q.pop(), Some(req(1)), "the running request is not given out again");
+        q.send_partial(partial(req(0)));
+        q.send(page(req(0), 4)).expect("delivered");
+        let got = recv.try_recv().expect("the finished page");
+        assert!(got.warnings.is_empty());
+        assert!(recv.try_recv().is_err(), "the finished page replaced the picture");
+        q.send_partial(partial(req(1)));
+        q.replace(vec![req(2)]);
+        assert!(recv.try_recv().is_err(), "a request no longer wanted keeps no picture");
     }
 
     #[test]
