@@ -93,3 +93,25 @@ are unchanged. Renderer regressions `japanese_substitute_missing_spaces_draw_no_
 and `japanese_substitute_spaces_keep_pdf_widths_and_unicode` use the synthetic
 MS-Mincho / UniJIS-UCS2-HW-H fixture with asdesign-fonts, including `/W` and `/DW`
 placement controls.
+
+## Large engineering sheets
+
+Three patches for drawings with millions of thin strokes (the 40 MB A1 sheet that
+`crates/render/examples/synth_sheet.rs` writes renders in about 4.3 s instead of 7.9 s; measure
+with `crates/render/examples/page_timing.rs`):
+
+- `hayro`: `RenderSettings::threads` hands vello_cpu's multi-threaded dispatcher (its
+  `multithreading` feature) a few threads that stroke and rasterize the page's paths while the
+  content stream is interpreted; `render_into` flushes the dispatcher before rasterizing.
+  `asdreader-render` asks for up to three (`raster_threads`). The pixels are those of one thread:
+  `raster::tests::threads_draw_the_pixels_one_thread_draws`.
+- `hayro`: a stroke at most 1.5 device pixels wide draws its round caps and joins square and
+  bevelled (kurbo built each from arcs: a third of a sheet's render time), and a stroke at most
+  one pixel wide is put on the pixel grid (`hairline_on_grid`), one full-strength row or column
+  instead of two grey ones, as other readers' "enhance thin lines" does.
+  `raster::tests::a_hairline_covers_one_row_at_full_strength`,
+  `raster::tests::a_wide_line_is_not_moved_to_the_grid`.
+- `hayro-syntax`: page content streamed through `ContentReader` is inflated with flate2
+  (`filter::lzw_flate::flate::fast`) instead of the pdf.js port; a stream flate2 rejects goes on
+  with the port from where flate2 stopped. `raster::tests::a_damaged_flate_content_stream_draws_what_decodes`
+  and the module's own tests.

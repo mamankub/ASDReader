@@ -345,6 +345,7 @@ fn render_page<'a>(
                     y_offset: t.y as f32,
                     bg_color,
                     color_replacement,
+                    threads: raster_threads(),
                 }
             }
             None => {
@@ -366,6 +367,7 @@ fn render_page<'a>(
                     height: Some(side(h)),
                     bg_color,
                     color_replacement,
+                    threads: raster_threads(),
                     ..Default::default()
                 }
             }
@@ -387,6 +389,20 @@ fn render_page<'a>(
         Ok(Err(e)) => Err((e, false)),
         Err(panic) => Err((format!("renderer crashed on page {}: {}", req.page + 1, panic_message(&panic)), true)),
     }
+}
+
+/// Threads that rasterize one page's paths while its content stream is interpreted (vello_cpu's
+/// multi-threaded dispatcher), for pages and tiles alike. The interpreter stays the critical
+/// path, so a few are enough: on a 40 MB engineering sheet two cut the render from 7.1 s to 4.4 s
+/// and more did not help. Up to half the machine's threads, at most three; none on a machine
+/// with fewer than four (where the render pool's own workers already use them). The output is
+/// identical either way.
+fn raster_threads() -> u16 {
+    static THREADS: std::sync::OnceLock<u16> = std::sync::OnceLock::new();
+    *THREADS.get_or_init(|| {
+        let cores = std::thread::available_parallelism().map_or(1, std::num::NonZero::get);
+        if cfg!(target_arch = "wasm32") || cores < 4 { 0 } else { (cores / 2).min(3) as u16 }
+    })
 }
 
 fn finish(req: RenderRequest, start: Stopwatch, r: Result<Output, (String, bool)>, warnings: Vec<RenderWarning>) -> RenderedPage {
@@ -4889,6 +4905,107 @@ trailer << /Root 1 0 R >>
         pdf.extend_from_slice(stream);
         pdf.extend_from_slice(b"\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n");
         pdf
+    }
+
+    /// The value of the red channel of pixel (`x`, `y`) of `page` (white background).
+    fn red_at(page: &RenderedPage, x: u32, y: u32) -> u8 {
+        page.rgba[((y * page.width + x) * 4) as usize]
+    }
+
+    fn render_content(content: &[u8], dict: &str, scale: f32) -> RenderedPage {
+        let mut r = PageRenderer::new(Arc::new(one_page_pdf(content, dict)), RenderConfig::default());
+        let page = r.render(RenderRequest { page: 0, kind: RequestKind::Pixels, tile: None, scale, tag: 0, ..Default::default() });
+        assert!(page.error.is_none(), "{:?}", page.error);
+        page
+    }
+
+    /// A line thinner than a pixel is drawn one pixel wide on the pixel grid, at full strength
+    /// (hayro patch: `hairline_on_grid`). Its centre (y = 19.7 from the top) used to spread it over
+    /// two rows at 80% and 20%, which read as grey, soft lines in engineering drawings.
+    #[test]
+    fn a_hairline_covers_one_row_at_full_strength() {
+        let page = render_content(b"0 0 0 RG 0.1 w 1 J 1 j 5 20.3 m 35 20.3 l S", "", 1.0);
+        assert_eq!(red_at(&page, 20, 19), 0, "the row under the line is black");
+        assert_eq!(red_at(&page, 20, 18), 255, "the row above is untouched");
+        assert_eq!(red_at(&page, 20, 20), 255, "the row below is untouched");
+        // The square end reaches half a pixel past the snapped end points (5.5 and 35.5).
+        assert_eq!(red_at(&page, 5, 19), 0);
+        assert_eq!(red_at(&page, 35, 19), 0);
+        assert_eq!(red_at(&page, 3, 19), 255);
+        assert_eq!(red_at(&page, 37, 19), 255);
+        // A vertical one covers one column.
+        let page = render_content(b"0 0 0 RG 0 w 20.3 5 m 20.3 35 l S", "", 1.0);
+        assert_eq!(red_at(&page, 20, 20), 0);
+        assert_eq!((red_at(&page, 19, 20), red_at(&page, 21, 20)), (255, 255));
+        // So does a dashed one, with its dashes scaled with the page: 4 pt on, 4 pt off at 2×.
+        let page = render_content(b"0 0 0 RG 0.1 w [4 4] 0 d 2 20.3 m 38 20.3 l S", "", 2.0);
+        let row = 80 - 41; // y = 40.6 device pixels from the bottom, snapped into row 39 from the top
+        assert_eq!(red_at(&page, 6, row), 0, "inside the first dash");
+        assert_eq!(red_at(&page, 14, row), 255, "inside the first gap");
+        assert_eq!(red_at(&page, 22, row), 0, "inside the second dash");
+    }
+
+    /// A stroke wider than a pixel keeps its place and its anti-aliased edges.
+    #[test]
+    fn a_wide_line_is_not_moved_to_the_grid() {
+        let page = render_content(b"0 0 0 RG 3 w 5 20.3 m 35 20.3 l S", "", 1.0);
+        // From y = 18.2 to 21.2 from the top: row 21 is a fifth covered.
+        let edge = red_at(&page, 20, 21);
+        assert!(edge > 150 && edge < 255, "row 21 is partly covered: {edge}");
+        assert_eq!(red_at(&page, 20, 19), 0);
+    }
+
+    /// The page's paths are rasterized on several threads (hayro patch: `RenderSettings::threads`)
+    /// with exactly the pixels one thread draws, through clips, groups, blending and text.
+    #[test]
+    fn threads_draw_the_pixels_one_thread_draws() {
+        let mut content = String::from("q 1 0 0 rg 2 2 30 30 re f 0.5 0 0 0.5 0 0 cm 10 10 50 50 re W n 0 0 1 RG 3 w 1 j 1 J\n");
+        for i in 0..400 {
+            let (x, y) = ((i * 37) % 70, (i * 53) % 70);
+            content.push_str(&format!("{x} {y} m {} {} l {} {y} l S\n", x + 7, y + 3, x + 2));
+        }
+        content.push_str("Q /GS0 gs 0 1 0 rg 15 15 20 20 re f BT /F1 9 Tf 4 30 Td (Threads) Tj ET 0.2 w 0 0 0 RG 1 1 m 39 39 l S");
+        let dict = "";
+        let pdf = format!(
+            "%PDF-1.7\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 40 40] /Contents 4 0 R /Resources << /ExtGState << /GS0 << /ca 0.5 /BM /Multiply >> >> /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >> endobj\n4 0 obj << {dict} /Length {} >> stream\n{content}\nendstream endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n",
+            content.len()
+        );
+        let pdf = Pdf::new(Arc::new(pdf.into_bytes())).expect("parses");
+        let pages = pdf.pages();
+        let page = pages.first().expect("a page");
+        let settings = RenderConfig::default().settings();
+        let draw = |threads: u16| {
+            let rs =
+                RenderSettings { x_scale: 7.0, y_scale: 7.0, width: Some(280), height: Some(280), bg_color: WHITE, threads, ..Default::default() };
+            hayro::render(page, &RenderCache::new(), &settings, &rs).data_as_u8_slice().to_vec()
+        };
+        let one = draw(0);
+        assert!(one.chunks(4).any(|p| p[0] < 128 && p[2] > 128), "the strokes are drawn");
+        for threads in [1, 2, 3] {
+            assert!(draw(threads) == one, "{threads} threads");
+        }
+    }
+
+    /// A Flate content stream that turns bad partway is drawn as far as it decodes, as before the
+    /// streaming decoder moved to flate2 (hayro-syntax patch: `flate::fast`).
+    #[test]
+    fn a_damaged_flate_content_stream_draws_what_decodes() {
+        use std::io::Write as _;
+        let mut content = String::from("0 0 1 rg 2 2 6 6 re f\n");
+        for i in 0..20_000 {
+            content.push_str(&format!("{} {} 1 1 re f\n", 20 + i % 15, 20 + i % 13));
+        }
+        let mut z = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+        z.write_all(content.as_bytes()).expect("compresses");
+        let mut stream = z.finish().expect("compresses");
+        let whole = render_content(&stream, "/Filter /FlateDecode", 1.0);
+        assert!(red_at(&whole, 4, 35) < 64, "the first square");
+        let at = stream.len() * 3 / 4;
+        for b in stream.get_mut(at..at + 8).expect("long enough") {
+            *b ^= 0xA5;
+        }
+        let damaged = render_content(&stream, "/Filter /FlateDecode", 1.0);
+        assert!(red_at(&damaged, 4, 35) < 64, "what came before the damage is drawn");
     }
 
     /// A document whose `pages` page dictionaries all live in one (uncompressed) object stream,

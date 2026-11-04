@@ -8,7 +8,10 @@ pub(crate) mod flate {
     use super::*;
     use crate::filter::lzw_flate::{PredictorParams, apply_predictor};
 
+    #[cfg(not(feature = "unsafe"))]
     pub(crate) use fallback::FlateState;
+    #[cfg(feature = "unsafe")]
+    pub(crate) use fast::FlateState;
 
     /// ASDReader patch: whether a Flate stream with `params` has no predictor, so that
     /// [`FlateState`] can produce it a piece at a time.
@@ -64,6 +67,199 @@ pub(crate) mod flate {
         }
         let params = PredictorParams::from_params(params);
         apply_predictor(decoded, &params)
+    }
+
+    /// ASDReader patch: the streaming Flate decoder of page content (see `ContentReader`), on
+    /// flate2. The port of pdf.js below was a sixth of the time a large page took to render. A
+    /// stream flate2 rejects goes on with the port, which decodes as far as it can: it starts
+    /// again from the beginning and drops what was already produced, so the output is the
+    /// port's from that point on.
+    #[cfg(feature = "unsafe")]
+    mod fast {
+        use super::fallback;
+        use alloc::vec::Vec;
+        use flate2::{Decompress, FlushDecompress, Status};
+
+        /// Output produced per call into flate2.
+        const CHUNK: usize = 64 << 10;
+
+        pub(crate) struct FlateState {
+            inner: Inner,
+        }
+
+        enum Inner {
+            Fast {
+                inflate: Decompress,
+                /// The next input byte.
+                pos: usize,
+                done: bool,
+                /// How many bytes have been produced in all.
+                emitted: usize,
+                scratch: Vec<u8>,
+            },
+            Fallback(fallback::FlateState),
+        }
+
+        impl FlateState {
+            /// The state at the start of `data`, past a zlib header if it has one. The header is
+            /// recognised as the port recognises it, and the Adler-32 trailer is not checked, as
+            /// the port does not check it.
+            pub(crate) fn new(data: &[u8]) -> Self {
+                let pos = match data {
+                    [cmf, flg, ..]
+                        if (cmf & 0x0f) == 0x08
+                            && (u16::from(*cmf) << 8 | u16::from(*flg)).is_multiple_of(31)
+                            && (flg & 0x20) == 0 =>
+                    {
+                        2
+                    }
+                    _ => 0,
+                };
+                Self {
+                    inner: Inner::Fast {
+                        inflate: Decompress::new(false),
+                        pos,
+                        done: false,
+                        emitted: 0,
+                        scratch: Vec::new(),
+                    },
+                }
+            }
+
+            /// Whether nothing more can be decoded from `data`.
+            pub(crate) fn finished(&self, data: &[u8]) -> bool {
+                match &self.inner {
+                    Inner::Fast { done, .. } => *done,
+                    Inner::Fallback(state) => state.finished(data),
+                }
+            }
+
+            /// Appends decoded bytes to `out` until it holds `until` bytes or the stream ends.
+            /// `data` is the whole encoded stream, the same on every call.
+            pub(crate) fn decode_into(&mut self, data: &[u8], out: &mut Vec<u8>, until: usize) {
+                if let Inner::Fast {
+                    inflate,
+                    pos,
+                    done,
+                    emitted,
+                    scratch,
+                } = &mut self.inner
+                {
+                    let mut failed = false;
+                    while !*done && out.len() < until {
+                        let want = (until - out.len()).min(CHUNK);
+                        if scratch.len() < want {
+                            scratch.resize(want, 0);
+                        }
+                        let input = data.get(*pos..).unwrap_or(&[]);
+                        let (before_in, before_out) = (inflate.total_in(), inflate.total_out());
+                        let Some(window) = scratch.get_mut(..want) else {
+                            break;
+                        };
+                        let status = inflate.decompress(input, window, FlushDecompress::None);
+                        let read = usize::try_from(inflate.total_in() - before_in).unwrap_or(0);
+                        let made = usize::try_from(inflate.total_out() - before_out).unwrap_or(0);
+                        *pos = pos.saturating_add(read);
+                        out.extend_from_slice(window.get(..made).unwrap_or(&[]));
+                        *emitted = emitted.saturating_add(made);
+                        match status {
+                            Ok(Status::StreamEnd) => *done = true,
+                            // No progress: the input ran out before the stream's end.
+                            Ok(_) if read == 0 && made == 0 => *done = true,
+                            Ok(_) => {}
+                            Err(_) => {
+                                failed = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !failed {
+                        return;
+                    }
+                    // The port, past the bytes flate2 produced.
+                    let skip = *emitted;
+                    let mut state = fallback::FlateState::new(data);
+                    let mut sink = Vec::new();
+                    let mut skipped = 0;
+                    while skipped < skip && !state.finished(data) {
+                        sink.clear();
+                        state.decode_into(data, &mut sink, (skip - skipped).min(1 << 20));
+                        if sink.is_empty() {
+                            break;
+                        }
+                        skipped += sink.len();
+                    }
+                    self.inner = Inner::Fallback(state);
+                }
+                if let Inner::Fallback(state) = &mut self.inner {
+                    state.decode_into(data, out, until);
+                }
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::FlateState;
+            use alloc::vec::Vec;
+            use flate2::Compression;
+            use flate2::write::ZlibEncoder;
+            use std::io::Write as _;
+
+            fn zlib(data: &[u8]) -> Vec<u8> {
+                let mut e = ZlibEncoder::new(Vec::new(), Compression::default());
+                e.write_all(data).unwrap();
+                e.finish().unwrap()
+            }
+
+            /// Decodes `data` in pieces of `step` bytes, as `ContentReader` asks for them.
+            fn in_pieces(data: &[u8], step: usize) -> Vec<u8> {
+                let mut state = FlateState::new(data);
+                let mut all = Vec::new();
+                while !state.finished(data) {
+                    let mut piece = Vec::new();
+                    state.decode_into(data, &mut piece, step);
+                    if piece.is_empty() {
+                        break;
+                    }
+                    all.extend_from_slice(&piece);
+                }
+                all
+            }
+
+            fn content(n: usize) -> Vec<u8> {
+                (0..n).map(|i| format!("{} {} m {} {} l S\n", i % 977, i % 613, i % 89, i % 7)).collect::<String>().into_bytes()
+            }
+
+            #[test]
+            fn pieces_join_to_the_whole_stream() {
+                let plain = content(50_000);
+                let encoded = zlib(&plain);
+                for step in [1, 7, 4096, 65_536, 1 << 20, usize::MAX >> 1] {
+                    assert_eq!(in_pieces(&encoded, step), plain, "step {step}");
+                }
+            }
+
+            #[test]
+            fn a_damaged_stream_reads_as_far_as_the_port_reads_it() {
+                let plain = content(20_000);
+                let mut encoded = zlib(&plain);
+                let at = encoded.len() / 2;
+                encoded[at] ^= 0xff;
+                let mut port = super::fallback::FlateState::new(&encoded);
+                let mut expected = Vec::new();
+                port.decode_into(&encoded, &mut expected, usize::MAX >> 1);
+                assert_eq!(in_pieces(&encoded, 4096), expected);
+            }
+
+            #[test]
+            fn a_cut_stream_ends_with_what_it_has() {
+                let plain = content(20_000);
+                let encoded = zlib(&plain);
+                let cut = &encoded[..encoded.len() / 3];
+                let got = in_pieces(cut, 65_536);
+                assert!(!got.is_empty() && plain.starts_with(&got));
+            }
+        }
     }
 
     /// Ported from <https://github.com/mozilla/pdf.js/blob/master/src/core/flate_stream.js>

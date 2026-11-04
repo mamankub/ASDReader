@@ -157,6 +157,9 @@ pub struct RenderSettings {
     /// ASDReader patch: when set, solid text and line-art paint colours are remapped while
     /// rendering; `None` renders exactly as without the patch.
     pub color_replacement: Option<ColorReplacement>,
+    /// ASDReader patch: threads that rasterize the page's paths while its content is interpreted
+    /// (vello_cpu's multi-threaded dispatcher); 0 renders on the calling thread alone.
+    pub threads: u16,
 }
 
 impl Default for RenderSettings {
@@ -170,6 +173,7 @@ impl Default for RenderSettings {
             x_offset: 0.0,
             y_offset: 0.0,
             color_replacement: None,
+            threads: 0,
         }
     }
 }
@@ -241,7 +245,7 @@ pub fn render_into<'a>(
 
     let vc_settings = vello_cpu::RenderSettings {
         level: Level::new(),
-        num_threads: 0,
+        num_threads: render_settings.threads,
         render_mode: RenderMode::OptimizeSpeed,
     };
 
@@ -293,6 +297,9 @@ pub fn render_into<'a>(
         device.pop_transparency_group();
     }
 
+    // ASDReader patch: the multi-threaded dispatcher must finish its queued paths first; a no-op
+    // on one thread.
+    device.ctx.flush();
     let mut resources = vello_cpu::Resources::default();
     device.ctx.render_to_buffer(
         &mut resources,

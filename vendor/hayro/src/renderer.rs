@@ -535,12 +535,31 @@ impl Renderer {
             line_width = widest / min_factor;
         }
 
+        // ASDReader patch: a round cap or join on a stroke at most HAIRLINE device pixels wide
+        // differs from a square cap or a bevel join by a fraction of a pixel, but kurbo builds
+        // each one from arcs: in engineering drawings (millions of hairlines with round caps and
+        // joins) that was a third of a page's render time. Such strokes take the cheap shapes.
+        let hairline = min_factor.is_finite() && line_width * min_factor <= HAIRLINE;
+        let (join, cap) = if hairline {
+            (
+                match stroke_props.line_join {
+                    kurbo::Join::Round => kurbo::Join::Bevel,
+                    other => other,
+                },
+                match stroke_props.line_cap {
+                    kurbo::Cap::Round => kurbo::Cap::Square,
+                    other => other,
+                },
+            )
+        } else {
+            (stroke_props.line_join, stroke_props.line_cap)
+        };
         let stroke = kurbo::Stroke {
             width: line_width as f64,
-            join: stroke_props.line_join,
+            join,
             miter_limit: stroke_props.miter_limit as f64,
-            start_cap: stroke_props.line_cap,
-            end_cap: stroke_props.line_cap,
+            start_cap: cap,
+            end_cap: cap,
             // ASDReader patch: see `usable_dash_pattern`.
             dash_pattern: usable_dash_pattern(path, &stroke_props.dash_array).into(),
             dash_offset: if stroke_props.dash_offset.is_finite() {
@@ -1384,8 +1403,25 @@ impl Renderer {
         stroke_props: &StrokeProps,
         is_text: bool,
     ) {
-        self.ctx.set_transform(transform);
-        let reach = self.set_stroke_properties(stroke_props, is_text, path);
+        // ASDReader patch: hairlines drawn on the pixel grid (see `hairline_on_grid`).
+        let adjusted = (!is_text
+            && !self.inside_pattern
+            && !self.in_type3_glyph
+            && matches!(paint, Paint::Color(_)))
+        .then(|| hairline_on_grid(path, transform, stroke_props))
+        .flatten();
+        let (path, transform, reach) = match &adjusted {
+            Some((device_path, stroke)) => {
+                self.ctx.set_transform(Affine::IDENTITY);
+                let reach = stroke_reach(stroke);
+                self.ctx.set_stroke(stroke.clone());
+                (device_path, Affine::IDENTITY, reach)
+            }
+            None => {
+                self.ctx.set_transform(transform);
+                (path, transform, self.set_stroke_properties(stroke_props, is_text, path))
+            }
+        };
         // ASDReader patch: see `may_paint_canvas`.
         if !may_paint_canvas(path, transform, reach, self.ctx.width(), self.ctx.height()) {
             return;
@@ -2133,6 +2169,78 @@ fn convert_blend_mode(blend_mode: BlendMode) -> peniko::BlendMode {
     };
 
     peniko::BlendMode::new(mix, Compose::SrcOver)
+}
+
+/// ASDReader patch: the widest stroke, in device pixels, whose round caps and joins are drawn
+/// square and bevelled (see `set_stroke_properties`).
+const HAIRLINE: f32 = 1.5;
+
+/// ASDReader patch: a stroke no wider than one device pixel, as device geometry on the pixel grid,
+/// with the stroke that draws it there under the identity transform; `None` for any other stroke.
+///
+/// Such a line is drawn one pixel wide (the minimum width, ISO 32000-2 10.7.2), and anti-aliased
+/// across two rows or columns at half strength wherever its centre falls between pixel centres:
+/// the grey, soft lines that made engineering drawings look blurred beside other readers. Their
+/// "enhance thin lines" puts the line on pixel centres instead, as stroke adjustment does
+/// (10.7.5), so a horizontal or vertical hairline covers exactly one row or column at full
+/// strength. Each point moves at most half a pixel. Only conformal transforms (a uniform scale
+/// with a rotation or a flip) qualify, so the dash pattern scales by one factor. Round caps and
+/// joins become square and bevelled, as `set_stroke_properties` does for hairlines.
+fn hairline_on_grid(
+    path: &BezPath,
+    transform: Affine,
+    props: &StrokeProps,
+) -> Option<(BezPath, kurbo::Stroke)> {
+    let [a, b, c, d, _, _] = transform.as_coeffs();
+    let (sx, sy) = (a.hypot(b), c.hypot(d));
+    let scale = sx.max(sy);
+    if !(scale.is_finite() && scale > 0.0)
+        || (sx - sy).abs() > 0.01 * scale
+        || (a * c + b * d).abs() > 0.01 * sx * sy
+    {
+        return None;
+    }
+    if f64::from(props.line_width.max(0.01)) * scale > 1.0 {
+        return None;
+    }
+    let grid = |p: Point| {
+        let p = transform * p;
+        Point::new(p.x.floor() + 0.5, p.y.floor() + 0.5)
+    };
+    let mut device = BezPath::new();
+    for el in path.elements() {
+        match *el {
+            kurbo::PathEl::MoveTo(p) => device.move_to(grid(p)),
+            kurbo::PathEl::LineTo(p) => device.line_to(grid(p)),
+            kurbo::PathEl::QuadTo(p1, p2) => device.quad_to(grid(p1), grid(p2)),
+            kurbo::PathEl::CurveTo(p1, p2, p3) => device.curve_to(grid(p1), grid(p2), grid(p3)),
+            kurbo::PathEl::ClosePath => device.close_path(),
+        }
+    }
+    if device.elements().iter().any(|el| el.end_point().is_some_and(|p| !p.is_finite())) {
+        return None;
+    }
+    let dashes: Vec<f32> = props.dash_array.iter().map(|d| (f64::from(*d) * scale) as f32).collect();
+    let dash_offset = f64::from(props.dash_offset) * scale;
+    let stroke = kurbo::Stroke {
+        width: 1.0,
+        join: match props.line_join {
+            kurbo::Join::Round => kurbo::Join::Bevel,
+            other => other,
+        },
+        miter_limit: f64::from(props.miter_limit),
+        start_cap: match props.line_cap {
+            kurbo::Cap::Round => kurbo::Cap::Square,
+            other => other,
+        },
+        end_cap: match props.line_cap {
+            kurbo::Cap::Round => kurbo::Cap::Square,
+            other => other,
+        },
+        dash_pattern: usable_dash_pattern(&device, &dashes).into(),
+        dash_offset: if dash_offset.is_finite() { dash_offset } else { 0.0 },
+    };
+    Some((device, stroke))
 }
 
 /// ASDReader patch: how far a stroke's paint reaches past its path, in user units: half the width

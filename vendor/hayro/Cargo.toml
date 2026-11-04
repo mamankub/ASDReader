@@ -74,12 +74,15 @@ features = [
 ]
 default-features = false
 
+# ASDReader patch: `multithreading`, so a page's paths are rasterized on several threads while
+# its content stream is interpreted (see `render_into`).
 [dependencies.vello_cpu]
 version = "0.0.8"
 features = [
     "std",
     "png",
     "u8_pipeline",
+    "multithreading",
 ]
 default-features = false
 
