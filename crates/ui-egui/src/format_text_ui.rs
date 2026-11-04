@@ -26,8 +26,8 @@ pub(crate) enum FontChoice {
     Family(FontFamily),
     /// Load font…: pick a font file.
     Load,
-    /// A font file installed on this computer.
-    Installed(std::path::PathBuf),
+    /// A font installed on this computer (a face of a collection included).
+    Installed(asdreader_engine::text_fonts::FontFile),
 }
 
 /// What the font list offers and shows.
@@ -107,7 +107,7 @@ fn installed_fonts_menu(ui: &mut egui::Ui, out: &mut Outcome) {
         egui::ScrollArea::vertical().max_height(row * INSTALLED_ROWS).auto_shrink([false, true]).show_rows(ui, row, shown.len(), |ui, rows| {
             for (label, font) in shown.get(rows).unwrap_or_default() {
                 if ui.button(label.as_str()).on_hover_text(font.path.display().to_string()).clicked() {
-                    out.font = Some(FontChoice::Installed(font.path.clone()));
+                    out.font = Some(FontChoice::Installed((*font).clone()));
                     ui.close();
                 }
             }

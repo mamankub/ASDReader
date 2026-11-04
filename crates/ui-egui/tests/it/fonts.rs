@@ -1,4 +1,4 @@
-//! The interface fonts with and without the optional craft-fonts build input (`CRAFT_FONTS_DIR`).
+//! The interface fonts with and without the optional asdesign-fonts build input (`ASDESIGN_FONTS_DIR`).
 
 use asdreader_ui_egui::theme;
 use egui::epaint::text::{Fonts, TextOptions};
@@ -45,12 +45,12 @@ fn layout_widths(fonts: &mut Fonts, text: &str) -> Vec<f32> {
     families().into_iter().map(|id| view.layout_no_wrap(text.to_owned(), id, Color32::BLACK).size().x).collect()
 }
 
-/// Built with craft-fonts, Japanese text renders with real glyphs (no tofu) in every family,
-/// from a craft-fonts face placed after the app's own fonts.
+/// Built with asdesign-fonts, Japanese text renders with real glyphs (no tofu) in every family,
+/// from a asdesign-fonts face placed after the app's own fonts.
 #[test]
-fn japanese_ui_text_uses_craft_fonts() {
+fn japanese_ui_text_uses_asdesign_fonts() {
     if asdreader_fonts::ui_japanese_fonts().is_empty() {
-        eprintln!("skipping japanese_ui_text_uses_craft_fonts: built without craft-fonts (set CRAFT_FONTS_DIR to run it)");
+        eprintln!("skipping japanese_ui_text_uses_asdesign_fonts: built without asdesign-fonts (set ASDESIGN_FONTS_DIR to run it)");
         return;
     }
     let defs = theme::font_definitions();
@@ -59,7 +59,7 @@ fn japanese_ui_text_uses_craft_fonts() {
         let first_jp = stack.iter().position(|n| n.starts_with("BIZ UDPGothic")).expect("BIZ UDPGothic is a fallback");
         let own = stack.iter().position(|n| n == "Inter" || n == "JetBrainsMono").expect("the app's own font");
         assert!(own < first_jp, "{family:?}: {stack:?}");
-        assert!(stack[first_jp..].iter().all(|n| asdreader_fonts::CRAFT_FONTS.iter().any(|f| f.name() == *n)), "{stack:?}");
+        assert!(stack[first_jp..].iter().all(|n| asdreader_fonts::ASDESIGN_FONTS.iter().any(|f| f.name() == *n)), "{stack:?}");
     }
     let mut fonts = Fonts::new(TextOptions::default(), defs);
     for id in families() {
@@ -73,11 +73,11 @@ fn japanese_ui_text_uses_craft_fonts() {
 
 /// Chinese mode orders the CJK fallback with the `Hans` group first, so one line never
 /// mixes faces with different vertical metrics. Without a `Hans` face in the build input the
-/// order part still holds; glyph coverage follows the craft-fonts checkout.
+/// order part still holds; glyph coverage follows the asdesign-fonts checkout.
 #[test]
 fn chinese_ui_text_prefers_the_chinese_face() {
     if asdreader_fonts::ui_chinese_fonts().is_empty() {
-        eprintln!("skipping chinese_ui_text_prefers_the_chinese_face: no Hans face bundled (set CRAFT_FONTS_DIR with a Chinese face to run it)");
+        eprintln!("skipping chinese_ui_text_prefers_the_chinese_face: no Hans face bundled (set ASDESIGN_FONTS_DIR with a Chinese face to run it)");
         return;
     }
     let defs = theme::font_definitions_for(true);
@@ -98,13 +98,13 @@ fn chinese_ui_text_prefers_the_chinese_face() {
     }
 }
 
-/// Built with a craft-fonts Arabic face, Arabic text has real glyphs in every family, from a
+/// Built with a asdesign-fonts Arabic face, Arabic text has real glyphs in every family, from a
 /// face placed after the app's own fonts.
 #[test]
-fn arabic_ui_text_uses_craft_fonts() {
+fn arabic_ui_text_uses_asdesign_fonts() {
     let arabic: Vec<String> = asdreader_fonts::ui_arabic_fonts().iter().map(|f| f.name()).collect();
     if arabic.is_empty() {
-        eprintln!("skipping arabic_ui_text_uses_craft_fonts: no Arab face bundled (set CRAFT_FONTS_DIR with an Arabic face to run it)");
+        eprintln!("skipping arabic_ui_text_uses_asdesign_fonts: no Arab face bundled (set ASDESIGN_FONTS_DIR with an Arabic face to run it)");
         return;
     }
     let defs = theme::font_definitions();
@@ -120,14 +120,14 @@ fn arabic_ui_text_uses_craft_fonts() {
     }
 }
 
-/// Built with a craft-fonts Telugu face, Telugu text has real glyphs in every family, from a
+/// Built with a asdesign-fonts Telugu face, Telugu text has real glyphs in every family, from a
 /// face placed after the app's own fonts, and is shaped: the conjunct క్ష is narrower than క్
 /// and ష held apart by a zero-width non-joiner.
 #[test]
-fn telugu_ui_text_uses_craft_fonts() {
-    let telugu: Vec<String> = asdreader_fonts::CRAFT_FONTS.iter().filter(|f| f.covers("Telu")).map(|f| f.name()).collect();
+fn telugu_ui_text_uses_asdesign_fonts() {
+    let telugu: Vec<String> = asdreader_fonts::ASDESIGN_FONTS.iter().filter(|f| f.covers("Telu")).map(|f| f.name()).collect();
     if telugu.is_empty() {
-        eprintln!("skipping telugu_ui_text_uses_craft_fonts: no Telu face bundled (set CRAFT_FONTS_DIR with a Telugu face to run it)");
+        eprintln!("skipping telugu_ui_text_uses_asdesign_fonts: no Telu face bundled (set ASDESIGN_FONTS_DIR with a Telugu face to run it)");
         return;
     }
     let defs = theme::font_definitions();
@@ -193,14 +193,14 @@ fn system_fallback_covers_devanagari() {
     assert!(layout_widths(&mut fonts, DEVANAGARI).iter().all(|w| w.is_finite() && *w > 0.0));
 }
 
-/// Built with craft-fonts, Hindi text renders with real glyphs (no tofu) in every family: a
-/// `Deva` face is a fallback after the app's own fonts. Without craft-fonts it is the installed
+/// Built with asdesign-fonts, Hindi text renders with real glyphs (no tofu) in every family: a
+/// `Deva` face is a fallback after the app's own fonts. Without asdesign-fonts it is the installed
 /// Devanagari fallback's job (see `system_fallback_covers_devanagari`), and the web build has
 /// neither.
 #[test]
-fn devanagari_ui_text_uses_craft_fonts() {
+fn devanagari_ui_text_uses_asdesign_fonts() {
     if asdreader_fonts::ui_devanagari_fonts().is_empty() {
-        eprintln!("skipping devanagari_ui_text_uses_craft_fonts: built without craft-fonts (set CRAFT_FONTS_DIR to run it)");
+        eprintln!("skipping devanagari_ui_text_uses_asdesign_fonts: built without asdesign-fonts (set ASDESIGN_FONTS_DIR to run it)");
         return;
     }
     let defs = theme::font_definitions();
@@ -346,10 +346,10 @@ fn chinese_ui_uses_an_installed_chinese_face() {
     }
 }
 
-/// Without craft-fonts the interface fonts still install and lay out any text (Japanese falls
+/// Without asdesign-fonts the interface fonts still install and lay out any text (Japanese falls
 /// back to egui's replacement glyph) without panicking; Latin text is unaffected.
 #[test]
-fn ui_fonts_work_without_craft_fonts() {
+fn ui_fonts_work_without_asdesign_fonts() {
     let mut fonts = Fonts::new(TextOptions::default(), theme::font_definitions());
     for id in families() {
         assert!(fonts.has_glyphs(&id, "ASDReader"), "{id:?}");

@@ -11,8 +11,8 @@ pub const MAX_OTHER_CJK_BYTES: u64 = 4 << 20;
 /// ISO 15924 codes of the Han, Japanese and Korean scripts, Hangul on its own included.
 const CJK_SCRIPTS: [&str; 6] = ["Hani", "Hans", "Hant", "Jpan", "Kore", "Hang"];
 
-/// Whether a craft-fonts manifest script tag is CJK. A tag can carry a region after the code
-/// (craft-fonts tags Noto Sans HK UI `Hant-HK`), so only the part before `-` is compared.
+/// Whether a asdesign-fonts manifest script tag is CJK. A tag can carry a region after the code
+/// (asdesign-fonts tags Noto Sans HK UI `Hant-HK`), so only the part before `-` is compared.
 pub fn is_cjk_script(tag: &str) -> bool {
     let code = tag.trim().split('-').next().unwrap_or_default();
     CJK_SCRIPTS.contains(&code)

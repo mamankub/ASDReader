@@ -1,0 +1,24 @@
+name: "Check out asdesign-fonts"
+description: "Checks out the mamankub/asdesign-fonts repository if a ref is specified"
+
+inputs:
+  ref:
+    description: "The git commit SHA or ref of mamankub/asdesign-fonts"
+    required: false
+    default: ""
+  path:
+    description: "Directory path to check out asdesign-fonts into"
+    required: false
+    default: "asdesign-fonts"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check out asdesign-fonts
+      if: inputs.ref != ''
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: mamankub/asdesign-fonts
+        ref: ${{ inputs.ref }}
+        path: ${{ inputs.path }}
+        persist-credentials: false

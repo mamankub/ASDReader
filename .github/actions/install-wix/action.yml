@@ -1,0 +1,31 @@
+name: "Install WiX Toolset"
+description: "Installs WiX dotnet tool and standard extensions for building MSI packages on Windows"
+
+inputs:
+  wix-version:
+    description: "Version of WiX to install"
+    required: false
+    default: "5.0.2"
+  install-extensions:
+    description: "Install standard UI and Util extensions"
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install WiX
+      shell: pwsh
+      env:
+        WIX_VERSION: ${{ inputs.wix-version }}
+        INSTALL_EXTENSIONS: ${{ inputs.install-extensions }}
+      run: |
+        $version = $env:WIX_VERSION
+        if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?\z') {
+          Write-Output "::error::invalid wix-version '$version'"
+          exit 1
+        }
+        dotnet tool install --global wix --version $version
+        if ($env:INSTALL_EXTENSIONS -eq "true") {
+          wix extension add -g "WixToolset.UI.wixext/$version" "WixToolset.Util.wixext/$version"
+        }

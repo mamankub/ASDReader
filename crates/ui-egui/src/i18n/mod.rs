@@ -4,7 +4,7 @@
 //! so agents and scripts are unaffected. A string without a translation is shown in English, so
 //! coverage can grow incrementally.
 //!
-//! The system is the one PhotoCraft uses (`photocraft/crates/ui-egui/src/i18n`), so catalogs and
+//! The system is the one ASDesign Photo uses (`asdesign-photo/crates/ui-egui/src/i18n`), so catalogs and
 //! habits carry over between the two apps.
 //!
 //! # Adding a language
@@ -468,7 +468,7 @@ fn detect_system_lang() -> Lang {
 }
 
 thread_local! {
-    // Per thread, as in PhotoCraft: independent app and test threads (kittest harnesses run in
+    // Per thread, as in ASDesign Photo: independent app and test threads (kittest harnesses run in
     // parallel) must not change each other's drawing language.
     static CURRENT: Cell<Lang> = const { Cell::new(Lang::EN) };
 }
@@ -1001,13 +1001,13 @@ mod tests {
         }
     }
 
-    /// With craft-fonts, every Japanese translation has glyphs: with all interface faces (desktop)
+    /// With asdesign-fonts, every Japanese translation has glyphs: with all interface faces (desktop)
     /// and with BIZ UDPGothic Regular alone (the web build's only Japanese face).
     #[test]
     fn japanese_labels_have_glyphs() {
-        let craft = asdreader_fonts::ui_japanese_fonts();
-        let Some(web) = craft.iter().find(|f| f.family == "BIZ UDPGothic" && f.style == "Regular") else {
-            eprintln!("skipping Japanese glyph checks: build with CRAFT_FONTS_DIR to run them");
+        let asdesign = asdreader_fonts::ui_japanese_fonts();
+        let Some(web) = asdesign.iter().find(|f| f.family == "BIZ UDPGothic" && f.style == "Regular") else {
+            eprintln!("skipping Japanese glyph checks: build with ASDESIGN_FONTS_DIR to run them");
             return;
         };
         let (entries, _) = parse_entries(JA().0.source, 1);
@@ -1015,7 +1015,7 @@ mod tests {
         let web_name = web.name();
         let mut web_only = crate::theme::font_definitions();
         for family in web_only.families.values_mut() {
-            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || *name == web_name);
+            family.retain(|name| !asdreader_fonts::ASDESIGN_FONTS.iter().any(|face| face.name() == *name) || *name == web_name);
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("desktop", crate::theme::font_definitions()), ("web", web_only)] {
@@ -1182,14 +1182,14 @@ mod tests {
         assert_eq!(tr_ctx(es, "no such context", "Type"), tr(es, "Type"));
     }
 
-    /// With a craft-fonts Telugu face, every Telugu translation has glyphs: with all interface
-    /// faces (desktop) and with the Telugu face as the only craft-fonts face (the web build keeps
+    /// With a asdesign-fonts Telugu face, every Telugu translation has glyphs: with all interface
+    /// faces (desktop) and with the Telugu face as the only asdesign-fonts face (the web build keeps
     /// it; Telugu labels must not need a Japanese or Arabic face).
     #[test]
     fn telugu_labels_have_glyphs() {
         let telugu: Vec<String> = asdreader_fonts::ui_telugu_fonts().iter().map(|f| f.name()).collect();
         if telugu.is_empty() {
-            eprintln!("skipping Telugu glyph checks: build with CRAFT_FONTS_DIR and a Telugu face to run them");
+            eprintln!("skipping Telugu glyph checks: build with ASDESIGN_FONTS_DIR and a Telugu face to run them");
             return;
         }
         let te = Lang::from_code("te").expect("te registered");
@@ -1197,7 +1197,7 @@ mod tests {
         let labels: String = entries.iter().flat_map(|e| e.translation.chars()).chain(te.name().chars()).filter(|c| !c.is_control()).collect();
         let mut telugu_only = crate::theme::font_definitions();
         for family in telugu_only.families.values_mut() {
-            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || telugu.contains(name));
+            family.retain(|name| !asdreader_fonts::ASDESIGN_FONTS.iter().any(|face| face.name() == *name) || telugu.contains(name));
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("all faces", crate::theme::font_definitions()), ("Telugu face only", telugu_only)] {
@@ -1723,14 +1723,14 @@ mod tests {
         assert_eq!([100, 101, 102, 200, 1000, u64::MAX - 13].map(form), [5; 6]);
     }
 
-    /// With a craft-fonts Arabic face, every Arabic translation has glyphs: with all interface
-    /// faces (desktop) and with the Arabic face as the only craft-fonts face (the web build keeps
+    /// With a asdesign-fonts Arabic face, every Arabic translation has glyphs: with all interface
+    /// faces (desktop) and with the Arabic face as the only asdesign-fonts face (the web build keeps
     /// it; Arabic labels must not need a Japanese face).
     #[test]
     fn arabic_labels_have_glyphs() {
         let faces: Vec<String> = asdreader_fonts::ui_arabic_fonts().iter().map(|f| f.name()).collect();
         if faces.is_empty() {
-            eprintln!("skipping Arabic glyph checks: build with CRAFT_FONTS_DIR and an Arabic face to run them");
+            eprintln!("skipping Arabic glyph checks: build with ASDESIGN_FONTS_DIR and an Arabic face to run them");
             return;
         }
         let ar = arabic();
@@ -1738,7 +1738,7 @@ mod tests {
         let labels: String = entries.iter().flat_map(|e| e.translation.chars()).chain(ar.name().chars()).filter(|c| !c.is_control()).collect();
         let mut arabic_only = crate::theme::font_definitions();
         for family in arabic_only.families.values_mut() {
-            family.retain(|name| !asdreader_fonts::CRAFT_FONTS.iter().any(|face| face.name() == *name) || faces.contains(name));
+            family.retain(|name| !asdreader_fonts::ASDESIGN_FONTS.iter().any(|face| face.name() == *name) || faces.contains(name));
         }
         use egui::epaint::text::{Fonts, TextOptions};
         for (build, defs) in [("all faces", crate::theme::font_definitions()), ("Arabic face only", arabic_only)] {

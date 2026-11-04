@@ -47,7 +47,7 @@ least likely to know about. Please read `AGENTS.md` §1 before adding any asset.
 
 - [ ] No asset from an Adobe product, and no Adobe icon recreated, traced or imitated
 - [ ] No font files committed here (they live in
-      [storytold/craft-fonts](https://github.com/storytold/craft-fonts))
+      [mamankub/asdesign-fonts](https://github.com/mamankub/asdesign-fonts))
 - [ ] No GPL/AGPL code copied in — MuPDF, Ghostscript, Poppler, veraPDF and DSS may only be
       run as external oracle processes
 - [ ] Behaviour comes from the specification or black-box observation, **not** from reading

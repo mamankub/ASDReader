@@ -33,7 +33,7 @@ use std::process::Command;
 /// Setting this environment variable to any value turns a missing oracle from a skip into a
 /// failure. CI sets it on the runners that install the tools.
 ///
-/// Any value counts, including `0` — the same convention as `CRAFT_FONTS_REQUIRED`, which this
+/// Any value counts, including `0` — the same convention as `ASDESIGN_FONTS_REQUIRED`, which this
 /// deliberately mirrors. The surprising half of that convention errs toward *requiring* an oracle,
 /// which is the safe direction for a gate whose whole purpose is to stop absence passing quietly.
 pub const REQUIRED_VAR: &str = "ASDREADER_ORACLES_REQUIRED";

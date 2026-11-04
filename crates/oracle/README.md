@@ -46,7 +46,7 @@ Each returns `Result<Oracle, Absent>`. `Oracle::command()` hands back a fresh `C
 ## The gate
 
 `ASDREADER_ORACLES_REQUIRED` (any value, including `0` — the same convention as
-`CRAFT_FONTS_REQUIRED`) turns absence from a skip into a failure. CI sets it on the runners that
+`ASDESIGN_FONTS_REQUIRED`) turns absence from a skip into a failure. CI sets it on the runners that
 install the tools, so a skip notice there becomes a red build.
 
 ```

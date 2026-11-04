@@ -1,5 +1,5 @@
 //! Unicode embedding of an explicitly supplied, embeddable TrueType face. Font files are
-//! document inputs or the optional craft-fonts build input, never system-interface fallbacks.
+//! document inputs or the optional asdesign-fonts build input, never system-interface fallbacks.
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -17,9 +17,9 @@ pub fn face_key(name: &str) -> String {
 }
 
 /// Full, approved faces of the source family. This never silently selects another family.
-pub fn matching_faces(name: &str) -> Vec<&'static crate::CraftFont> {
+pub fn matching_faces(name: &str) -> Vec<&'static crate::AsdesignFont> {
     let key = face_key(name);
-    crate::CRAFT_FONTS.iter().filter(|f| face_key(f.family) == key || face_key(&f.name()) == key).collect()
+    crate::ASDESIGN_FONTS.iter().filter(|f| face_key(f.family) == key || face_key(&f.name()) == key).collect()
 }
 
 /// Whether a complete font program can show every non-newline character.
@@ -42,6 +42,81 @@ pub fn names(bytes: &[u8]) -> Result<(String, String), String> {
     let family = name(StringId::FAMILY_NAME).ok_or("the font has no family name")?;
     let postscript = name(StringId::POSTSCRIPT_NAME).unwrap_or_else(|| family.replace(' ', ""));
     Ok((family, postscript))
+}
+
+/// The family and PostScript names a font program carries, read leniently: a subset embedded in a
+/// PDF (which `names` would refuse for its missing tables or permissions) still says which face
+/// it was cut from, even when the PDF's `/BaseFont` is an anonymous `CIDFont+F1`.
+pub fn program_names(bytes: &[u8]) -> Option<(String, String)> {
+    use skrifa::string::StringId;
+    let f = FontRef::new(bytes).ok()?;
+    let name = |id| {
+        f.localized_strings(id)
+            .find(|s| s.language() == Some("en"))
+            .or_else(|| f.localized_strings(id).next())
+            .map(|s| s.to_string())
+            .filter(|s| !s.is_empty() && s.len() <= 128)
+    };
+    let family = name(StringId::FAMILY_NAME)?;
+    let postscript = name(StringId::POSTSCRIPT_NAME).unwrap_or_else(|| family.replace(' ', ""));
+    Some((family, postscript))
+}
+
+/// Most faces read from one font collection.
+pub const MAX_COLLECTION_FACES: u32 = 16;
+
+/// Face `index` of a TrueType/OpenType collection (`.ttc`, `ttcf`) as a standalone font program,
+/// the form a PDF embeds: its table directory and tables copied out of the collection. `None`
+/// when `bytes` is not a collection, has no such face, or its directory points outside the file.
+/// Windows keeps many Thai faces this way (Cordia New and CordiaUPC in `cordia.ttc`, Angsana,
+/// Browallia).
+pub fn collection_face(bytes: &[u8], index: u32) -> Option<Vec<u8>> {
+    let u16_at = |at: usize| bytes.get(at..at.checked_add(2)?).map(|b| u16::from_be_bytes([b[0], b[1]]));
+    let u32_at = |at: usize| bytes.get(at..at.checked_add(4)?).map(|b| u32::from_be_bytes([b[0], b[1], b[2], b[3]]));
+    if bytes.get(..4) != Some(b"ttcf".as_slice()) {
+        return None;
+    }
+    let count = u32_at(8)?;
+    if index >= count.min(MAX_COLLECTION_FACES) {
+        return None;
+    }
+    let face = u32_at(12usize.checked_add(usize::try_from(index).ok()?.checked_mul(4)?)?)? as usize;
+    let tables = usize::from(u16_at(face.checked_add(4)?)?);
+    if tables == 0 || tables > 64 {
+        return None;
+    }
+    let header_len = 12usize.checked_add(tables.checked_mul(16)?)?;
+    let mut records = Vec::with_capacity(tables);
+    let mut total = header_len;
+    for t in 0..tables {
+        let at = face.checked_add(12)?.checked_add(t.checked_mul(16)?)?;
+        let tag = bytes.get(at..at.checked_add(4)?)?;
+        let checksum = u32_at(at.checked_add(4)?)?;
+        let offset = u32_at(at.checked_add(8)?)? as usize;
+        let length = u32_at(at.checked_add(12)?)? as usize;
+        let data = bytes.get(offset..offset.checked_add(length)?)?;
+        total = total.checked_add(length.checked_add(3)? & !3)?;
+        records.push((tag, checksum, data));
+    }
+    if total > 32 << 20 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(total);
+    // sfnt version, numTables, searchRange, entrySelector, rangeShift: as the collection has them.
+    out.extend_from_slice(bytes.get(face..face.checked_add(12)?)?);
+    let mut offset = header_len;
+    for (tag, checksum, data) in &records {
+        out.extend_from_slice(tag);
+        out.extend_from_slice(&checksum.to_be_bytes());
+        out.extend_from_slice(&u32::try_from(offset).ok()?.to_be_bytes());
+        out.extend_from_slice(&u32::try_from(data.len()).ok()?.to_be_bytes());
+        offset = offset.checked_add(data.len().checked_add(3)? & !3)?;
+    }
+    for (_, _, data) in &records {
+        out.extend_from_slice(data);
+        out.resize(out.len().checked_add(3)? & !3, 0);
+    }
+    Some(out)
 }
 
 /// A selected external font is document input: a face the user picked on their own computer
@@ -370,6 +445,51 @@ mod tests {
         embed(&mut doc, &mut second, bytes, "Inter").unwrap();
         assert_eq!(doc.scan_objects().filter(|(_, o)| matches!(o.as_ref(), Object::Stream(s) if s.dict.get(b"PCFullFont").is_some())).count(), 1);
         assert_eq!(face_key("ABCDEF+Droid-Sans-Fallback"), face_key("Droid Sans Fallback"));
+    }
+
+    /// A face is copied out of a collection whole: the same tables, readable on its own, embeddable.
+    #[test]
+    fn a_collection_face_becomes_a_standalone_program() {
+        let inter = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+        let mono = include_bytes!("../../../assets/fonts/JetBrainsMono-Regular.ttf");
+        // A two-face collection: header and offset table, both faces' directories, then their
+        // tables, every offset counted from the start of the file, as a .ttc lays them out.
+        let fonts = [&inter[..], &mono[..]];
+        let tables = |f: &[u8]| usize::from(u16::from_be_bytes([f[4], f[5]]));
+        let mut ttc = b"ttcf\0\x01\0\0\0\0\0\x02".to_vec();
+        let mut directory_at = ttc.len() + 4 * fonts.len();
+        let mut data_at = directory_at + fonts.iter().map(|f| 12 + 16 * tables(f)).sum::<usize>();
+        let (mut directories, mut data) = (Vec::new(), Vec::new());
+        for f in fonts {
+            ttc.extend_from_slice(&(directory_at as u32).to_be_bytes());
+            directory_at += 12 + 16 * tables(f);
+            directories.extend_from_slice(&f[..12]);
+            for t in 0..tables(f) {
+                let r = &f[12 + t * 16..28 + t * 16];
+                let offset = u32::from_be_bytes([r[8], r[9], r[10], r[11]]) as usize;
+                let length = u32::from_be_bytes([r[12], r[13], r[14], r[15]]) as usize;
+                directories.extend_from_slice(&r[..8]);
+                directories.extend_from_slice(&(data_at as u32).to_be_bytes());
+                directories.extend_from_slice(&r[12..16]);
+                let mut table = f[offset..offset + length].to_vec();
+                table.resize((length + 3) & !3, 0);
+                data_at += table.len();
+                data.extend_from_slice(&table);
+            }
+        }
+        ttc.extend_from_slice(&directories);
+        ttc.extend_from_slice(&data);
+        let first = collection_face(&ttc, 0).unwrap();
+        let second = collection_face(&ttc, 1).unwrap();
+        assert_eq!(program_names(&first), Some(("Inter".into(), "Inter-Regular".into())));
+        assert_eq!(program_names(&second).map(|n| n.0), Some("JetBrains Mono".into()));
+        assert_eq!(validate_document_input(&first), Ok(()));
+        let mut doc = Document::new_empty();
+        assert!(embed(&mut doc, &mut Dict::new(), &first, "Inter").is_ok());
+        assert_eq!(collection_face(&ttc, 2), None, "no third face");
+        assert_eq!(collection_face(inter, 0), None, "not a collection");
+        assert_eq!(collection_face(&ttc[..40], 0), None, "truncated");
+        assert_eq!(program_names(b"junk"), None);
     }
 
     /// A font installed on the user's computer need not declare an open licence (Tahoma and most

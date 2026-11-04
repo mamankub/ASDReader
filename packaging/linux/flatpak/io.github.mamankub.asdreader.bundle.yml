@@ -47,7 +47,7 @@ modules:
       - install -Dm644 share/metainfo/io.github.mamankub.asdreader.metainfo.xml /app/share/metainfo/io.github.mamankub.asdreader.metainfo.xml
       # OCR models (with their licences), found at /app/bin/../share/asdreader/models.
       - mkdir -p /app/share/asdreader && cp -R share/asdreader/models /app/share/asdreader/
-      # Licences, including the embedded craft-fonts' OFL texts.
+      # Licences, including the embedded asdesign-fonts' OFL texts.
       - mkdir -p /app/share/icons /app/share/doc && cp -R share/icons/hicolor /app/share/icons/ && cp -R share/doc/asdreader /app/share/doc/
     sources:
       - type: dir

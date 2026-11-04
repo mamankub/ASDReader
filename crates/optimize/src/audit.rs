@@ -83,7 +83,7 @@ pub struct SpaceUse {
 }
 
 /// How deep form XObjects nested in each other's resources are sorted by kind. Deeper forms
-/// (and what they use) are still counted, as X Object Forms; the limit keeps a crafted chain
+/// (and what they use) are still counted, as X Object Forms; the limit keeps a made chain
 /// of nested forms from overflowing the stack.
 const MAX_FORM_DEPTH: usize = 64;
 

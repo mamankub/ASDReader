@@ -12,7 +12,7 @@ fn pixels(bytes: Arc<Vec<u8>>, page: usize) -> Vec<u8> {
 }
 
 #[test]
-#[ignore = "requires a private Chinese PDF and its full approved face in craft-fonts"]
+#[ignore = "requires a private Chinese PDF and its full approved face in asdesign-fonts"]
 fn private_new_chinese_glyphs_keep_face_position_save_reopen_and_undo() {
     let path = std::env::var("ASDREADER_CHINESE_TEXT_PDF").expect("provide a local PDF");
     let original = Arc::new(std::fs::read(&path).unwrap());

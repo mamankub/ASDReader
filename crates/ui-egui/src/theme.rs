@@ -234,13 +234,13 @@ pub const SYSTEM_THAI_FALLBACK: &str = "system-thai-fallback";
 /// What [`install_fonts_for`] installs: [`font_definitions_for`], then, on desktop, one face
 /// already installed on this machine. It only draws characters no embedded face has.
 ///
-/// - In a Chinese interface built without a `Hans` craft-fonts face (every release so far,
+/// - In a Chinese interface built without a `Hans` asdesign-fonts face (every release so far,
 ///   #826), it is a Chinese system face (Microsoft YaHei, PingFang, …), placed before the
-///   Japanese craft-fonts faces: they lack hundreds of the catalog's characters (欢, 导, 签, …),
+///   Japanese asdesign-fonts faces: they lack hundreds of the catalog's characters (欢, 导, 签, …),
 ///   and one line drawn from two faces with different vertical metrics would not sit on one
 ///   baseline.
 /// - Otherwise it is the last fallback of every family (an Arabic file name in a build without
-///   craft-fonts).
+///   asdesign-fonts).
 ///
 /// Installed Devanagari, Telugu, Sinhala, Tamil, Hebrew and Hangul faces, when there are, end
 /// every family just before that one, so Hindi, Telugu (#1531), Sinhala and Tamil (#1688) and
@@ -303,8 +303,8 @@ pub fn installed_font_definitions(cjk: CjkPreference) -> FontDefinitions {
 }
 
 /// The interface fonts: Inter (and JetBrains Mono for code) first, then egui's defaults, then
-/// the CJK, Arabic, Telugu, Hebrew and Thai faces of the optional craft-fonts build input as the
-/// last fallback in every family. Without craft-fonts there is no Japanese, Chinese, Arabic,
+/// the CJK, Arabic, Telugu, Hebrew and Thai faces of the optional asdesign-fonts build input as the
+/// last fallback in every family. Without asdesign-fonts there is no Japanese, Chinese, Arabic,
 /// Telugu, Hebrew or Thai face here.
 pub fn font_definitions() -> FontDefinitions {
     font_definitions_for(false)

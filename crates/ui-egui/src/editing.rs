@@ -183,6 +183,20 @@ impl ASDReaderApp {
                 true
             }
             Err(e) => {
+                // A paragraph its own subset can't show: try once more with its installed full face.
+                #[cfg(not(target_arch = "wasm32"))]
+                if let Some(retry) = self.installed_face_retry(id, &edit) {
+                    if self.apply_edit(retry) {
+                        return true;
+                    }
+                    // The retry has said why it failed; take back the font it loaded.
+                    if self.session.undo(id).is_ok()
+                        && let (Some(doc), Some(view)) = (self.session.get(id), self.views.get_mut(i))
+                    {
+                        view.document_changed(&doc.info);
+                    }
+                    return false;
+                }
                 if let Some(view) = self.views.get_mut(i) {
                     // A drawing whose annotation wasn't added must not stay painted.
                     view.comments.drawings_refused();

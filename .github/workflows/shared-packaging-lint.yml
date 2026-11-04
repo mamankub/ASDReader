@@ -1,0 +1,32 @@
+# Copied from the shared CI workflows (revision eddaf20) into this repository; ASDReader-only.
+name: "Packaging lint"
+
+on:
+  workflow_call:
+    inputs:
+      actionlint-version:
+        description: "Version of actionlint to install"
+        type: string
+        required: false
+        default: "1.7.12"
+      extra-checks-script:
+        description: "Optional repository-local Bash script for app-specific packaging checks"
+        type: string
+        required: false
+        default: ""
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run packaging lint
+        uses: ./.github/actions/packaging-lint
+        with:
+          actionlint-version: ${{ inputs.actionlint-version }}
+      - name: App-specific packaging checks
+        if: inputs.extra-checks-script != ''
+        env:
+          CHECKS_SCRIPT: ${{ inputs.extra-checks-script }}
+        run: bash -- "$CHECKS_SCRIPT"

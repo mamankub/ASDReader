@@ -5,7 +5,7 @@ macOS, Windows, Linux, FreeBSD and the web, signs the ones it has certificates f
 updates a **draft** GitHub Release named `ASDReader v<version>`. Nobody sees a draft until a
 maintainer publishes it.
 
-The pipeline was ported from PhotoCraft's. User-facing names say **ASDReader**; files, binaries and
+The pipeline was ported from ASDesign Photo's. User-facing names say **ASDReader**; files, binaries and
 ids stay lowercase (`asdreader-<version>-<platform>-<arch>.<ext>`, `io.github.mamankub.asdreader`).
 
 ## Cutting a release
@@ -64,8 +64,8 @@ The workflow sets `ASDREADER_BUILD_SHA` and `ASDREADER_BUILD_DATE` (`packaging/e
 for local builds): the commit is recorded in the macOS `Info.plist` (`ASDReaderBuildCommit`) and the
 date in the AppStream metadata. The binaries don't embed the commit yet.
 
-**Fonts:** every job checks out [craft-fonts](https://github.com/storytold/craft-fonts) at the commit
-pinned in `release.yml` and builds with `CRAFT_FONTS_DIR` and `CRAFT_FONTS_REQUIRED=1`, so releases
+**Fonts:** every job checks out [asdesign-fonts](https://github.com/mamankub/asdesign-fonts) at the commit
+pinned in `release.yml` and builds with `ASDESIGN_FONTS_DIR` and `ASDESIGN_FONTS_REQUIRED=1`, so releases
 embed its Japanese fonts and fail rather than ship without them (`AGENTS.md` §1.4). Bump the pin
 deliberately.
 
@@ -146,7 +146,7 @@ neither the MSI nor the portable zip needs the Visual C++ redistributable.
   smoke test checks that both all-users shortcuts point at the installed `ASDReader.exe` and are
   removed on uninstall, and that `INSTALLDESKTOPSHORTCUT=0` skips the desktop one.
 - The portable zip holds both executables, the README, the licences, the OFL licence of each
-  embedded craft-fonts family, and `portable.txt`. That marker beside `ASDReader.exe` keeps the
+  embedded asdesign-fonts family, and `portable.txt`. That marker beside `ASDReader.exe` keeps the
   settings, logs, crash recovery and new digital IDs in `ASDReaderData\` next to the exe instead of
   `%APPDATA%` and `%LOCALAPPDATA%` (`crates/ui-egui/src/portable.rs`).
 - **Signing:** `packaging/windows/sign.ps1` signs both executables and the MSI with `signtool`

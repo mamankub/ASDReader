@@ -1,8 +1,8 @@
 //! Application panel identities and persistence around the shared docking renderer.
 //! Document contents remain owned by their existing view implementations.
 
-use craft_ui::docking::{Action, DockArea, DockStyle, Layout, Location, Node, PanelLimits, Permissions, Placement, Zone};
-use craft_ui::layout::{SplitAxis, SplitSize};
+use asdesign_ui::docking::{Action, DockArea, DockStyle, Layout, Location, Node, PanelLimits, Permissions, Placement, Zone};
+use asdesign_ui::layout::{SplitAxis, SplitSize};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -137,7 +137,7 @@ impl Workspace {
             }
             let mut probe = self.layout.clone();
             if let Err(error) = probe.restore(*panel, location)
-                && error != craft_ui::docking::DockError::MissingTarget
+                && error != asdesign_ui::docking::DockError::MissingTarget
             {
                 return Err(error.to_string());
             }
@@ -484,8 +484,8 @@ mod tests {
                     SplitSize::FixedFirst(272.0),
                     Node::Stack {
                         entries: vec![
-                            craft_ui::docking::StackEntry { panel: Panel::Tools, open: true, height: None },
-                            craft_ui::docking::StackEntry { panel: Panel::Inspector, open: false, height: None },
+                            asdesign_ui::docking::StackEntry { panel: Panel::Tools, open: true, height: None },
+                            asdesign_ui::docking::StackEntry { panel: Panel::Inspector, open: false, height: None },
                         ],
                     },
                     tabs(Panel::Canvas),

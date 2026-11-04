@@ -27,15 +27,40 @@ completes its subsets automatically, including new Chinese characters. When the 
 the complete program of a paragraph's font (not a subset) and its licence allows editable
 embedding, a character the font's encoding can't show is drawn with that same program. A
 character no available face has is refused with an error that names it, and a CJK character
-without a craft-fonts build says so. Replacement text takes the craft-fonts Japanese faces when
+without a asdesign-fonts build says so. Replacement text takes the asdesign-fonts Japanese faces when
 they can draw all of it, and the bundled Inter face (`assets/fonts`) for the Latin, Greek and
 Cyrillic letters they lack (Uzbek `қизил`, Kazakh `әже`): that face needs no build input, so
 these work in every build, the web one included. Choosing another face
 is explicit. A font does not need to declare an open licence: its own embedding permissions
-decide, and fonts with restricted embedding, unsupported collections (`.ttc`), variable fonts
-and the excluded families (Adobe-authored, Source Han / Noto CJK) are refused or not listed.
+decide, and fonts with restricted embedding, variable fonts and the excluded families
+(Adobe-authored, Source Han / Noto CJK) are refused or not listed. Each face of a collection
+(`.ttc`, such as Windows' `cordia.ttc` with Cordia New and CordiaUPC) is listed and embedded on
+its own.
 The whole font program is embedded, so a large font makes the PDF larger. Interface fallback fonts
 are never exported.
+
+**The installed face a subset was cut from.** When a paragraph's own embedded subset can't show
+the text typed (a Thai vowel or tone mark the document never used, say), the desktop app looks for
+the full face on this computer by the names inside the embedded program, which survive even when
+the PDF calls the font `CIDFont+F1` (PDFsharp does), loads it into the page and applies the edit
+with it, so the paragraph keeps its look. Only that face is used, matched by PostScript name (a
+bold subset never takes the regular face); without it the error is reported as before. The search
+runs in the background from the moment a paragraph editor opens. Automation and the CLI never read
+installed fonts on their own: they use `text_font_import` with an explicit file.
+
+**Thai PUA glyphs.** Thai fonts made for software without OpenType shaping (Tahoma, TH
+SarabunPSK, Angsana, Cordia…) carry extra glyphs for the marks that move: a tone mark lowered when
+no upper vowel is under it (เจ้า, บ้าน), shifted left over ป ฝ ฟ ฬ (ไฟฟ้า, เป็น), lower vowels
+dropped under ฎ ฏ, ญ ฐ without their tails. Producers often give those glyphs the Private Use Area
+code point in `/ToUnicode` (U+F70B for the lowered mai tho) instead of the Thai character, so the
+text read as `เจาของ`. Text extraction, search, copy and the editor read them as the Thai
+character (`crates/fonts/src/thai_pua.rs`), and text written back with such a font takes the
+variant the standard Thai positioning rules choose, so `เจ้าของ` keeps the lowered mark it had.
+Thai and Lao marks drawn with no advance are read right after the letter drawn before them, even
+when the producer places them a little past the next letter's start.
+
+**Turned text** (a landscape drawing turned onto a portrait page, as CAD exports are) takes a chosen
+document font for the whole paragraph; formatting part of it is still refused.
 
 The full selected program, glyph mappings, widths and Unicode text are embedded in the PDF.
 Saving and reopening therefore needs no locally installed font. Editing the same text again
@@ -44,10 +69,10 @@ shares a single copy of it. The Type 3 fonts generated for Japanese or Hebrew ch
 page's fonts lack are made anew by each edit; after an edit, those nothing on the page shows any
 more leave the page's resources, unless some content that could name them can't be read.
 Original subset bytes are
-preserved. Optional matching faces from `CRAFT_FONTS_DIR` can also complete source subsets;
+preserved. Optional matching faces from `ASDESIGN_FONTS_DIR` can also complete source subsets;
 this works only when that build input actually contains the full face. This change does not
 add a font binary or change the release font pin. Fonts shared by releases belong in
-`storytold/craft-fonts` under the repository's asset rules.
+`mamankub/asdesign-fonts` under the repository's asset rules.
 
 Rewrapped Chinese and Japanese text, which has no spaces between words, may break between any
 two characters. A row never begins with closing punctuation, a closing bracket or quote, a small

@@ -472,6 +472,47 @@ impl ASDReaderApp {
         }
     }
 
+    /// Edit ▸ Installed fonts…: load the chosen face (out of its collection, if it is in one) into
+    /// the page and apply it to the paragraph, as Load font… does with a picked file.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn use_installed_font(&mut self, page: usize, font: &asdreader_engine::text_fonts::FontFile) {
+        match font.program() {
+            Ok(bytes) => self.use_files(FilePurpose::TextFont { page }, vec![(font.label(), bytes)]),
+            Err(e) => self.notify_fmt("Couldn't read {name}: {e}", &[("name", &font.label()), ("e", &e.to_string())]),
+        }
+    }
+
+    /// A paragraph that couldn't be rewritten in its own font, usually because its embedded subset
+    /// lacks a letter just typed (a Thai vowel or tone mark the document never used): when the face
+    /// that subset was cut from is installed on this computer (TH SarabunPSK, Cordia New…, found by
+    /// the names inside the embedded program, not the PDF's `CIDFont+F1`), it is loaded into the
+    /// page and the same edit is returned to try again with it, so the paragraph keeps its look.
+    /// `None` when there is nothing to retry with; an edit that already names a font is left alone.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(crate) fn installed_face_retry(&mut self, id: asdreader_engine::DocId, edit: &Edit) -> Option<Edit> {
+        let Edit::EditTextBlock { page, block, text, style } = edit else { return None };
+        if style.resource.is_some() || style.family.is_some() || style.bold.is_some() {
+            return None;
+        }
+        let ctx = self.ctx.clone()?;
+        let (family, postscript) = self.session.get(id)?.paragraph_font_names(*page, *block)?;
+        let files = installed_font_files(&ctx)?;
+        let font = asdreader_engine::text_fonts::matching_installed(&files, &family, &postscript)?;
+        let bytes = Arc::new(font.program().ok()?);
+        self.session.apply(id, Edit::RegisterTextFont { page: *page, bytes: bytes.clone() }).ok()?;
+        let resource = self.session.get(id).and_then(|doc| {
+            doc.text_editor_fonts(*page).into_iter().find(|f| f.bytes == *bytes && !f.resource.starts_with("PCApproved")).map(|f| f.resource)
+        });
+        let Some(resource) = resource else {
+            let _ = self.session.undo(id);
+            return None;
+        };
+        log::info!("paragraph font {postscript}: completed with the installed {}", font.path.display());
+        let mut style = style.clone();
+        style.resource = Some(resource);
+        Some(Edit::EditTextBlock { page: *page, block: *block, text: text.clone(), style })
+    }
+
     /// Use picked files (also the entry point for tests and automation).
     pub fn use_files(&mut self, purpose: FilePurpose, files: Vec<(String, Vec<u8>)>) {
         match purpose {

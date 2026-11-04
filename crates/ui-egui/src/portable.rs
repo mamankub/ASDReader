@@ -1,8 +1,8 @@
 //! Portable mode (#157): a marker file beside the executable ([`MARKERS`]) keeps the settings,
 //! log files, crash-recovery autosaves and new digital IDs in `<exe dir>/ASDReaderData`, so a
 //! portable copy (on a USB stick, say) writes nothing to `%APPDATA%` or `%LOCALAPPDATA%`. The
-//! Windows portable zip ships with `portable.txt`; the MSI doesn't. PhotoCraft uses the same
-//! scheme (`photocraft/apps/photocraft/src/app_dirs.rs`).
+//! Windows portable zip ships with `portable.txt`; the MSI doesn't. ASDesign Photo uses the same
+//! scheme (`asdesign-photo/apps/asdesign-photo/src/app_dirs.rs`).
 //!
 //! If that folder can't be written (read-only medium, Program Files), portable mode stays off, the
 //! per-user folders are used and the app says why.

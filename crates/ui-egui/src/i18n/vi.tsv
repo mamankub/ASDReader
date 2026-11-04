@@ -1,7 +1,7 @@
 # Vietnamese (vi) catalog. Columns, separated by a TAB: context <TAB> source <TAB> translation
 #
 # Clean-room translations from ASDReader's English UI labels. Reviewed by a native
-# Vietnamese-speaking contributor for the original catalog; later additions are marked below. PhotoCraft/VectorCraft Vietnamese catalogs were used only as
+# Vietnamese-speaking contributor for the original catalog; later additions are marked below. ASDesign Photo/ASDesign Vector Vietnamese catalogs were used only as
 # translation memory when the English source and its meaning in context matched. Product and
 # format names (ASDReader, PDF, PDF/A, OCR, XFA, Word…) remain names where appropriate.
 # Plural rule: `plural_none` — every @plural row lists exactly one form.
@@ -670,7 +670,7 @@ theme	Appearance	Giao diện
 	JavaScript is turned off (Preferences ▸ JavaScript).	JavaScript đã bị tắt (Tùy chọn > JavaScript).
 	JavaScript, e.g. getField("total").value	JavaScript, ví dụ getField("total").value
 	Join our Discord	Tham gia Discord của chúng tôi
-	Join the ArtCraft community	Tham gia cộng đồng ArtCraft
+	Join the ASDesign community	Tham gia cộng đồng ASDesign
 	Justify	Căn đều
 	Keep source fonts	Giữ phông chữ nguồn
 	Keep tool selected	Giữ công cụ được chọn
@@ -1373,7 +1373,7 @@ theme	Appearance	Giao diện
 	Archive documents	Lưu trữ tài liệu
 	Area	Diện tích
 	Arrow	Mũi tên
-	ArtCraft website	Trang web ArtCraft
+	ASDesign website	Trang web ASDesign
 	Ask about this document	Hỏi về tài liệu này
 	Attach a file	Đính kèm một tệp
 	Attach file	Đính kèm tệp
@@ -1508,7 +1508,7 @@ theme	Appearance	Giao diện
 	Insert text	Chèn văn bản
 	JavaScript	JavaScript
 	JavaScript console…	Bảng điều khiển JavaScript…
-	Join the ArtCraft Discord	Tham gia Discord của ArtCraft
+	Join the ASDesign Discord	Tham gia Discord của ASDesign
 	Light gray	Xám nhạt
 	Line	Đường thẳng
 	Link	Liên kết

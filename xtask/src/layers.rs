@@ -1,7 +1,7 @@
 //! Dependency layering rules (plan/architecture.md §3), enforced by `cargo xtask layers`.
 //!
 //! The rule engine works on a small, metadata-independent model so it can be unit-tested;
-//! `from_metadata` builds that model from `cargo metadata`. (Structure shared with PhotoCraft.)
+//! `from_metadata` builds that model from `cargo metadata`. (Structure shared with ASDesign Photo.)
 
 use serde_json::Value;
 
@@ -34,6 +34,9 @@ pub const TABLE: &[(&str, Class)] = &[
     ("filters", Class::Standalone(0)),
     ("crypt", Class::Standalone(0)),
     ("arlington", Class::Standalone(0)),
+    // Shared ASDesign libraries without workspace dependencies: stored-path checks and the spooler.
+    ("asdesign-docpath", Class::Standalone(0)),
+    ("asdesign-print", Class::Standalone(0)),
     // L1 object layer
     ("cos", Class::Standalone(1)),
     // L2 core model
@@ -81,6 +84,9 @@ pub const TABLE: &[(&str, Class)] = &[
     ("ui-common", Class::Layer(7)),
     ("ui-egui", Class::Layer(7)),
     ("automation", Class::Layer(7)),
+    // Shared ASDesign egui controls and the macOS quit handling (egui, so L7).
+    ("asdesign-ui", Class::Layer(7)),
+    ("asdesign-quit", Class::Layer(7)),
     // test support
     ("testkit", Class::Testkit),
     ("oracle", Class::Testkit),
@@ -96,6 +102,8 @@ pub const STANDALONE_DEPS: &[(&str, &[&str])] = &[("cos", &["filters", "crypt", 
 
 /// Allowed same-layer edges (architecture §3 rule 1). `forms → js` is deliberately absent.
 pub const SIDEWAYS: &[(&str, &str)] = &[
+    ("ui-egui", "asdesign-ui"),
+    ("ui-egui", "asdesign-quit"),
     ("redact", "edit"),
     ("audit", "edit"),
     ("a11y", "preflight"),
@@ -108,7 +116,7 @@ pub const SIDEWAYS: &[(&str, &str)] = &[
 ];
 
 /// External crates that constitute a UI toolkit / windowing dependency (prefix match with `*`).
-pub const UI_CRATES: &[&str] = &["egui", "eframe", "winit", "egui_kittest", "craft-ui", "egui_extras", "egui_dock", "egui_tiles", "rfd", "wgpu*"];
+pub const UI_CRATES: &[&str] = &["egui", "eframe", "winit", "egui_kittest", "asdesign-ui", "egui_extras", "egui_dock", "egui_tiles", "rfd", "wgpu*"];
 pub const UI_MIN_LAYER: u8 = 7;
 
 pub fn short_name(pkg: &str) -> &str {
@@ -313,12 +321,12 @@ mod tests {
 
     #[test]
     fn ui_crates_below_l7_flagged() {
-        for dep in ["egui", "eframe", "winit", "rfd", "wgpu", "wgpu-core", "egui_dock", "craft-ui"] {
+        for dep in ["egui", "eframe", "winit", "rfd", "wgpu", "wgpu-core", "egui_dock", "asdesign-ui"] {
             let v = check(&[c("asdreader-engine", &[(dep, Normal, false)])]);
             assert!(matches!(v[..], [Violation::UiBelowL7 { layer: 6, .. }]), "{dep}");
         }
         assert!(check(&[c("asdreader-platform", &[("winit", Normal, false)])]).is_empty());
-        assert!(check(&[c("asdreader-ui-egui", &[("craft-ui", Normal, false)])]).is_empty());
+        assert!(check(&[c("asdreader-ui-egui", &[("asdesign-ui", Normal, false)])]).is_empty());
     }
 
     #[test]

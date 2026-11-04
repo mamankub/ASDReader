@@ -9,8 +9,8 @@ use crate::{ASDReaderApp, Dialog, Mode, PropsTab, RightPanel, icons, widgets, wi
 /// Height of the tab strip when it doubles as the macOS title bar (#789). AppKit draws the traffic
 /// lights itself, centred in the standard 28 pt title-bar band at the top of the window, and moving
 /// them takes AppKit calls the workspace forbids (`unsafe`). So on macOS the strip is that band:
-/// the lights sit vertically centred in it, and the controls beside them shrink to fit, as in
-/// WordCraft (storytold/wordcraft#255).
+/// the lights sit vertically centred in it, and the controls beside them shrink to fit, as in the
+/// ASDesign Word app.
 pub const MAC_TITLE_BAR: f32 = 28.0;
 /// The traffic lights as AppKit lays them out: button diameter, centre-to-centre pitch and the
 /// first button's left edge (8–10 pt depending on the macOS version; the larger value keeps the
@@ -449,7 +449,7 @@ fn tab(
     let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     let a11y = if dirty { format!("{name} (edited)") } else { name.to_string() };
     let sense = if draggable { Sense::click_and_drag() } else { Sense::click() };
-    let resp = craft_ui::tabs::Tab::new(id, &a11y, active).sense(sense).focus_stroke(Stroke::new(1.0, t.accent)).show_at(ui, rect, |ui, resp| {
+    let resp = asdesign_ui::tabs::Tab::new(id, &a11y, active).sense(sense).focus_stroke(Stroke::new(1.0, t.accent)).show_at(ui, rect, |ui, resp| {
         let press = theme::Press::track(ui, resp);
         let bg = if active {
             press.fill(t.chrome, t.chrome.lerp_to_gamma(t.hover, 0.65), t.hover)

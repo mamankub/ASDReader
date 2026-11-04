@@ -1,11 +1,11 @@
 //! Synthetic ASDReader specimen, generated with the app's PDF writer and OFL fonts.
-//! CRAFT_FONTS_DIR=../craft-fonts cargo run -p asdreader-edit --example asdreader_demo
+//! ASDESIGN_FONTS_DIR=../asdesign-fonts cargo run -p asdreader-edit --example asdreader_demo
 use asdreader_cos::{Dict, Document, Object, SaveOptions};
 use asdreader_edit::{AddedText, Content, add_content};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if asdreader_fonts::document_thai_font().is_none() {
-        return Err("set CRAFT_FONTS_DIR to the pinned craft-fonts checkout (Noto Sans Thai is required)".into());
+        return Err("set ASDESIGN_FONTS_DIR to the pinned asdesign-fonts checkout (Noto Sans Thai is required)".into());
     }
     let mut doc = Document::new_empty();
     let pages = doc.add(Object::Dict(Dict::new()));

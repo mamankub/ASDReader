@@ -9,7 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-craft-print = { workspace = true }
+asdesign-print = { workspace = true }
 asdreader-cos = { workspace = true }
 asdreader-content = { workspace = true }
 asdreader-model = { workspace = true }

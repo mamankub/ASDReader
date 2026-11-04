@@ -124,12 +124,12 @@ update the numbers.
   [#688](https://github.com/mamankub/ASDReader/issues/688),
   [#728](https://github.com/mamankub/ASDReader/issues/728),
   [#758](https://github.com/mamankub/ASDReader/issues/758),
-  [#689](https://github.com/mamankub/ASDReader/issues/689) (Flatpak). craft-fonts has Noto Sans
+  [#689](https://github.com/mamankub/ASDReader/issues/689) (Flatpak). asdesign-fonts has Noto Sans
   CJK SC, but at 16.4 MB it is too large to embed whole; the interface needs a cut of it
-  (storytold/craft-libs#213).
+  (ASDesign libraries (crates/asdesign-*)#213).
 - **Impact:** the second-largest language group sees a broken interface although the catalog is 97%
   translated.
-- **Estimate:** 6–12 h (cut CJK faces through craft-fonts-build plus the fallback chain). **Doc:**
+- **Estimate:** 6–12 h (cut CJK faces through asdesign-fonts-build plus the fallback chain). **Doc:**
   [localization-parity.md](localization-parity.md).
 
 ### 6. Open-issue backlog of wrong results in shipped features

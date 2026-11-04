@@ -25,7 +25,7 @@ Cargo stores custom-profile artifacts separately under `target/low-disk`. Switch
 normal and low-disk profiles can therefore leave both sets of artifacts on disk. To remove only
 the low-disk artifacts, run `cargo clean --profile low-disk`.
 
-Building ASDReader requires Rust 1.95 or later: the UI crate and its `egui` and `craft-ui`
+Building ASDReader requires Rust 1.95 or later: the UI crate and its `egui` and `asdesign-ui`
 dependencies need it, and the workspace `rust-version` states the same minimum.
 
 ## Interface appearance
@@ -117,7 +117,7 @@ On first launch after upgrading, existing `app.ron` preferences are copied from 
 data folder without replacing an existing configuration file. The old copy is retained;
 logs, crash recovery and digital IDs stay in their data locations. If migration fails,
 the app logs the failure and continues using the original preferences folder.
-The existing PrintCraft-to-ASDReader migration runs first. macOS, Windows and portable
+The existing ASDesign Print-to-ASDReader migration runs first. macOS, Windows and portable
 copies retain their current preferences locations.
 
 ## Environment variables
@@ -135,7 +135,7 @@ copies retain their current preferences locations.
 | `ASDREADER_RENDERER` | `gl` starts with OpenGL (glow) and never loads wgpu; `wgpu` reports a wgpu failure instead of retrying with OpenGL; unset, wgpu is retried with OpenGL when it can't start (see [Renderer fallback](#renderer-fallback)) |
 | `ASDREADER_TITLEBAR` | Linux: `app` draws ASDReader's own title bar (window buttons in the tab strip, in the order of GNOME's `button-layout`, and resize edges); `system` keeps the frame winit or the desktop draws; unset, ASDReader draws its own when the Wayland compositor draws no frames (GNOME), and leaves it to the desktop otherwise (KDE, Sway, Hyprland, X11). Where ASDReader draws it, Preferences ▸ Use system title bar switches back to winit's frame without a restart; `system` also hides that option |
 | `ASDREADER_BUILD_LABEL` | Build time: a label for a local or patched build (letters, digits, inner dots), shown after the version in `--version`, About and the log (`0.7.1 (titlebar)`). `packaging/linux/package.sh` also puts it in the file names and the .rpm/.deb release (`1.titlebar`), which upgrades over the release of the same version |
-| `CRAFT_FONTS_DIR` | Build time: a [craft-fonts](https://github.com/storytold/craft-fonts) checkout to embed (Japanese fonts) |
+| `ASDESIGN_FONTS_DIR` | Build time: a [asdesign-fonts](https://github.com/mamankub/asdesign-fonts) checkout to embed (Japanese fonts) |
 | `ASDREADER_SYSTEM_FONTS` | `0` stops the desktop app from using an installed font for characters its embedded fonts lack (`cargo xtask screenshots` sets it) |
 | `FONTCONFIG_FILE` | On Linux/Unix, the Fontconfig configuration file used to discover installed UI fallback fonts (default: `/etc/fonts/fonts.conf`); relative filenames are resolved under `FONTCONFIG_PATH` |
 | `FONTCONFIG_PATH` | Directory for a relative `FONTCONFIG_FILE` (default: `/etc/fonts`; the first entry of a search path is used) |

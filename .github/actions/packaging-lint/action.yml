@@ -1,0 +1,137 @@
+name: "Packaging Lint"
+description: "Lints packaging scripts (shellcheck, pwsh), actionlint, AppStream, Desktop entries, and Flatpak manifests"
+
+inputs:
+  actionlint-version:
+    description: "Version of actionlint to install"
+    required: false
+    default: "1.7.12"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install tools
+      shell: bash
+      env:
+        ACTIONLINT_VERSION: ${{ inputs.actionlint-version }}
+      run: |
+        version="$ACTIONLINT_VERSION"
+        if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+          echo "::error::invalid actionlint-version '$version'"
+          exit 1
+        fi
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends shellcheck desktop-file-utils appstream libxml2-utils python3-yaml
+        tar_url="https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz"
+        curl --proto '=https' --proto-redir =https -fsSL -o "$RUNNER_TEMP/actionlint.tar.gz" "$tar_url"
+        case "$version" in
+          "1.7.12")
+            expected="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8"
+            ;;
+          *)
+            curl --proto '=https' --proto-redir =https -fsSL -o "$RUNNER_TEMP/checksums.txt" "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_checksums.txt"
+            expected=$(grep -E "actionlint_${version}_linux_amd64\.tar\.gz" "$RUNNER_TEMP/checksums.txt" | awk '{print $1}')
+            ;;
+        esac
+        echo "$expected  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum -c -
+        tar -xz -C "$RUNNER_TEMP" -f "$RUNNER_TEMP/actionlint.tar.gz" actionlint
+
+    - name: actionlint
+      shell: bash
+      run: |
+        "$RUNNER_TEMP/actionlint" -color
+
+    - name: shellcheck
+      shell: bash
+      run: |
+        sh_files=$(find packaging -type f -name "*.sh" 2>/dev/null || true)
+        if [ -f packaging/linux/AppRun ]; then
+          sh_files="$sh_files packaging/linux/AppRun"
+        fi
+        if [ -n "$sh_files" ]; then
+          shellcheck $sh_files
+        fi
+
+    - name: AppImage AppRun desktop integration
+      shell: bash
+      run: |
+        if [ -f packaging/linux/apprun-test.sh ]; then
+          bash packaging/linux/apprun-test.sh
+        fi
+
+    - name: Linux tarball installer test
+      shell: bash
+      run: |
+        if [ -f packaging/linux/test_install.py ]; then
+          python3 packaging/linux/test_install.py
+        fi
+
+    - name: FreeBSD package layout (dry run)
+      shell: bash
+      run: |
+        if [ -f packaging/freebsd/package.sh ] && grep -q -- '--dry-run' packaging/freebsd/package.sh; then
+          bash packaging/freebsd/package.sh --dry-run
+        fi
+
+    - name: PowerShell
+      shell: pwsh
+      run: |
+        foreach ($f in Get-ChildItem packaging/windows/*.ps1) {
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors | ForEach-Object { Write-Output "::error file=$($f.Name)::$_" }; exit 1 }
+          Write-Output "ok $($f.Name)"
+        }
+        if (Test-Path ./packaging/windows/check-icons.ps1) {
+          ./packaging/windows/check-icons.ps1
+        }
+
+    - name: XML, desktop entry, AppStream, Flatpak manifest
+      shell: bash
+      run: |
+        wxs=$(ls packaging/windows/*.wxs 2>/dev/null || true)
+        wxl=$(ls packaging/windows/*.wxl 2>/dev/null || true)
+        plist=$(ls packaging/macos/*.plist* 2>/dev/null || true)
+        xml=$(ls packaging/linux/*.xml* 2>/dev/null || true)
+        if [ -n "$wxs" ] || [ -n "$wxl" ] || [ -n "$plist" ] || [ -n "$xml" ]; then
+          xmllint --noout $wxs $wxl $plist $xml
+        fi
+
+        if [ -n "$wxs" ]; then
+          if grep -oE '<Icon Id="[^"]*"' $wxs | grep -vE '\.(ico|exe)"$'; then
+            echo "::error::Icon Id must end in .ico or .exe"; exit 1
+          fi
+          if [ "$(grep -oiE '(UpgradeCode|Guid)="[0-9A-F-]{36}"' $wxs | cut -d'"' -f2 | sort -f | uniq -di)" ]; then
+            echo "::error file=$wxs::duplicate GUID"; exit 1
+          fi
+        fi
+
+        for df in $(ls packaging/linux/*.desktop 2>/dev/null || true); do
+          desktop-file-validate "$df"
+        done
+
+        for mi in $(ls packaging/linux/*.metainfo.xml.in 2>/dev/null || true); do
+          base="$(basename "$mi" .in)"
+          sed -e 's/@VERSION@/0.0.0/' -e 's/@DATE@/2026-01-01/' "$mi" >"$RUNNER_TEMP/$base"
+          appstreamcli validate --no-net --explain "$RUNNER_TEMP/$base"
+        done
+
+        python3 - <<'PYEOF'
+        import glob, yaml
+        src_files = [f for f in glob.glob("packaging/linux/flatpak/*.yml") if not f.endswith(".bundle.yml")]
+        bundle_files = glob.glob("packaging/linux/flatpak/*.bundle.yml")
+        if src_files and bundle_files:
+            src = yaml.safe_load(open(src_files[0]))
+            bundle = yaml.safe_load(open(bundle_files[0]))
+            for key in ("runtime", "runtime-version", "sdk", "finish-args"):
+                if key in src and key in bundle:
+                    assert src[key] == bundle[key], f"Flatpak manifests disagree on {key}: {src[key]} vs {bundle[key]}"
+            print("Flatpak manifests ok")
+        PYEOF
+
+    - name: Embedded icons existence check
+      shell: bash
+      run: |
+        if [ -f packaging/check-icons.sh ]; then
+          bash packaging/check-icons.sh
+        fi

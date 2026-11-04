@@ -413,7 +413,7 @@ impl Dictionary {
     /// example decoding a `/ToUnicode` CMap stream) to `max_decompressed_size`
     /// bytes. This is the decompression-bomb-safe counterpart to
     /// [`Dictionary::get_font_encoding`]: it is used by
-    /// [`crate::Document::extract_text_with_limit`] so a crafted font stream
+    /// [`crate::Document::extract_text_with_limit`] so a made font stream
     /// cannot inflate without limit. Unlike other encoding errors (which fall
     /// back to standard encoding), a detected size-limit violation is propagated
     /// as [`DecompressError::MemoryLimitExceeded`].

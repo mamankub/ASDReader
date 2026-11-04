@@ -9,10 +9,10 @@ pub fn run(args: &[String]) -> Result<()> {
         bail!("usage: cargo xtask asdreader build|run|test [cargo options] [-- app options]");
     }
     let root = crate::gates::root();
-    let dir = std::env::var_os("CRAFT_FONTS_DIR").map(PathBuf::from).unwrap_or_else(|| root.join("../craft-fonts"));
-    let dir = dir.canonicalize().context("prepare the pinned craft-fonts checkout beside ASDReader, or set CRAFT_FONTS_DIR; see README.md")?;
+    let dir = std::env::var_os("ASDESIGN_FONTS_DIR").map(PathBuf::from).unwrap_or_else(|| root.join("../asdesign-fonts"));
+    let dir = dir.canonicalize().context("prepare the pinned asdesign-fonts checkout beside ASDReader, or set ASDESIGN_FONTS_DIR; see README.md")?;
     let mut command = Command::new("cargo");
-    command.current_dir(root).env("CRAFT_FONTS_DIR", dir).env("CRAFT_FONTS_REQUIRED", "1").env("ASDREADER_REQUIRE_THAI", "1");
+    command.current_dir(root).env("ASDESIGN_FONTS_DIR", dir).env("ASDESIGN_FONTS_REQUIRED", "1").env("ASDREADER_REQUIRE_THAI", "1");
     command.args([action, "--locked", "-j", "2"]);
     if action == "test" {
         command.args(["-p", "asdreader-fonts", "-p", "asdreader-edit"]);

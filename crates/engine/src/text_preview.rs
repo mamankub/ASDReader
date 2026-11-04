@@ -67,6 +67,12 @@ impl Document {
         self.editor.as_ref().and_then(|e| asdreader_edit::text::text_editor_fonts(&e.cos, page).ok()).unwrap_or_default()
     }
 
+    /// The names inside the font program paragraph `block` on `page` is drawn with (see
+    /// [`asdreader_edit::text::block_font_names`]), for finding its full face on this computer.
+    pub fn paragraph_font_names(&self, page: usize, block: usize) -> Option<(String, String)> {
+        self.editor.as_ref().and_then(|e| asdreader_edit::text::block_font_names(&e.cos, page, block))
+    }
+
     /// Preparing the background never changes working bytes, dirty state or undo history.
     pub fn text_edit_preview(&self, page: usize, block: usize) -> Result<TextEditPreview, String> {
         guard(|| {

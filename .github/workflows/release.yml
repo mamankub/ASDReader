@@ -31,8 +31,8 @@ jobs:
     env:
       CARGO_BUILD_JOBS: "2"
       CARGO_INCREMENTAL: "0"
-      CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
-      CRAFT_FONTS_REQUIRED: "1"
+      ASDESIGN_FONTS_DIR: ${{ github.workspace }}/asdesign-fonts
+      ASDESIGN_FONTS_REQUIRED: "1"
       ASDREADER_REQUIRE_THAI: "1"
       ASDREADER_SYSTEM_FONTS: "0"
       ASDREADER_BUILD_SHA: ${{ github.sha }}
@@ -43,9 +43,9 @@ jobs:
       - name: Check out pinned fonts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: storytold/craft-fonts
-          ref: 3d9ab3a132ed0eff457e424226a435a901da30d3
-          path: craft-fonts
+          repository: mamankub/asdesign-fonts
+          ref: c76dcbc93b13d3b6981c12602bc545ea7ec3e67a
+          path: asdesign-fonts
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
@@ -68,7 +68,7 @@ jobs:
           expected = os.environ.get('EXPECTED_VERSION', '')
           if expected and expected != version:
               raise SystemExit(f'Expected {expected}, Cargo.toml has {version}')
-          fonts = pathlib.Path(os.environ['CRAFT_FONTS_DIR'])
+          fonts = pathlib.Path(os.environ['ASDESIGN_FONTS_DIR'])
           count = 0
           for line in (fonts / 'fonts/manifest.txt').read_text().splitlines():
               if not line.strip() or line.lstrip().startswith('#'):

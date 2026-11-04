@@ -2,7 +2,7 @@
 
 สถานะ: ผ่านการตรวจในเครื่อง; เตรียมเผยแพร่รุ่นแรก v0.13.1 ตามอนุมัติเจ้าของ — 2026-11-03
 
-ฐานซอร์ส `a2ec27b4775f53c40cad3456936d9406611e3a8d` บน branch `feat/asdreader-brand-thai` ใช้ Rust 1.95.0 และ craft-fonts revision `3d9ab3a132ed0eff457e424226a435a901da30d3` ตรวจ SHA-256 ตรงกับ manifest ครบทั้ง 7 ไฟล์ฟอนต์ ไม่มีฟอนต์ใหม่ถูกคัดลอกเข้า repository นี้
+ฐานซอร์ส `a2ec27b4775f53c40cad3456936d9406611e3a8d` บน branch `feat/asdreader-brand-thai` ใช้ Rust 1.95.0 และ asdesign-fonts revision `3d9ab3a132ed0eff457e424226a435a901da30d3` ตรวจ SHA-256 ตรงกับ manifest ครบทั้ง 7 ไฟล์ฟอนต์ ไม่มีฟอนต์ใหม่ถูกคัดลอกเข้า repository นี้
 
 ## การเปลี่ยนแปลง
 
@@ -11,9 +11,9 @@
 - README หลักเป็นภาษาไทย ภาพมาจาก UI จริงของ ASDReader และ PDF สังเคราะห์ที่สร้างด้วย `crates/edit/examples/asdreader_demo.rs`
 - แยกช่วงอักษรไทยก่อนจัดรูปข้อความจากฟอนต์เอกสาร แก้สระอำและตำแหน่งเครื่องหมายในข้อความอังกฤษสลับไทย
 - ขณะเพิ่มข้อความ เก็บสระหน้าและสระหลังไว้กับตัวฐานในการขึ้นบรรทัดใหม่ รวมถึงการเก็บเครื่องหมายซ้อนด้วย shaped clusters ที่มีอยู่เดิม
-- `cargo xtask asdreader build|run|test` บังคับมีฟอนต์ไทยก่อน build; `CRAFT_FONTS_REQUIRED` ที่ตั้งไว้แต่ไม่มี `CRAFT_FONTS_DIR` จะหยุดด้วย error
-- CI เดิมบังคับ `require-craft-fonts`, `ASDREADER_REQUIRE_THAI=1` และ `ASDREADER_SYSTEM_FONTS=0` ทั้ง Linux และ Windows โดยใช้ reusable workflow เดิม ไม่เพิ่ม actions หรือขั้นตอนติดตั้งแพ็กเกจใหม่
-- ลบไฟล์ trademark ArtCraft เดิมครบ 8 ไฟล์ตามอนุมัติเจ้าของ และนำรายการออกจาก manifest โดยคง `LICENSE-brand.txt` และเครดิตต้นทางไว้
+- `cargo xtask asdreader build|run|test` บังคับมีฟอนต์ไทยก่อน build; `ASDESIGN_FONTS_REQUIRED` ที่ตั้งไว้แต่ไม่มี `ASDESIGN_FONTS_DIR` จะหยุดด้วย error
+- CI เดิมบังคับ `require-asdesign-fonts`, `ASDREADER_REQUIRE_THAI=1` และ `ASDREADER_SYSTEM_FONTS=0` ทั้ง Linux และ Windows โดยใช้ reusable workflow เดิม ไม่เพิ่ม actions หรือขั้นตอนติดตั้งแพ็กเกจใหม่
+- ลบไฟล์ trademark ASDesign เดิมครบ 8 ไฟล์ตามอนุมัติเจ้าของ และนำรายการออกจาก manifest โดยคงเครดิตต้นทางไว้ (`LICENSE-brand.txt` ถูกลบตามมาภายหลัง เมื่อไม่มีไฟล์ใดใช้)
 - จัดรูป guard ของ ClosePath ใน `crates/edit/src/images.rs` และย่อ boolean ใน `crates/ui-egui/src/compare_ui.rs` ให้ผ่าน lint โดยคงพฤติกรรมเดิม
 
 ## หลักฐานก่อนและหลังแก้
@@ -44,7 +44,7 @@
 | ฟอร์แมตไอคอน | ICO ทั้งสองไฟล์มี 9 ขนาด; ICNS มี PNG entries 7 ขนาด |
 | ฟอนต์ขาดหาย | เรียก build script ด้วย required flag: ไม่มี directory และมี manifest ที่ไม่มี Thai ต่างให้ `cargo::error` |
 
-ใช้ `CRAFT_FONTS_REQUIRED=1 ASDREADER_REQUIRE_THAI=1 ASDREADER_SYSTEM_FONTS=0` ในการตรวจชุดไทย จึงไม่อาศัยฟอนต์ระบบช่วยให้ผ่าน โดย UI coverage ครอบคลุม codepoint ไทยที่กำหนดใช้ `U+0E01..U+0E3A` และ `U+0E3F..U+0E5B` ที่ scale 1, 1.5 และ 2
+ใช้ `ASDESIGN_FONTS_REQUIRED=1 ASDREADER_REQUIRE_THAI=1 ASDREADER_SYSTEM_FONTS=0` ในการตรวจชุดไทย จึงไม่อาศัยฟอนต์ระบบช่วยให้ผ่าน โดย UI coverage ครอบคลุม codepoint ไทยที่กำหนดใช้ `U+0E01..U+0E3A` และ `U+0E3F..U+0E5B` ที่ scale 1, 1.5 และ 2
 
 ## ตรวจซ้ำเพื่อเตรียม v0.13.1
 
@@ -66,7 +66,7 @@ CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate m
 
 ## เอกสารสิทธิ์ในแพ็กเกจ
 
-แพ็กเกจ archive แนบ ATTRIBUTION.md และไฟล์ใบอนุญาตที่ NOTICE อ้างถึงสำหรับ Inter, JetBrains Mono, Dancing Script, ฟอนต์เริ่มต้นของ egui, Lucide และทรัพยากร PDF ที่ฝังมากับแอป เพิ่มจากใบอนุญาต craft-fonts/โมเดล OCR ที่คัดลอกอยู่แล้ว สคริปต์ Linux และ Windows ใช้รายการเดียวกันใน `packaging/asset-licences.txt` และ NOTICE ระบุการเปลี่ยนแบรนด์พร้อมเก็บเครดิตต้นทาง ตรวจ staging helpers จริงทั้ง Bash และ PowerShell แล้ว: คัดลอกครบ 11 ไฟล์และ byte ตรงต้นฉบับ; ฝั่ง Linux คงใบอนุญาตฟอนต์ไทยและ ATTRIBUTION.md ครบ
+แพ็กเกจ archive แนบ ATTRIBUTION.md และไฟล์ใบอนุญาตที่ NOTICE อ้างถึงสำหรับ Inter, JetBrains Mono, Dancing Script, ฟอนต์เริ่มต้นของ egui, Lucide และทรัพยากร PDF ที่ฝังมากับแอป เพิ่มจากใบอนุญาต asdesign-fonts/โมเดล OCR ที่คัดลอกอยู่แล้ว สคริปต์ Linux และ Windows ใช้รายการเดียวกันใน `packaging/asset-licences.txt` และ NOTICE ระบุการเปลี่ยนแบรนด์พร้อมเก็บเครดิตต้นทาง ตรวจ staging helpers จริงทั้ง Bash และ PowerShell แล้ว: คัดลอกครบ 11 ไฟล์และ byte ตรงต้นฉบับ; ฝั่ง Linux คงใบอนุญาตฟอนต์ไทยและ ATTRIBUTION.md ครบ
 
 ## ภาพที่ตรวจด้วยตา
 
@@ -82,7 +82,7 @@ CI FreeBSD เดิมเริ่ม VM ไม่ได้ (`Cannot allocate m
 
 ## การนำแบรนด์เก่าออก
 
-ไฟล์ที่นำออกแล้ว: `artcraft-logo.svg`, `artcraft-logo.png`, `artcraft-logo-white.svg`, `artcraft-logo-white.png`, `artcraft-mark.svg`, `artcraft-mark.png`, `artcraft-mark-black.svg`, `artcraft-mark-black.png` ภายใน `docs/brand/` โดยคง `LICENSE-brand.txt` และเครดิตต้นทางไว้
+ไฟล์ที่นำออกแล้ว: `asdesign-logo.svg`, `asdesign-logo.png`, `asdesign-logo-white.svg`, `asdesign-logo-white.png`, `asdesign-mark.svg`, `asdesign-mark.png`, `asdesign-mark-black.svg`, `asdesign-mark-black.png` ภายใน `docs/brand/` โดยคง `LICENSE-brand.txt` และเครดิตต้นทางไว้
 
 ## ประวัติ
 

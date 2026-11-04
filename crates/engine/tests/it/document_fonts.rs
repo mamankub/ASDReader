@@ -87,7 +87,7 @@ fn contextual_arabic_marks_ligatures_and_mixed_bidi_keep_logical_text_after_reop
         return;
     }
     let Some(font) = asdreader_fonts::document_arabic_font() else {
-        eprintln!("set CRAFT_FONTS_DIR to test full Arabic glyph programs");
+        eprintln!("set ASDESIGN_FONTS_DIR to test full Arabic glyph programs");
         return;
     };
     if asdreader_fonts::embedding::validate(font.bytes).is_err() {

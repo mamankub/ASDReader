@@ -91,5 +91,5 @@ lacks a spacing character (including Adobe-Japan1 U+2002). Native glyphs and
 variation forms retain priority; embedded fonts, PDF advances and Unicode decoding
 are unchanged. Renderer regressions `japanese_substitute_missing_spaces_draw_no_ink`
 and `japanese_substitute_spaces_keep_pdf_widths_and_unicode` use the synthetic
-MS-Mincho / UniJIS-UCS2-HW-H fixture with craft-fonts, including `/W` and `/DW`
+MS-Mincho / UniJIS-UCS2-HW-H fixture with asdesign-fonts, including `/W` and `/DW`
 placement controls.

@@ -896,7 +896,7 @@ fn keychain_identities_carry_their_issuers() {
         }
         let id = found.unwrap();
         let issuers: Vec<_> = id.chain.iter().map(|c| c.subject.common_name()).collect();
-        assert_eq!(issuers, [Some("PrintCraft Test Root CA")]);
+        assert_eq!(issuers, [Some("ASDesign Print Test Root CA")]);
         let file = pkcs12::open(&data("chain.p12"), "test").unwrap();
         assert_eq!(id.chain.iter().map(|c| &c.raw).collect::<Vec<_>>(), file.chain.iter().map(|c| &c.raw).collect::<Vec<_>>());
     }));

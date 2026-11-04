@@ -9,7 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
-craft-docpath = { workspace = true }
+asdesign-docpath = { workspace = true }
 asdreader-measure = { workspace = true }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff"] }
 asdreader-render = { workspace = true }

@@ -30,7 +30,7 @@ ASDReader เป็นโปรแกรมอ่านและแก้ไข 
 
 ## ภาษาไทยและฟอนต์
 
-ASDReader ใช้ **Noto Sans Thai** จากชุด [craft-fonts](https://github.com/storytold/craft-fonts) ที่ตรึง revision ไว้ รองรับพยัญชนะไทย รวมถึง ฃ ฅ สระ วรรณยุกต์ เครื่องหมาย และเลขไทย โดยใช้ OpenType shaping เพื่อวางรูปอักษรและเครื่องหมายประกอบ
+ASDReader ใช้ **Noto Sans Thai** จากชุด [asdesign-fonts](https://github.com/mamankub/asdesign-fonts) ที่ตรึง revision ไว้ รองรับพยัญชนะไทย รวมถึง ฃ ฅ สระ วรรณยุกต์ เครื่องหมาย และเลขไทย โดยใช้ OpenType shaping เพื่อวางรูปอักษรและเครื่องหมายประกอบ
 
 การปรับใน fork นี้ครอบคลุม:
 
@@ -68,8 +68,8 @@ git clone https://github.com/mamankub/ASDReader.git
 cd ASDReader
 
 # ชุดฟอนต์เป็น build input ภายนอก ไม่คัดลอกฟอนต์เข้า repo นี้
-git clone https://github.com/storytold/craft-fonts.git ../craft-fonts
-git -C ../craft-fonts checkout 3d9ab3a132ed0eff457e424226a435a901da30d3
+git clone https://github.com/mamankub/asdesign-fonts.git ../asdesign-fonts
+git -C ../asdesign-fonts checkout c76dcbc93b13d3b6981c12602bc545ea7ec3e67a
 
 # ตรวจฟอนต์ไทยก่อนเริ่มแอป
 cargo xtask asdreader run -- --language th
@@ -79,7 +79,7 @@ cargo xtask asdreader run -- document.pdf --language th
 cargo xtask asdreader build --release
 ```
 
-คำสั่ง `asdreader` จะหา `../craft-fonts` โดยอัตโนมัติ หรือใช้ตำแหน่งจาก `CRAFT_FONTS_DIR` แล้วเปิด `CRAFT_FONTS_REQUIRED=1` และ `ASDREADER_REQUIRE_THAI=1` เพื่อให้ build ล้มพร้อมข้อความชัดเจนหากไม่มีชุดฟอนต์หรือไม่มี face ภาษาไทย
+คำสั่ง `asdreader` จะหา `../asdesign-fonts` โดยอัตโนมัติ หรือใช้ตำแหน่งจาก `ASDESIGN_FONTS_DIR` แล้วเปิด `ASDESIGN_FONTS_REQUIRED=1` และ `ASDREADER_REQUIRE_THAI=1` เพื่อให้ build ล้มพร้อมข้อความชัดเจนหากไม่มีชุดฟอนต์หรือไม่มี face ภาษาไทย
 
 ชื่อ Cargo package, binary และ ID สำหรับ packaging บางส่วนยังใช้ `asdreader` เพื่อให้ทำงานกับโครงสร้างเดิมได้ เช่น `target/release/asdreader` และ `asdreader-cli` ชื่อที่แสดงในแอปและ artwork เป็น ASDReader ส่วนข้อมูลการตั้งค่าที่เก็บไว้ยังใช้ตำแหน่งเดิม
 
@@ -98,15 +98,15 @@ cargo run -p asdreader-cli -- run --script steps.json --root ./work
 cargo run -p asdreader-cli -- mcp
 ```
 
-หาก script เขียนข้อความไทย ต้องตั้ง `CRAFT_FONTS_DIR=../craft-fonts ASDREADER_REQUIRE_THAI=1` ตอน build CLI ด้วย รายละเอียดอยู่ใน [คู่มือ automation](crates/automation/README.md)
+หาก script เขียนข้อความไทย ต้องตั้ง `ASDESIGN_FONTS_DIR=../asdesign-fonts ASDREADER_REQUIRE_THAI=1` ตอน build CLI ด้วย รายละเอียดอยู่ใน [คู่มือ automation](crates/automation/README.md)
 
 แอปเดสก์ท็อปมี control channel แบบ opt-in ผ่าน `--control FILE` สำหรับ `inspect`, `click`, `type` และ `screenshot` โดยผูกกับ loopback และใช้ token ใหม่ทุกครั้ง ไม่เปิดใช้งานเอง
 
 ## พัฒนาและทดสอบ
 
 ```sh
-export CRAFT_FONTS_DIR="$PWD/../craft-fonts"
-export CRAFT_FONTS_REQUIRED=1
+export ASDESIGN_FONTS_DIR="$PWD/../asdesign-fonts"
+export ASDESIGN_FONTS_REQUIRED=1
 export ASDREADER_REQUIRE_THAI=1
 export ASDREADER_SYSTEM_FONTS=0
 
@@ -129,7 +129,7 @@ cargo xtask assets
 ## สร้างภาพประกอบใหม่จาก ASDReader
 
 ```sh
-export CRAFT_FONTS_DIR="$PWD/../craft-fonts"
+export ASDESIGN_FONTS_DIR="$PWD/../asdesign-fonts"
 export ASDREADER_REQUIRE_THAI=1
 export ASDREADER_SYSTEM_FONTS=0
 
@@ -145,8 +145,8 @@ target/debug/examples/shot docs/images/asdreader-home.png --language th --size 1
 
 ## สิทธิ์และเครดิต
 
-ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของ ArtCraft Team, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
+ซอร์สใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก คงเครดิตและประกาศที่จำเป็นของ ASDesign Team, ASDReader contributors และ dependency ไว้ใน [NOTICE](NOTICE)
 
-logo/icon ของ ASDReader เป็นรูปทรงต้นฉบับสีแดงนีออน `#FF1744` และขาว `#FFFFFF` ส่วน wordmark ใช้เส้นอักษรจาก Inter ที่มีสิทธิ์ OFL ฟอนต์ Lucide icons และ asset อื่นคงสิทธิ์ของเจ้าของตาม [ATTRIBUTION.md](ATTRIBUTION.md) ฟอนต์จาก build input มีรายละเอียดใน [craft-fonts attribution](https://github.com/storytold/craft-fonts/blob/3d9ab3a132ed0eff457e424226a435a901da30d3/ATTRIBUTION.md)
+logo/icon ของ ASDReader เป็นรูปทรงต้นฉบับสีแดงนีออน `#FF1744` และขาว `#FFFFFF` ส่วน wordmark ใช้เส้นอักษรจาก Inter ที่มีสิทธิ์ OFL ฟอนต์ Lucide icons และ asset อื่นคงสิทธิ์ของเจ้าของตาม [ATTRIBUTION.md](ATTRIBUTION.md) ฟอนต์จาก build input มีรายละเอียดใน [asdesign-fonts attribution](https://github.com/mamankub/asdesign-fonts/blob/c76dcbc93b13d3b6981c12602bc545ea7ec3e67a/ATTRIBUTION.md)
 
 แจ้งปัญหาได้ที่ [Issues ของ ASDReader](https://github.com/mamankub/ASDReader/issues) พร้อมรุ่นโปรแกรม ขั้นตอนทำซ้ำ และ PDF ตัวอย่างที่ไม่มีข้อมูลส่วนบุคคล

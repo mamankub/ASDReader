@@ -3916,7 +3916,7 @@ trailer << /Size 13 /Root 1 0 R >>
         assert_eq!(grotesk.substitute.as_deref(), Some("Courier"));
         assert!(grotesk.substitution.as_deref().unwrap_or_default().contains("descriptor flags"), "{grotesk:?}");
 
-        // Japanese depends on the optional craft-fonts build input; either way it is reported,
+        // Japanese depends on the optional asdesign-fonts build input; either way it is reported,
         // and never as a Latin face.
         let jpan = font(&info.fonts, "KozMinPro-Regular");
         assert!(jpan.substitution.is_some(), "a substitution is always explained");

@@ -989,9 +989,9 @@ fn added_arabic_text_is_shaped_in_display_order_and_stays_searchable() {
     let text =
         AddedText { rect: [72.0, 600.0, 400.0, 700.0], text: "مرحبا World".into(), size: 14.0, align: Align::Right, ..AddedText::default() };
     if asdreader_fonts::document_arabic_font().is_none() {
-        eprintln!("skipping the Arabic drawing checks: built without a craft-fonts Arab face (set CRAFT_FONTS_DIR)");
+        eprintln!("skipping the Arabic drawing checks: built without a asdesign-fonts Arab face (set ASDESIGN_FONTS_DIR)");
         let err = add_content(&mut doc, 0, &Content::Text(text)).unwrap_err();
-        assert!(matches!(&err, EditError::Invalid(m) if m.contains("CRAFT_FONTS_DIR")), "{err:?}");
+        assert!(matches!(&err, EditError::Invalid(m) if m.contains("ASDESIGN_FONTS_DIR")), "{err:?}");
         assert!(!doc.is_modified(), "nothing is written when the font is missing");
         return;
     }
@@ -1040,7 +1040,7 @@ fn added_hebrew_text_is_drawn_right_to_left_and_stays_searchable() {
         ..AddedText::default()
     };
     if asdreader_fonts::document_hebrew_font(false).is_none() {
-        eprintln!("skipping the Hebrew drawing checks: built without a craft-fonts Hebr face (set CRAFT_FONTS_DIR)");
+        eprintln!("skipping the Hebrew drawing checks: built without a asdesign-fonts Hebr face (set ASDESIGN_FONTS_DIR)");
         assert_eq!(first_undrawable(&text), Some('ש'));
         let err = add_content(&mut doc, 0, &Content::Text(text)).unwrap_err();
         assert!(matches!(&err, EditError::Invalid(m) if m.contains("U+05E9")), "{err:?}");
@@ -1341,18 +1341,18 @@ fn descriptor_text_page() -> Document {
     Document::open(Arc::new(out)).unwrap()
 }
 
-/// The Japanese fallback face comes from craft-fonts, an optional build input.
-fn without_craft_fonts(test: &str) -> bool {
+/// The Japanese fallback face comes from asdesign-fonts, an optional build input.
+fn without_asdesign_fonts(test: &str) -> bool {
     if asdreader_fonts::document_japanese_font().is_some() {
         return false;
     }
-    eprintln!("skipping {test}: built without craft-fonts (set CRAFT_FONTS_DIR to run it)");
+    eprintln!("skipping {test}: built without asdesign-fonts (set ASDESIGN_FONTS_DIR to run it)");
     true
 }
 
 #[test]
 fn japanese_line_uses_unicode_type3_fallback() {
-    if without_craft_fonts("japanese_line_uses_unicode_type3_fallback") {
+    if without_asdesign_fonts("japanese_line_uses_unicode_type3_fallback") {
         return;
     }
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
@@ -1394,7 +1394,7 @@ fn fallback_paths(doc: &Document) -> Vec<Vec<u8>> {
 
 #[test]
 fn japanese_line_fallback_uses_real_source_family_and_weight() {
-    if without_craft_fonts("japanese_line_fallback_uses_real_source_family_and_weight") {
+    if without_asdesign_fonts("japanese_line_fallback_uses_real_source_family_and_weight") {
         return;
     }
     let mut sans = styled_text_page("Helvetica");
@@ -1405,7 +1405,7 @@ fn japanese_line_fallback_uses_real_source_family_and_weight() {
     text::replace_line(&mut bold, 0, 0, replacement).unwrap();
     text::replace_line(&mut serif, 0, 0, replacement).unwrap();
     assert_ne!(fallback_paths(&sans), fallback_paths(&serif), "sans source must not use Mincho outlines");
-    if asdreader_fonts::CRAFT_FONTS.iter().any(|f| f.family == "BIZ UDPGothic" && f.style == "Bold") {
+    if asdreader_fonts::ASDESIGN_FONTS.iter().any(|f| f.family == "BIZ UDPGothic" && f.style == "Bold") {
         assert_ne!(fallback_paths(&sans), fallback_paths(&bold), "bold must change the actual glyph paths");
     }
     for doc in [&sans, &bold, &serif] {
@@ -1415,7 +1415,7 @@ fn japanese_line_fallback_uses_real_source_family_and_weight() {
 
 #[test]
 fn japanese_paragraph_fallback_honors_requested_family_and_weight() {
-    if without_craft_fonts("japanese_paragraph_fallback_honors_requested_family_and_weight") {
+    if without_asdesign_fonts("japanese_paragraph_fallback_honors_requested_family_and_weight") {
         return;
     }
     let replacement = "見本商会　御中";
@@ -1440,7 +1440,7 @@ fn japanese_paragraph_fallback_honors_requested_family_and_weight() {
     )
     .unwrap();
     assert_ne!(fallback_paths(&regular), fallback_paths(&serif), "requested serif must change actual outlines");
-    if asdreader_fonts::CRAFT_FONTS.iter().any(|f| f.family == "BIZ UDPGothic" && f.style == "Bold") {
+    if asdreader_fonts::ASDESIGN_FONTS.iter().any(|f| f.family == "BIZ UDPGothic" && f.style == "Bold") {
         assert_ne!(fallback_paths(&regular), fallback_paths(&bold), "requested bold must change actual outlines");
         let mut source_bold = styled_text_page("Helvetica-Bold");
         text::replace_block(&mut source_bold, 0, 0, replacement).unwrap();
@@ -1453,7 +1453,7 @@ fn japanese_paragraph_fallback_honors_requested_family_and_weight() {
 
 #[test]
 fn japanese_fallback_reports_the_face_after_save_and_reopen() {
-    if without_craft_fonts("japanese_fallback_reports_the_face_after_save_and_reopen") {
+    if without_asdesign_fonts("japanese_fallback_reports_the_face_after_save_and_reopen") {
         return;
     }
     // F2 is (a subset of) Arial: a regular sans face, so the fallback is the regular Gothic.
@@ -1478,12 +1478,12 @@ fn japanese_fallback_reports_the_face_after_save_and_reopen() {
 
 #[test]
 fn cyrillic_in_a_serif_line_falls_back_to_a_face_that_has_it() {
-    if without_craft_fonts("cyrillic_in_a_serif_line_falls_back_to_a_face_that_has_it") {
+    if without_asdesign_fonts("cyrillic_in_a_serif_line_falls_back_to_a_face_that_has_it") {
         return;
     }
     let replacement = "Привет, world";
-    let has_all = |f: &asdreader_fonts::CraftFont| replacement.chars().all(|ch| asdreader_fonts::japanese_glyph_from(f, ch).is_ok());
-    if !asdreader_fonts::CRAFT_FONTS.iter().any(|f| f.covers("Jpan") && has_all(f)) {
+    let has_all = |f: &asdreader_fonts::AsdesignFont| replacement.chars().all(|ch| asdreader_fonts::japanese_glyph_from(f, ch).is_ok());
+    if !asdreader_fonts::ASDESIGN_FONTS.iter().any(|f| f.covers("Jpan") && has_all(f)) {
         eprintln!("skipping: no Japanese fallback face has Cyrillic");
         return;
     }
@@ -1498,9 +1498,9 @@ fn cyrillic_in_a_serif_line_falls_back_to_a_face_that_has_it() {
     }
 }
 
-/// #2593: the craft-fonts faces are Japanese, and part of the Cyrillic (Uzbek қ ғ ҳ, Kazakh ә ө ү
+/// #2593: the asdesign-fonts faces are Japanese, and part of the Cyrillic (Uzbek қ ғ ҳ, Kazakh ә ө ү
 /// ұ һ) is in none of them. The bundled Inter face has it, so the replacement is written instead of
-/// being refused, and a build without craft-fonts can do it too.
+/// being refused, and a build without asdesign-fonts can do it too.
 #[test]
 fn uzbek_and_kazakh_cyrillic_use_the_bundled_latin_face() {
     for replacement in ["The quick brown fox jumps over the lazy dog қизил", "әже", "ўзбекча ғўза"] {
@@ -1522,7 +1522,7 @@ fn uzbek_and_kazakh_cyrillic_use_the_bundled_latin_face() {
 /// face it was drawn with before the bundled Latin face was added.
 #[test]
 fn cyrillic_the_japanese_faces_carry_keeps_them() {
-    if without_craft_fonts("cyrillic_the_japanese_faces_carry_keeps_them") {
+    if without_asdesign_fonts("cyrillic_the_japanese_faces_carry_keeps_them") {
         return;
     }
     let face = asdreader_fonts::document_japanese_font_for_style(false, false).unwrap();
@@ -1538,7 +1538,7 @@ fn cyrillic_the_japanese_faces_carry_keeps_them() {
 
 #[test]
 fn japanese_paragraph_uses_unicode_type3_fallback() {
-    if without_craft_fonts("japanese_paragraph_uses_unicode_type3_fallback") {
+    if without_asdesign_fonts("japanese_paragraph_uses_unicode_type3_fallback") {
         return;
     }
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
@@ -1548,8 +1548,8 @@ fn japanese_paragraph_uses_unicode_type3_fallback() {
     assert_eq!(text::text_blocks(&reopened, 0).unwrap()[0].text, replacement);
 }
 
-/// The first `n` Japanese characters, in code point order, that every craft-fonts face can draw, so
-/// whichever face an edit picks has them all. Without craft-fonts there are no faces, every character
+/// The first `n` Japanese characters, in code point order, that every asdesign-fonts face can draw, so
+/// whichever face an edit picks has them all. Without asdesign-fonts there are no faces, every character
 /// passes, and the text is still long.
 fn covered_japanese_chars(n: usize) -> String {
     let faces = asdreader_fonts::document_japanese_fonts_for_style(false, false);
@@ -1628,7 +1628,7 @@ fn rewriting_japanese_twice_keeps_only_the_fallback_fonts_it_shows() {
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Hello) Tj ET");
     if text::rewrite_block(&mut doc, 0, 0, Some("日本語の文章"), &text::BlockStyle::default()).is_err() {
         assert!(asdreader_fonts::document_japanese_font().is_none());
-        eprintln!("built without a craft-fonts Japanese face: the Type 3 path is checked with CRAFT_FONTS_DIR");
+        eprintln!("built without a asdesign-fonts Japanese face: the Type 3 path is checked with ASDESIGN_FONTS_DIR");
         return;
     }
     let first: Vec<_> = fallback_fonts(&doc).into_iter().map(|(_, f)| f).collect();
@@ -1661,10 +1661,10 @@ fn fallback_fonts(doc: &Document) -> Vec<(Vec<u8>, Dict)> {
 fn japanese_replacement_over_240_unique_glyphs_is_split_across_fallback_fonts() {
     let replacement = covered_japanese_chars(300);
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
-    if without_craft_fonts("japanese_replacement_over_240_unique_glyphs_is_split_across_fallback_fonts") {
-        // Without craft-fonts the long text gets the clear error, not the old limit message.
+    if without_asdesign_fonts("japanese_replacement_over_240_unique_glyphs_is_split_across_fallback_fonts") {
+        // Without asdesign-fonts the long text gets the clear error, not the old limit message.
         let err = text::replace_line(&mut doc, 0, 0, &replacement).unwrap_err().to_string();
-        assert!(err.contains("CRAFT_FONTS_DIR"), "{err}");
+        assert!(err.contains("ASDESIGN_FONTS_DIR"), "{err}");
         return;
     }
     text::replace_line(&mut doc, 0, 0, &replacement).unwrap();
@@ -1689,7 +1689,7 @@ fn japanese_replacement_over_240_unique_glyphs_is_split_across_fallback_fonts() 
 /// document nor a snapshot taken before the edit, which is what undo restores.
 #[test]
 fn japanese_replacement_missing_a_glyph_after_240_changes_nothing() {
-    if without_craft_fonts("japanese_replacement_missing_a_glyph_after_240_changes_nothing") {
+    if without_asdesign_fonts("japanese_replacement_missing_a_glyph_after_240_changes_nothing") {
         return;
     }
     // The first CJK character that no face draws: the 242nd unique character, in a second font.
@@ -1712,7 +1712,7 @@ fn japanese_replacement_missing_a_glyph_after_240_changes_nothing() {
 /// same box as with one font, and the font is switched only where the text moves to another font.
 #[test]
 fn japanese_fallback_split_across_fonts_keeps_order_and_positions() {
-    if without_craft_fonts("japanese_fallback_split_across_fonts_keeps_order_and_positions") {
+    if without_asdesign_fonts("japanese_fallback_split_across_fonts_keeps_order_and_positions") {
         return;
     }
     // 見 and 商 are in the first font, 御 in the second: runs [見商], [御], [見], three switches.
@@ -1741,7 +1741,7 @@ fn japanese_fallback_split_across_fonts_keeps_order_and_positions() {
 /// character, and a run of one font's characters switches nowhere.
 #[test]
 fn japanese_fallback_switches_font_only_between_runs() {
-    if without_craft_fonts("japanese_fallback_switches_font_only_between_runs") {
+    if without_asdesign_fonts("japanese_fallback_switches_font_only_between_runs") {
         return;
     }
     let alternating = "見商".repeat(500);
@@ -1761,7 +1761,7 @@ fn japanese_fallback_switches_font_only_between_runs() {
 /// wraps across lines.
 #[test]
 fn japanese_paragraph_split_across_fonts_reads_back_as_one_block() {
-    if without_craft_fonts("japanese_paragraph_split_across_fonts_reads_back_as_one_block") {
+    if without_asdesign_fonts("japanese_paragraph_split_across_fonts_reads_back_as_one_block") {
         return;
     }
     // Spaces are glyphs too, so two glyphs per font needs several fonts; the narrow box wraps the text.
@@ -1781,7 +1781,7 @@ fn japanese_paragraph_split_across_fonts_reads_back_as_one_block() {
 /// leaves the document as it was: the fallback fonts are written only once the edit is accepted.
 #[test]
 fn japanese_paragraph_refused_before_its_fallback_fonts_are_written() {
-    if without_craft_fonts("japanese_paragraph_refused_before_its_fallback_fonts_are_written") {
+    if without_asdesign_fonts("japanese_paragraph_refused_before_its_fallback_fonts_are_written") {
         return;
     }
     let plain = "BT /F2 12 Tf 72 700 Td (ab) Tj ET";
@@ -1808,7 +1808,7 @@ fn japanese_paragraph_refused_before_its_fallback_fonts_are_written() {
 /// has the wrong operand count.
 #[test]
 fn type3_fallback_glyphs_declare_a_well_formed_d1() {
-    if without_craft_fonts("type3_fallback_glyphs_declare_a_well_formed_d1") {
+    if without_asdesign_fonts("type3_fallback_glyphs_declare_a_well_formed_d1") {
         return;
     }
     // Cyrillic is respaced (shifted by its side bearing), and its box must move with it.
@@ -1839,7 +1839,7 @@ fn type3_fallback_glyphs_declare_a_well_formed_d1() {
 /// line takes a fallback face that has every letter instead of failing on the first one.
 #[test]
 fn cyrillic_replacement_in_a_serif_line_uses_a_face_with_the_letters() {
-    if without_craft_fonts("cyrillic_replacement_in_a_serif_line_uses_a_face_with_the_letters") {
+    if without_asdesign_fonts("cyrillic_replacement_in_a_serif_line_uses_a_face_with_the_letters") {
         return;
     }
     let replacement = "София 2027";
@@ -1873,7 +1873,7 @@ fn fallback_widths(doc: &Document) -> Vec<f64> {
 
 #[test]
 fn japanese_paragraph_keeps_ideographic_spaces() {
-    if without_craft_fonts("japanese_paragraph_keeps_ideographic_spaces") {
+    if without_asdesign_fonts("japanese_paragraph_keeps_ideographic_spaces") {
         return;
     }
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Original paragraph) Tj ET");
@@ -1891,22 +1891,22 @@ fn japanese_paragraph_keeps_ideographic_spaces() {
     assert_eq!(text::text_lines(&reopen(&doc), 0).unwrap()[0].text, replacement);
 }
 
-/// Without craft-fonts there is no Japanese face: editing in Japanese is a clear error that
+/// Without asdesign-fonts there is no Japanese face: editing in Japanese is a clear error that
 /// leaves the page untouched, never a panic; Latin edits work as before.
 #[test]
-fn japanese_edit_without_craft_fonts_is_a_clear_error() {
+fn japanese_edit_without_asdesign_fonts_is_a_clear_error() {
     let mut doc = text_page("BT /F2 12 Tf 72 700 Td (ab) Tj ET");
     let before = page_content_bytes(&doc, 0);
     let line = text::replace_line(&mut doc, 0, 0, "日本語の文字");
     let block = text::replace_block(&mut doc, 0, 0, "日本語の文字");
     if asdreader_fonts::document_japanese_font().is_some() {
-        eprintln!("built with craft-fonts: the Japanese edits succeed (checked by the tests above)");
+        eprintln!("built with asdesign-fonts: the Japanese edits succeed (checked by the tests above)");
         assert!(line.is_ok() && block.is_ok());
         return;
     }
     for result in [line.map(|_| ()), block.map(|_| ())] {
         let Err(EditError::Invalid(msg)) = result else { panic!("expected a clear error, got {result:?}") };
-        assert!(msg.contains("Japanese fallback font") && msg.contains("CRAFT_FONTS_DIR"), "{msg}");
+        assert!(msg.contains("Japanese fallback font") && msg.contains("ASDESIGN_FONTS_DIR"), "{msg}");
     }
     assert_eq!(page_content_bytes(&doc, 0), before);
     let latin = text::replace_line(&mut doc, 0, 0, "Hello").unwrap();
@@ -2408,7 +2408,7 @@ fn missing_glyphs_substitute_helvetica_and_impossible_text_is_refused() {
     let doc2 = reopen(&doc);
     let lines = text::text_lines(&doc2, 0).unwrap();
     assert_eq!((lines[0].text.as_str(), lines[0].base_font.as_str()), ("abc", "Helvetica"));
-    // Neither the standard font nor the craft-fonts Japanese faces have this emoji.
+    // Neither the standard font nor the asdesign-fonts Japanese faces have this emoji.
     let mut doc = text_page("BT /F1 12 Tf 72 700 Td (Hello) Tj ET");
     assert!(text::replace_line(&mut doc, 0, 0, "\u{1f4a9}").is_err());
     assert!(text::replace_line(&mut doc, 0, 5, "x").is_err(), "no such line");
@@ -3275,7 +3275,7 @@ fn justified_text_in_the_type3_fallback_stretches_its_spaces() {
     let rewritten = text::rewrite_block(&mut doc, 0, 0, Some(typed), &style);
     if asdreader_fonts::document_japanese_font().is_none() {
         assert!(rewritten.is_err());
-        eprintln!("built without a craft-fonts Japanese face: the Type 3 path is checked with CRAFT_FONTS_DIR");
+        eprintln!("built without a asdesign-fonts Japanese face: the Type 3 path is checked with ASDESIGN_FONTS_DIR");
         return;
     }
     rewritten.unwrap();
@@ -3289,7 +3289,7 @@ fn justified_text_in_the_type3_fallback_stretches_its_spaces() {
     assert!(ops.iter().filter(|o| o.is("Tw")).all(|o| o.operands.first().and_then(|n| n.as_f64()) == Some(0.0)), "{ops:?}");
 }
 
-/// Letters the page's font lacks are drawn with the Hebrew face from craft-fonts; a build
+/// Letters the page's font lacks are drawn with the Hebrew face from asdesign-fonts; a build
 /// without it says so and changes nothing. Hebrew points are refused, not misdrawn.
 #[test]
 fn hebrew_letters_the_page_font_lacks_use_the_hebrew_face() {
@@ -3305,9 +3305,9 @@ fn hebrew_letters_the_page_font_lacks_use_the_hebrew_face() {
     let line = text::replace_line(&mut doc, 0, 0, typed);
     if asdreader_fonts::document_hebrew_font(false).is_none() {
         let Err(EditError::Invalid(msg)) = line else { panic!("expected a clear error, got {line:?}") };
-        assert!(msg.contains("Hebrew fallback font") && msg.contains("CRAFT_FONTS_DIR"), "{msg}");
+        assert!(msg.contains("Hebrew fallback font") && msg.contains("ASDESIGN_FONTS_DIR"), "{msg}");
         assert_eq!(page_content_bytes(&doc, 0), before);
-        eprintln!("built without a craft-fonts Hebrew face: the Type 3 path is checked with CRAFT_FONTS_DIR");
+        eprintln!("built without a asdesign-fonts Hebrew face: the Type 3 path is checked with ASDESIGN_FONTS_DIR");
         return;
     }
     assert_eq!(line.unwrap().substituted.as_deref(), Some("Noto Sans Hebrew Type3"));
@@ -3402,7 +3402,7 @@ fn page_text_the_standard_fonts_cant_draw_is_refused() {
     };
     add_header_footer(&mut doc, &[0], &hf("Left\r\n<<Bates Number#6#1#ACME-#>>"), true, &cx()).unwrap();
     assert!(add_header_footer(&mut doc, &[0], &hf("A\rB"), true, &cx()).unwrap_err().to_string().contains("U+000D"));
-    // Arabic is shaped with the craft-fonts Arabic face (#403): drawable when that face is built
+    // Arabic is shaped with the asdesign-fonts Arabic face (#403): drawable when that face is built
     // in, refused (never written as `?`) when it isn't. Text left to the standard font still counts.
     let arabic = |text: &str| AddedText { rect: [72.0, 600.0, 300.0, 700.0], text: text.into(), ..AddedText::default() };
     // U+061C is in the Arabic block but is a direction mark that's dropped, not shaped: it never
@@ -3418,7 +3418,7 @@ fn page_text_the_standard_fonts_cant_draw_is_refused() {
     } else {
         // #403's own refusal says what's missing; the Add-text editor still keeps the draft.
         let err = add_content(&mut doc, 0, &Content::Text(arabic("مرحبا Hello"))).unwrap_err().to_string();
-        assert!(err.contains("CRAFT_FONTS_DIR"), "{err}");
+        assert!(err.contains("ASDESIGN_FONTS_DIR"), "{err}");
         assert_eq!(first_undrawable(&arabic("مرحبا Hello")), Some('م'));
         // An existing item may still take Arabic (#403 keeps it movable), but nothing else that
         // the standard font would write as `?`.
@@ -3730,7 +3730,7 @@ fn added_thai_text_wraps_clusters_and_survives_reopen() {
         assert_eq!(first_undrawable(&t), Some('ส'));
         let before = list_added(&doc);
         let err = add_content(&mut doc, 0, &Content::Text(t)).unwrap_err().to_string();
-        assert!(err.contains("Thai") && err.contains("CRAFT_FONTS_DIR"), "{err}");
+        assert!(err.contains("Thai") && err.contains("ASDESIGN_FONTS_DIR"), "{err}");
         assert_eq!(list_added(&doc), before);
         return;
     }
@@ -4977,6 +4977,33 @@ fn turned_paragraph_keeps_its_line_breaks_when_a_word_is_added() {
     assert!(text::rewrite_block(&mut doc, 0, 0, Some("Only line"), &style).is_err());
 }
 
+/// A turned paragraph (a CAD drawing turned onto a portrait page) takes a chosen document font, for
+/// the whole paragraph: its own subset often lacks the letters typed, Thai above all, and the full
+/// face of the same family keeps its look. It stays turned and where it was.
+#[test]
+fn a_turned_paragraph_takes_a_chosen_document_font() {
+    let inter = include_bytes!("../../../assets/fonts/Inter-Regular.ttf");
+    let mut doc = text_page("BT /F1 12 Tf 0 1 -1 0 300 300 Tm (Only line) Tj ET");
+    let before = text::text_lines(&doc, 0).unwrap();
+    let resource = text::register_text_font(&mut doc, 0, inter).unwrap();
+    let style = text::BlockStyle { resource: Some(resource.clone()), ..Default::default() };
+    text::rewrite_block(&mut doc, 0, 0, Some("Only line, now ŵ"), &style).unwrap();
+    let doc = reopen(&doc);
+    let after = text::text_lines(&doc, 0).unwrap();
+    assert_eq!(text::text_blocks(&doc, 0).unwrap()[0].editor_text, "Only line, now ŵ");
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].font, resource, "drawn with the chosen face");
+    let [x0, y0, x1, y1] = after[0].rect;
+    assert!(!after[0].upright() && y1 - y0 > x1 - x0, "still turned, running up the page: {:?}", after[0].rect);
+    // It starts where it did along its baseline (across it, the box follows the new face's height).
+    assert!((y0 - before[0].rect[1]).abs() < 0.5 && x0 < 300.0 && x1 > 288.0, "from where it started: {:?}", after[0].rect);
+    assert!((after[0].origin_baseline() - before[0].origin_baseline()).abs() < 0.01);
+    // A font the page doesn't have is refused, and the page is left as it was.
+    let mut doc = text_page("BT /F1 12 Tf 0 1 -1 0 300 300 Tm (Only line) Tj ET");
+    let style = text::BlockStyle { resource: Some("PCFull9".into()), ..Default::default() };
+    assert!(text::rewrite_block(&mut doc, 0, 0, Some("Only line"), &style).is_err());
+}
+
 /// A paragraph drawn at a slant rewraps at the width its rows have along their baseline, as the
 /// same paragraph upright does. Its upright bounding box turned into the baseline's frame is wider
 /// by the rows' height times |sin 2θ|, which let a word that doesn't fit stay on its row.
@@ -5409,7 +5436,7 @@ fn a_subset_program_is_not_trusted_for_new_characters_and_the_error_names_the_ch
     let mut doc = embedded_program_page("BT /F1 12 Tf 72 700 Td (Stable text) Tj ET", "ABCDEF+Inter-Regular");
     // The subset's own program is not trusted for a character: a fallback face draws it through a
     // generated font instead (the subset may map a code whose outline was dropped). The Japanese
-    // sans face leads the fallbacks when built with craft-fonts; the bundled Inter face otherwise.
+    // sans face leads the fallbacks when built with asdesign-fonts; the bundled Inter face otherwise.
     let edit = text::rewrite_block(&mut doc, 0, 0, Some("Stable tőxt"), &text::BlockStyle::default()).unwrap();
     let face = asdreader_fonts::document_japanese_font_for_style(false, false).map_or("Inter", |f| f.family);
     assert_eq!(edit.substituted, Some(format!("{face} Type3")));
@@ -5455,7 +5482,7 @@ fn draft_layout_matches_the_paragraph_an_applied_edit_draws() {
 #[test]
 fn japanese_paragraphs_wrap_between_characters_without_closing_marks_at_a_row_start() {
     if asdreader_fonts::document_japanese_font().is_none() {
-        eprintln!("skipping the Japanese wrapping checks: built without craft-fonts (set CRAFT_FONTS_DIR)");
+        eprintln!("skipping the Japanese wrapping checks: built without asdesign-fonts (set ASDESIGN_FONTS_DIR)");
         return;
     }
     let text = "日本語の文章は単語の間に空白がないので、どの文字の間でも行を折り返せます。ただし「句読点」や小さい「っ」は行頭に来ません。";

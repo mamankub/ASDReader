@@ -1461,7 +1461,7 @@ fn docking_renders_real_pdf_default_floating_and_redocked() {
                 }
                 h.run_steps(5);
                 h.state().docking.validate().unwrap();
-                if let Ok(directory) = std::env::var("CRAFT_UI_DOCKING_DIR") {
+                if let Ok(directory) = std::env::var("ASDESIGN_UI_DOCKING_DIR") {
                     let _gpu = crate::gpu();
                     std::fs::create_dir_all(&directory).unwrap();
                     h.render().unwrap().save(format!("{directory}/pdf-{width}-{scale}-{state}.png")).unwrap();
@@ -1508,7 +1508,7 @@ fn home_and_combine_suppress_inspector_without_forgetting_layout_or_choice() {
         }
         h.run_steps(4);
         assert!(h.query_by_role_and_label(egui::accesskit::Role::Tab, "Inspector").is_none());
-        if let Ok(directory) = std::env::var("CRAFT_UI_DOCKING_DIR") {
+        if let Ok(directory) = std::env::var("ASDESIGN_UI_DOCKING_DIR") {
             let _gpu = crate::gpu();
             std::fs::create_dir_all(&directory).unwrap();
             let state = if combine { "combine" } else { "home" };
@@ -1521,7 +1521,7 @@ fn home_and_combine_suppress_inspector_without_forgetting_layout_or_choice() {
         h.state_mut().combine_tab.focused = false;
         h.run_steps(4);
         h.get_by_label("This document has no bookmarks.");
-        if let Ok(directory) = std::env::var("CRAFT_UI_DOCKING_DIR") {
+        if let Ok(directory) = std::env::var("ASDESIGN_UI_DOCKING_DIR") {
             let _gpu = crate::gpu();
             h.render().unwrap().save(format!("{directory}/availability-return.png")).unwrap();
         }

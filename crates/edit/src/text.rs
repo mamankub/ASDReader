@@ -16,7 +16,7 @@ use std::rc::Rc;
 use asdreader_content::{Matrix, Op, Pieces, parse, serialize_ops};
 use asdreader_cos::{DecodeBudget, Dict, Document, Object, PdfString, Stream};
 use asdreader_fonts::pdf::Metrics;
-use asdreader_fonts::{CraftFont, GlyphError, japanese_glyph_from};
+use asdreader_fonts::{AsdesignFont, GlyphError, japanese_glyph_from};
 
 use crate::EditError;
 
@@ -142,6 +142,22 @@ pub fn text_editor_fonts(doc: &Document, page: usize) -> Result<Vec<TextEditorFo
         }
     }
     Ok(result)
+}
+
+/// The family and PostScript names inside the font program paragraph `block` is drawn with (its
+/// first line's), when the page embeds it. These name the face the subset was cut from even where
+/// the PDF calls the font `CIDFont+F1`, so the full face can be found on this computer.
+pub fn block_font_names(doc: &Document, page: usize, block: usize) -> Option<(String, String)> {
+    let lines = text_lines(doc, page).ok()?;
+    let blocks = group_blocks(&lines);
+    let first = lines.get(*blocks.get(block)?.lines.first()?)?;
+    let p = page_dict(doc, page).ok()?;
+    let resources = p.dict.get(b"Resources").and_then(|o| doc.dict(o)).unwrap_or_default();
+    let fonts = resources.get(b"Font").and_then(|o| doc.dict(o)).unwrap_or_default();
+    let font = doc.dict(fonts.get(first.font.as_bytes())?)?;
+    let mut decode = DecodeBudget::new(32 << 20, 0);
+    let bytes = asdreader_fonts::pdf::embedded_sfnt_within(doc, &font, &mut decode)?;
+    asdreader_fonts::embedding::program_names(&bytes)
 }
 
 /// Load an explicit full face into this page's resources. Nothing on the page is replaced;
@@ -1716,7 +1732,7 @@ fn is_type3_fallback(font: &Dict) -> bool {
 
 /// The generated font's `/Name` and its resource prefix: the bundled Latin face, Hebrew, or the
 /// Japanese ones.
-fn fallback_names(face: &CraftFont, hebrew: bool) -> (&'static str, &'static str) {
+fn fallback_names(face: &AsdesignFont, hebrew: bool) -> (&'static str, &'static str) {
     if hebrew {
         (HEBREW_FONT_NAME, "PCHe")
     } else if face.family == "Inter" {
@@ -1876,7 +1892,7 @@ fn pdf_num(v: f64) -> String {
     if v.fract() == 0.0 { format!("{v:.0}") } else { format!("{v:.4}").trim_end_matches('0').trim_end_matches('.').to_string() }
 }
 
-fn type3_path(face: &CraftFont, ch: char) -> Result<(Vec<u8>, f64), EditError> {
+fn type3_path(face: &AsdesignFont, ch: char) -> Result<(Vec<u8>, f64), EditError> {
     let glyph = japanese_glyph_from(face, ch).map_err(|e| match e {
         GlyphError::NoFont => no_japanese_font(),
         GlyphError::Missing => EditError::Invalid(format!("the {} fallback font has no glyph for U+{:04X}", face.family, ch as u32)),
@@ -1932,7 +1948,7 @@ fn unicode_hex(ch: char) -> String {
 
 /// The same outline for a face that may simply lack the glyph: `None` then, so the caller can try
 /// the next face (and report the character once none of them has it).
-fn type3_glyph(face: &CraftFont, ch: char) -> Result<Option<(Vec<u8>, f64)>, EditError> {
+fn type3_glyph(face: &AsdesignFont, ch: char) -> Result<Option<(Vec<u8>, f64)>, EditError> {
     match japanese_glyph_from(face, ch) {
         Err(GlyphError::Missing) => Ok(None),
         _ => type3_path(face, ch).map(Some),
@@ -1949,12 +1965,12 @@ fn no_fallback_font(text: &str) -> EditError {
     EditError::Invalid(format!(
         "the paragraph's font has no glyph for {ch} (U+{:04X}) and this build has no fallback font for it; \
          choose a font that has it (Load font… or Installed fonts…), or use an official release, which includes \
-         ASDReader's fallback fonts (to build them in, set CRAFT_FONTS_DIR to a craft-fonts checkout)",
+         ASDReader's fallback fonts (to build them in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout)",
         u32::from(ch)
     ))
 }
 
-/// The character the craft-fonts Japanese faces are for: kana, CJK ideographs and their compatibility
+/// The character the asdesign-fonts Japanese faces are for: kana, CJK ideographs and their compatibility
 /// and full-width forms.
 fn needs_japanese(ch: char) -> bool {
     matches!(u32::from(ch), 0x3000..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF)
@@ -1963,14 +1979,14 @@ fn needs_japanese(ch: char) -> bool {
 /// The chosen face has no outline for `ch`, and neither has any other: say which character it is and
 /// what the writer can do about it. A CJK character without a Japanese face in the build is about
 /// that build input, which is the one answer that changes it.
-fn no_glyph_for(face: &CraftFont, ch: char) -> EditError {
+fn no_glyph_for(face: &AsdesignFont, ch: char) -> EditError {
     if needs_japanese(ch) && asdreader_fonts::document_japanese_font().is_none() {
         return no_japanese_font();
     }
     EditError::Invalid(format!(
         "the {} fallback font has no glyph for {ch} (U+{:04X}), and no fallback face covers the text; \
          choose a font that has it (Load font… or Installed fonts…), or use an official release, which includes \
-         ASDReader's fallback fonts (to build them in, set CRAFT_FONTS_DIR to a craft-fonts checkout)",
+         ASDReader's fallback fonts (to build them in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout)",
         face.family,
         u32::from(ch)
     ))
@@ -1980,13 +1996,13 @@ fn no_glyph_for(face: &CraftFont, ch: char) -> EditError {
 fn no_japanese_font() -> EditError {
     EditError::Invalid(
         "this text needs ASDReader's Japanese fallback font, which this build doesn't include \
-         (official releases do; to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout)"
+         (official releases do; to build it in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout)"
             .into(),
     )
 }
 
 /// The first of `faces` (best match first) that has a glyph for every one of `chars`, else the first.
-fn fallback_face<'a>(faces: &[&'a CraftFont], chars: &[char], has_glyph: impl Fn(&CraftFont, char) -> bool) -> Option<&'a CraftFont> {
+fn fallback_face<'a>(faces: &[&'a AsdesignFont], chars: &[char], has_glyph: impl Fn(&AsdesignFont, char) -> bool) -> Option<&'a AsdesignFont> {
     faces.iter().copied().find(|face| chars.iter().all(|ch| has_glyph(face, *ch))).or_else(|| faces.first().copied())
 }
 
@@ -1994,7 +2010,7 @@ fn fallback_face<'a>(faces: &[&'a CraftFont], chars: &[char], has_glyph: impl Fn
 fn no_hebrew_font() -> EditError {
     EditError::Invalid(
         "this text needs ASDReader's Hebrew fallback font (Noto Sans Hebrew), which this build doesn't include \
-         (to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout that has it)"
+         (to build it in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout that has it)"
             .into(),
     )
 }
@@ -2004,7 +2020,7 @@ fn no_hebrew_font() -> EditError {
 /// and the bundled Latin one for anything it lacks; other text takes the Japanese faces, and the
 /// bundled Latin face behind them, which covers the Latin, Greek and Cyrillic letters they lack
 /// (#2593: the Japanese faces have no қ, ғ, ҳ, ә, ө, ү, ұ or һ).
-fn type3_faces(text: &str, family: crate::added::Family, bold: bool) -> Result<(Vec<&'static CraftFont>, bool), EditError> {
+fn type3_faces(text: &str, family: crate::added::Family, bold: bool) -> Result<(Vec<&'static AsdesignFont>, bool), EditError> {
     let japanese = asdreader_fonts::document_japanese_fonts_for_style(family == crate::added::Family::Times, bold);
     let latin = asdreader_fonts::document_latin_fonts(bold);
     if !text.chars().any(crate::bidi::is_hebrew) {
@@ -2044,7 +2060,7 @@ fn type3_font(
     // text keeps the Hebrew face and takes each character it lacks from the next face that has it.
     let face = if hebrew { faces.first().copied() } else { fallback_face(&faces, &chars, |face, ch| japanese_glyph_from(face, ch).is_ok()) }
         .ok_or_else(|| no_fallback_font(text))?;
-    let others: &[&CraftFont] = if hebrew { faces.get(1..).unwrap_or_default() } else { &[] };
+    let others: &[&AsdesignFont] = if hebrew { faces.get(1..).unwrap_or_default() } else { &[] };
     // Every outline is read before the document is touched, so a character that fails leaves it
     // as it was. Each font takes the next `per_font` characters; codes restart at 1 in each.
     let per_font = max_glyphs.clamp(1, MAX_TYPE3_GLYPHS);
@@ -2085,7 +2101,7 @@ fn type3_font(
 /// Adds one generated font whose codes 1 to `glyphs.len()` show `glyphs`, and returns its resource
 /// name (`PCLat`, `PCJp`, then `PCJp1`, ...; `PCHe`, ... for Hebrew text). Nothing here can fail: the
 /// outlines were read already.
-fn add_type3_font(doc: &mut Document, fonts_res: &mut Dict, face: &CraftFont, hebrew: bool, glyphs: Vec<Type3Glyph>) -> String {
+fn add_type3_font(doc: &mut Document, fonts_res: &mut Dict, face: &AsdesignFont, hebrew: bool, glyphs: Vec<Type3Glyph>) -> String {
     let last_char = glyphs.len();
     let mut charprocs = Dict::new();
     let mut widths = Vec::with_capacity(last_char);
@@ -2697,8 +2713,8 @@ fn rewrite_block_from(
     // Text turned on the page (a landscape page drawn a quarter turn round) is rewritten in its
     // own text space below; the styled region path lays rows out along the page's x axis.
     let upright = members.iter().all(|line| line.upright());
-    if !upright && (!style.ranges.is_empty() || style.resource.is_some()) {
-        return Err(EditError::Invalid("formatting part of turned text, or choosing a document font for it, isn't supported yet".into()));
+    if !upright && !style.ranges.is_empty() {
+        return Err(EditError::Invalid("formatting part of turned text isn't supported yet".into()));
     }
     let visual_indic = members.iter().any(|line| line.visual_order);
     if upright
@@ -2735,6 +2751,15 @@ fn rewrite_block_from(
     let last = members.last().copied().unwrap_or(first);
     let emit = &last.origin;
     let (font_name, old_size) = o.state.font.clone().ok_or_else(|| EditError::Invalid("the paragraph has no font".into()))?;
+    // Turned text (a landscape drawing turned onto a portrait page, as CAD exports are) takes a
+    // chosen document font here, for the whole paragraph: the styled path below can't lay it out.
+    // Its own subset often lacks the characters typed (Thai above all), and the full face of the
+    // same family is what keeps the paragraph looking as it did.
+    let font_name = match style.resource.as_deref().filter(|_| !upright) {
+        Some(resource) if fonts_res.get(resource.as_bytes()).is_some() => resource.to_owned(),
+        Some(resource) => return Err(EditError::Invalid(format!("page {} has no font {resource}", page + 1))),
+        None => font_name,
+    };
     let k = o.k.max(1e-6);
     // The size in text space: points ÷ the text-to-user scale.
     let size = style.size.map_or(old_size, |pt| (pt / k).max(0.1));
@@ -3372,11 +3397,11 @@ mod tests {
     #[test]
     fn fallback_face_moves_on_when_the_best_face_lacks_a_character() {
         static JPAN: &[&str] = &["Jpan"];
-        let mincho = CraftFont { family: "Mincho", style: "Regular", scripts: JPAN, bytes: b"" };
-        let gothic = CraftFont { family: "Gothic", style: "Regular", scripts: JPAN, bytes: b"" };
+        let mincho = AsdesignFont { family: "Mincho", style: "Regular", scripts: JPAN, bytes: b"" };
+        let gothic = AsdesignFont { family: "Gothic", style: "Regular", scripts: JPAN, bytes: b"" };
         let faces = [&mincho, &gothic];
         // Only the Gothic face has the Cyrillic letter.
-        let has = |face: &CraftFont, ch: char| ch.is_ascii() || face.family == "Gothic";
+        let has = |face: &AsdesignFont, ch: char| ch.is_ascii() || face.family == "Gothic";
         assert_eq!(fallback_face(&faces, &['a', 'ф'], has).map(|f| f.family), Some("Gothic"));
         // Characters the best face has keep it.
         assert_eq!(fallback_face(&faces, &['a', 'b'], has).map(|f| f.family), Some("Mincho"));
@@ -3388,7 +3413,7 @@ mod tests {
     #[test]
     fn hebrew_and_japanese_fallback_shards_are_recognized_as_ours() {
         static HEBR: &[&str] = &["Hebr"];
-        let face = CraftFont { family: "FakeHebrew", style: "Regular", scripts: HEBR, bytes: b"" };
+        let face = AsdesignFont { family: "FakeHebrew", style: "Regular", scripts: HEBR, bytes: b"" };
         let glyph = |code, ch| Type3Glyph { code, ch, path: b"0 0 0 0 0 0 d1\nf\n".to_vec(), width: 0.5 };
         let mut doc = Document::new_empty();
         let mut fonts = Dict::new();

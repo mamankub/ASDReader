@@ -1,11 +1,14 @@
-ASDReader (based on ASDReader)
+ASDReader
 Copyright (c) 2026 ArtCraft Team and the ASDReader contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
 
 ASDReader artwork is contributor-original under MIT OR Apache-2.0 (docs/brand/LICENSE-asdreader.txt).
-The upstream ArtCraft name, wordmark and logos are trademarks of the ArtCraft Team, not open source.
-Their historical terms remain in docs/brand/LICENSE-brand.txt; their logo files are removed from this fork.
+No trademark, wordmark or logo of the upstream project is included.
+
+The crates crates/asdesign-ui, crates/asdesign-quit, crates/asdesign-print and crates/asdesign-docpath
+are derived from the upstream project's shared crate library, under the same licences:
+Copyright (c) 2026 ArtCraft Team and contributors. MIT OR Apache-2.0.
 
 Third-party material
 
@@ -19,15 +22,15 @@ list (author, source, license) is in ATTRIBUTION.md.
 - Inter typeface (assets/fonts/Inter-*.ttf) — SIL Open Font License 1.1. See assets/fonts/OFL-Inter.txt.
 - JetBrains Mono typeface (assets/fonts/JetBrainsMono-*.ttf) — SIL Open Font License 1.1. See assets/fonts/OFL-JetBrainsMono.txt.
 - Dancing Script typeface (assets/fonts/DancingScript.ttf), Copyright 2016 The Dancing Script Project Authors — SIL Open Font License 1.1 (Reserved Font Name "Dancing Script"). See assets/fonts/OFL-DancingScript.txt.
-- Fonts from craft-fonts (https://github.com/storytold/craft-fonts), an optional build input
-  (CRAFT_FONTS_DIR) that is not part of this repository. Builds made with it, which includes every
+- Fonts from asdesign-fonts (https://github.com/mamankub/asdesign-fonts), an optional build input
+  (ASDESIGN_FONTS_DIR) that is not part of this repository. Builds made with it, which includes every
   official release, embed the fonts listed in
-  https://github.com/storytold/craft-fonts/blob/main/ATTRIBUTION.md (BIZ UDPGothic, Shippori Mincho,
+  https://github.com/mamankub/asdesign-fonts/blob/main/ATTRIBUTION.md (BIZ UDPGothic, Shippori Mincho,
   BIZ UDMincho; the web build only BIZ UDPGothic Regular) under the SIL Open Font License 1.1. Those
-  packages carry each font's licence as OFL-<family>.txt. Builds made with the craft-fonts revision
+  packages carry each font's licence as OFL-<family>.txt. Builds made with the asdesign-fonts revision
   pinned in .github/workflows/ also include Noto Sans Thai (in the web build too), Copyright 2022
   The Noto Project Authors (https://github.com/notofonts/thai), under SIL OFL 1.1; its licence is
-  fonts/noto-sans-thai/OFL.txt in the craft-fonts build input.
+  fonts/noto-sans-thai/OFL.txt in the asdesign-fonts build input.
 - hayro (rendering, via crates.io) — Apache-2.0 OR MIT. Its `embed-fonts` feature bundles the Foxit
   standard-14 Type 1 fonts under BSD-3-Clause ("Copyright 2014 PDFium Authors"), and hayro-cmap bundles
   Adobe CMap resources under BSD-3-Clause.
@@ -38,7 +41,7 @@ list (author, source, license) is in ATTRIBUTION.md.
 - Colour profile in hayro-interpret — CGATS001Compat-v2-micro.icc (CC0-1.0, Clinton Ingram).
 
 Archive packages include ATTRIBUTION.md and the source-relative licence files listed in
-packaging/asset-licences.txt, in addition to the craft-fonts and OCR model licences.
+packaging/asset-licences.txt, in addition to the asdesign-fonts and OCR model licences.
 
 Required notices:
 

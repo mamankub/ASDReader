@@ -605,6 +605,11 @@ impl TextDevice {
     }
 }
 
+/// Thai and Lao vowel signs and tone marks written above or below their letter (Unicode Mn).
+fn is_thai_lao_mark(c: char) -> bool {
+    matches!(c, '\u{0E31}' | '\u{0E34}'..='\u{0E3A}' | '\u{0E47}'..='\u{0E4E}' | '\u{0EB1}' | '\u{0EB4}'..='\u{0EBC}' | '\u{0EC8}'..='\u{0ECE}')
+}
+
 /// Whether `ASDREADER_TEXT_DEBUG` is set. `draw_glyph` runs once per glyph and `getenv` scans the
 /// whole environment under a lock, so read it once.
 fn text_debug() -> bool {
@@ -643,6 +648,14 @@ impl<'a> Device<'a> for TextDevice {
         if !replaced && text.chars().all(|c| c.is_control()) {
             return;
         }
+        // A Thai font's PUA glyph (a lowered or left-shifted mark) reads as the Thai mark it is.
+        let text = match asdreader_fonts::thai_pua::normalize(&text) {
+            std::borrow::Cow::Borrowed(_) => text,
+            std::borrow::Cow::Owned(t) => t,
+        };
+        // A Thai or Lao vowel or tone mark drawn with no advance sits on the letter before it: it
+        // gets no width of its own, so it is read with that letter, not after the next one.
+        let combining = !text.is_empty() && text.chars().all(is_thai_lao_mark);
         // Glyph space → view space. Glyph space uses 1000 units per em for outline glyphs; the em
         // box spans descender (−200) to ascender (800), the advance gives the width.
         let t = transform * glyph_transform;
@@ -651,6 +664,7 @@ impl<'a> Device<'a> for TextDevice {
             eprintln!("{kind} {text:?} transform={:?} glyph_transform={:?}", transform.as_coeffs(), glyph_transform.as_coeffs());
         }
         let advance = match glyph {
+            Glyph::Outline(g) if combining && g.advance_width().is_none_or(|a| a <= 0.0) => 0.0,
             Glyph::Outline(g) => {
                 g.advance_width().filter(|a| *a > 0.0).map(f64::from).unwrap_or_else(|| g.outline().bounding_box().width().max(500.0))
             }
@@ -1189,22 +1203,72 @@ fn place_glyphs(glyphs: &[&TextGlyph], height: &dyn Fn(usize) -> f32, s: &Seg, s
     } else {
         collide(glyphs, height, s.h, sc);
     }
-    // Each mark goes before the first placed glyph whose x is greater than its own. Marks are visited in x order, and
-    // that position never moves back, so one pass over `placed` puts all of them in.
-    sc.marks.sort_by(|a, b| x0(*a).total_cmp(&x0(*b)));
+    // A run of marks goes before the first placed glyph that starts after it; at the same x, drawing
+    // order decides (a mark drawn after a letter at its x belongs to it).
+    sc.marks.sort_by(|a, b| x0(*a).total_cmp(&x0(*b)).then(a.cmp(b)));
     if !sc.marks.is_empty() {
+        let before = |p: usize, m: usize| x0(p) < x0(m) || (x0(p) == x0(m) && p < m);
         sc.merged.clear();
         let mut next = 0;
-        for &m in &sc.marks {
-            while next < sc.placed.len() && x0(sc.placed[next]) <= x0(m) {
-                sc.merged.push(sc.placed[next]);
+        for &p in &sc.placed {
+            while let Some(&m) = sc.marks.get(next)
+                && !before(p, m)
+            {
+                sc.merged.push(m);
                 next += 1;
             }
-            sc.merged.push(m);
+            sc.merged.push(p);
         }
-        sc.merged.extend_from_slice(&sc.placed[next..]);
+        sc.merged.extend(sc.marks.get(next..).unwrap_or_default());
         std::mem::swap(&mut sc.placed, &mut sc.merged);
     }
+    attach_marks(glyphs, height, &zero_width, sc);
+}
+
+/// Puts each zero-width glyph (a combining mark) drawn right after a letter, on that letter's box,
+/// straight after that letter, wherever its own x falls and whichever run it is in: Thai and Lao
+/// vowel signs and tone marks always follow their letter. A producer that nudges marks right
+/// (PDFsharp draws them a little past where the next letter starts) would otherwise read ศ ั ย as
+/// ศยั. Marks stacked on one letter follow it in drawing order; a mark with no such letter keeps
+/// its place.
+fn attach_marks(glyphs: &[&TextGlyph], height: &dyn Fn(usize) -> f32, zero_width: &dyn Fn(usize) -> bool, sc: &mut Scratch) {
+    let mut zero: Vec<usize> = sc.placed.iter().copied().filter(|&i| zero_width(i)).collect();
+    if zero.is_empty() {
+        return;
+    }
+    zero.sort_unstable();
+    let letters: std::collections::HashSet<usize> = sc.placed.iter().copied().filter(|&i| !zero_width(i)).collect();
+    let mut anchor_of: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+    let mut on: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+    for &m in &zero {
+        let Some(mark) = glyphs.get(m) else { continue };
+        let tolerance = 0.25 * height(m);
+        let anchor = m.checked_sub(1).and_then(|p| {
+            if let Some(&a) = anchor_of.get(&p) {
+                return Some(a);
+            }
+            let r = glyphs.get(p)?.rect;
+            (letters.contains(&p) && mark.rect[0] >= r[0] - tolerance && mark.rect[0] <= r[2] + tolerance).then_some(p)
+        });
+        if let Some(a) = anchor {
+            anchor_of.insert(m, a);
+            on.entry(a).or_default().push(m);
+        }
+    }
+    if anchor_of.is_empty() {
+        return;
+    }
+    sc.merged.clear();
+    for &p in &sc.placed {
+        if anchor_of.contains_key(&p) {
+            continue;
+        }
+        sc.merged.push(p);
+        if let Some(marks) = on.get(&p) {
+            sc.merged.extend_from_slice(marks);
+        }
+    }
+    std::mem::swap(&mut sc.placed, &mut sc.merged);
 }
 
 /// `place_glyphs` for a segment of two or more text runs. `h` is the segment's line height. Returns whether the segment
@@ -1914,6 +1978,47 @@ mod tests {
             assert_eq!(text.find("of"), vec![0..2], "a match ending inside the ligature covers it, Tm {turn}");
             assert_eq!(text.line_rects(0..4).len(), 1, "one line, Tm {turn}");
         }
+    }
+
+    /// Thai drawn one glyph at a time with absolute positions, as PDFsharp writes CAD drawings: each
+    /// vowel sign or tone mark is placed a little past where the next letter starts, and the lowered
+    /// mai tho is the font's PUA glyph (U+F70B). The text reads in logical order, with the real mark.
+    #[test]
+    fn thai_marks_follow_their_letter_and_pua_marks_read_as_thai() {
+        use lopdf::{Document, Object, Stream, dictionary};
+        let mut doc = Document::with_version("1.7");
+        // A ศ, B ั, C ย, D ้ (PUA, lowered), E บ, F า.
+        let cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /TestThai def /CMapType 2 def \
+            1 begincodespacerange <00> <FF> endcodespacerange \
+            6 beginbfchar <41> <0E28> <42> <0E31> <43> <0E22> <44> <F70B> <45> <0E1A> <46> <0E32> endbfchar \
+            endcmap CMapName currentdict /CMap defineresource pop end end";
+        let to_unicode = doc.add_object(Stream::new(dictionary! {}, cmap.as_bytes().to_vec()));
+        let widths: Vec<Object> = [600, 0, 600, 0, 600, 600].into_iter().map(Object::Integer).collect();
+        let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "FirstChar" => 65, "LastChar" => 70, "Widths" => widths, "ToUnicode" => to_unicode });
+        let glyph = |code: &str, x: f64, y: f64| format!("BT /F1 20 Tf {x} {y} Td ({code}) Tj ET ");
+        let content = [
+            glyph("A", 100.0, 150.0),
+            glyph("B", 112.3, 150.0),
+            glyph("C", 112.0, 150.0),
+            glyph("E", 100.0, 100.0),
+            glyph("D", 112.3, 100.0),
+            glyph("F", 112.0, 100.0),
+        ]
+        .concat();
+        let content = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(300), Object::Integer(300)], "Resources" => dictionary! {"Font" => dictionary! {"F1" => font}}, "Contents" => content });
+        doc.objects.insert(pages, dictionary! {"Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1}.into());
+        let catalog = doc.add_object(dictionary! {"Type" => "Catalog", "Pages" => pages});
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        let pdf = Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let text = extract_page(&pdf, 0, &InterpreterSettings::default()).unwrap();
+        let plain = text.plain_text();
+        let lines: Vec<&str> = plain.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines, ["ศัย", "บ้า"], "{plain:?}");
+        assert_eq!(text.find("บ้า").len(), 1, "found with the real mai tho");
     }
 
     /// One page per content stream, in Helvetica (`/F1`), with `/P1` in the resources'

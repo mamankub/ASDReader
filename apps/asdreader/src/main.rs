@@ -82,8 +82,8 @@ fn print_and_exit(text: &str) -> eframe::Result {
     Ok(())
 }
 
-/// The app was called PrintCraft before; settings saved then are under this key.
-const LEGACY_STORAGE_KEY: &str = "printcraft";
+/// The app was called ASDesign Print before; settings saved then are under this key.
+const LEGACY_STORAGE_KEY: &str = "asdesign-print-app";
 
 /// The preferences folder (`app.ron`, docs/development.md). In portable mode
 /// it is `ASDReaderData` beside the executable (#157). XDG desktops use the configuration base;
@@ -105,7 +105,7 @@ fn settings_dir() -> Option<std::path::PathBuf> {
     }
 }
 
-/// Move the settings and crash-recovery folders of the app's former name, PrintCraft, to the new
+/// Move the settings and crash-recovery folders of the app's former name, ASDesign Print, to the new
 /// name once, so an upgrade keeps recent files, preferences and unsaved work. Best effort: a
 /// folder is left alone when the new one already exists or the move fails. A portable copy leaves
 /// the per-user folders alone.
@@ -113,11 +113,11 @@ fn migrate_legacy_folders() {
     if asdreader_ui_egui::portable::data_dir().is_some() {
         return;
     }
-    let mut moves = vec![(eframe::storage_dir("PrintCraft"), eframe::storage_dir("ASDReader"))];
+    let mut moves = vec![(eframe::storage_dir("ASDesign Print"), eframe::storage_dir("ASDReader"))];
     // Recovery lives in the settings folder except on Windows, where it is under %LOCALAPPDATA%.
     if cfg!(windows) {
         let local = std::env::var_os("LOCALAPPDATA").filter(|v| !v.is_empty()).map(std::path::PathBuf::from);
-        moves.push((local.as_ref().map(|d| d.join("PrintCraft")), local.map(|d| d.join("ASDReader"))));
+        moves.push((local.as_ref().map(|d| d.join("ASDesign Print")), local.map(|d| d.join("ASDReader"))));
     }
     for (old, new) in moves {
         let (Some(old), Some(new)) = (old, new) else { continue };
@@ -241,7 +241,7 @@ fn main() -> eframe::Result {
     let window_controls = if cfg!(any(target_os = "macos", target_os = "windows")) { None } else { decorations::app_drawn() };
     migrate_legacy_folders();
     // The log file stays in the data folder; opened after the arguments (so `--version` leaves
-    // no file behind) and after the PrintCraft migration (which a fresh folder would block).
+    // no file behind) and after the ASDesign Print migration (which a fresh folder would block).
     // Records logged until now are written to it first.
     if let (Some(logger), Some(dir)) =
         (logger, asdreader_ui_egui::portable::data_dir().map(std::path::Path::to_path_buf).or_else(|| eframe::storage_dir("ASDReader")))
@@ -424,7 +424,7 @@ fn app_creator<'a>(
             app.os_events = Some(apple_events.connect(&cc.egui_ctx));
             // winit's Quit (⌘Q) ends the process without asking about unsaved changes (#1136). This
             // menu's Quit closes the window instead, so `guard_quit` asks, as for the close button.
-            if let Err(e) = craft_quit::install_app_menu(&cc.egui_ctx, "ASDReader") {
+            if let Err(e) = asdesign_quit::install_app_menu(&cc.egui_ctx, "ASDReader") {
                 log::warn!("couldn't install the app menu, so ⌘Q quits without asking to save: {e}");
             }
         }

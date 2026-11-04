@@ -150,10 +150,10 @@ foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'ATTRIBU
   if (Test-Path $p) { Copy-Item $p $Portable }
 }
 Copy-AssetLicences $Portable
-# Builds made with craft-fonts (CRAFT_FONTS_DIR, set for every release) embed its fonts: ship their
+# Builds made with asdesign-fonts (ASDESIGN_FONTS_DIR, set for every release) embed its fonts: ship their
 # licences, fonts\<family>\OFL.txt -> OFL-<family>.txt.
-if ($env:CRAFT_FONTS_DIR) {
-  Get-ChildItem -Path (Join-Path $env:CRAFT_FONTS_DIR 'fonts') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+if ($env:ASDESIGN_FONTS_DIR) {
+  Get-ChildItem -Path (Join-Path $env:ASDESIGN_FONTS_DIR 'fonts') -Directory -ErrorAction SilentlyContinue | ForEach-Object {
     $ofl = Join-Path $_.FullName 'OFL.txt'
     if (Test-Path $ofl) { Copy-Item $ofl (Join-Path $Portable "OFL-$($_.Name).txt") }
   }

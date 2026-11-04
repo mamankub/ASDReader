@@ -1,5 +1,5 @@
 //! Arabic items too big for one Type 3 font. Shaped clusters and glyph outlines are injected here,
-//! so these run without the craft-fonts Arabic face. Shaping itself is covered by the face tests in
+//! so these run without the asdesign-fonts Arabic face. Shaping itself is covered by the face tests in
 //! `tests.rs`, which run where the face is built in.
 
 use std::cell::Cell;
@@ -155,7 +155,7 @@ fn an_item_below_the_old_limit_is_drawn_exactly_as_before() {
     let drawn = draw_laid_shaped(&mut doc, &item(), &laid, &Dict::new(), &mut fonts, &mut out, |_, id| Ok(boxed(0.5 + f64::from(id) * 0.01)));
     assert!(drawn.is_ok(), "{drawn:?}");
     assert_eq!(fonts.len(), 1);
-    // The injected outlines are fixed; only the descriptor's family comes from craft-fonts.
+    // The injected outlines are fixed; only the descriptor's family comes from asdesign-fonts.
     // Check that metadata separately, then normalize those two fields to the original golden.
     // ActualText is new metadata: check each line's value and remove only its added wrappers
     // before hashing. Drawing bytes and font objects still match the original golden exactly.

@@ -152,7 +152,7 @@ impl<'a> Stream<'a> {
     pub fn obj_id(&self) -> ObjectIdentifier {
         self.dict.obj_id().unwrap_or_else(|| {
             // In theory shouldn't ever happen, but could theoretically be
-            // triggered in a crafted PDF.
+            // triggered in a made PDF.
             ObjectIdentifier::new(0, 0)
         })
     }

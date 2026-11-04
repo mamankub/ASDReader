@@ -558,7 +558,7 @@ fn format_section(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens) {
             }
             Some(FontChoice::Load) => app.pick_files(crate::files::FilePurpose::TextFont { page: ed.page }, false),
             #[cfg(not(target_arch = "wasm32"))]
-            Some(FontChoice::Installed(path)) => app.use_paths(crate::files::FilePurpose::TextFont { page: ed.page }, &[path]),
+            Some(FontChoice::Installed(font)) => app.use_installed_font(ed.page, &font),
             #[cfg(target_arch = "wasm32")]
             Some(FontChoice::Installed(_)) => {}
             None => {}

@@ -331,19 +331,19 @@ fn is_thai(c: char) -> bool {
 }
 
 /// Arabic letters, marks, digits and punctuation: an item with any of them is shaped with the
-/// craft-fonts Arabic face.
+/// asdesign-fonts Arabic face.
 fn is_arabic(c: char) -> bool {
     matches!(u32::from(c), 0x0600..=0x06FF | 0x0750..=0x077F | 0x0870..=0x08FF | 0xFB50..=0xFDFF | 0xFE70..=0xFEFC)
 }
 
 /// Hebrew letters, points, cantillation marks and punctuation (and the presentation forms): an
-/// item with any of them is drawn with the craft-fonts Hebrew face.
+/// item with any of them is drawn with the asdesign-fonts Hebrew face.
 fn is_hebrew(c: char) -> bool {
     matches!(u32::from(c), 0x0591..=0x05F4 | 0xFB1D..=0xFB4F)
 }
 
 /// The first character of `t` that would be drawn as `?`: outside WinAnsiEncoding and not drawn
-/// with the craft-fonts Arabic (#125) or Hebrew (#128) face, or Arabic or Hebrew that the face can't
+/// with the asdesign-fonts Arabic (#125) or Hebrew (#128) face, or Arabic or Hebrew that the face can't
 /// draw (or that has no face to draw it). Page-content tools refuse such text; the Add-text editor
 /// keeps it open.
 pub fn first_undrawable(t: &AddedText) -> Option<char> {
@@ -375,7 +375,7 @@ pub fn first_undrawable(t: &AddedText) -> Option<char> {
     })
 }
 
-/// Whether `t` has Arabic or Hebrew that its craft-fonts face draws (so `draw` lays it out with
+/// Whether `t` has Arabic or Hebrew that its asdesign-fonts face draws (so `draw` lays it out with
 /// [`draw_shaped`]).
 fn shaped_by_a_face(t: &AddedText) -> bool {
     (asdreader_fonts::document_arabic_font().is_some() && t.text.chars().any(is_arabic))
@@ -487,7 +487,7 @@ fn shaped_width(t: &AddedText, s: &str, rtl: bool) -> f64 {
 fn arabic_error(e: GlyphError, text: &str) -> EditError {
     EditError::Invalid(match e {
         GlyphError::NoFont => "Arabic text needs ASDReader's Arabic font, which this build doesn't include \
-                               (to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout that has an Arab face)"
+                               (to build it in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout that has an Arab face)"
             .into(),
         GlyphError::Missing => format!("the Arabic font can't show \"{text}\""),
         GlyphError::TooComplex => format!("the Arabic font's glyphs for \"{text}\" are too complex"),
@@ -497,7 +497,7 @@ fn arabic_error(e: GlyphError, text: &str) -> EditError {
 fn hebrew_error(e: GlyphError, text: &str) -> EditError {
     EditError::Invalid(match e {
         GlyphError::NoFont => "Hebrew text needs ASDReader's Hebrew font, which this build doesn't include \
-                               (to build it in, set CRAFT_FONTS_DIR to a craft-fonts checkout that has a Hebr face)"
+                               (to build it in, set ASDESIGN_FONTS_DIR to a asdesign-fonts checkout that has a Hebr face)"
             .into(),
         GlyphError::Missing => format!("the Hebrew font can't show \"{text}\""),
         GlyphError::TooComplex => format!("the Hebrew font's glyphs for \"{text}\" are too complex"),
@@ -507,7 +507,7 @@ fn hebrew_error(e: GlyphError, text: &str) -> EditError {
 fn thai_error(e: GlyphError, text: &str) -> EditError {
     EditError::Invalid(match e {
         GlyphError::NoFont => {
-            "Thai text needs a Thai font in this build; rebuild with CRAFT_FONTS_DIR pointing to craft-fonts with a Thai face".into()
+            "Thai text needs a Thai font in this build; rebuild with ASDESIGN_FONTS_DIR pointing to asdesign-fonts with a Thai face".into()
         }
         GlyphError::Missing => format!("the Thai font can't show \"{text}\""),
         GlyphError::TooComplex => "the Thai glyphs are too complex; use a shorter text box".into(),
@@ -539,7 +539,7 @@ const GLYPHS_PER_FONT: usize = 240;
 type LaidLine = (String, bool, Vec<Piece>, f64);
 
 /// Draw a text item that has Arabic, Hebrew or Thai in it. Each line is laid out in display order; their glyphs
-/// come from Type 3 fonts drawn from the craft-fonts face's outlines (no font file is embedded),
+/// come from Type 3 fonts drawn from the asdesign-fonts face's outlines (no font file is embedded),
 /// with a ToUnicode map for copy and search. Other text uses the item's standard font.
 fn draw_shaped(doc: &mut Document, t: &AddedText, taken: &Dict, fonts: &mut Dict, out: &mut Vec<u8>) -> Result<(), EditError> {
     let laid = wrapped(t)
@@ -550,7 +550,7 @@ fn draw_shaped(doc: &mut Document, t: &AddedText, taken: &Dict, fonts: &mut Dict
 }
 
 /// [`draw_shaped`] for lines that are already laid out. `outline` is the source of glyph outlines
-/// for a script's face (the craft-fonts faces, or a stand-in in tests).
+/// for a script's face (the asdesign-fonts faces, or a stand-in in tests).
 fn draw_laid_shaped(
     doc: &mut Document,
     t: &AddedText,

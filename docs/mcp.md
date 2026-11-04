@@ -66,7 +66,7 @@ asdreader-cli mcp --automation-read-root /work/project --automation-write-root /
   "args": ["mcp", "--automation-read-root", "/work/project", "--automation-write-root", "/work/project/out"]}}}
 ```
 
-The two flags (VectorCraft, PhotoCraft and the other Craft apps take the same ones, so one client
+The two flags (ASDesign Vector, ASDesign Photo and the other Asdesign apps take the same ones, so one client
 config works across the suite) keep the agent to the folders you give it:
 
 - Every file a tool reads must lie inside the **read root**: `doc_open`, `page_insert_file`,

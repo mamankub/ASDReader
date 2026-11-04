@@ -43,7 +43,7 @@ This change does not alter persistence of other print preferences.
 Headless `doc_print` defaults are unchanged.
 
 `spool` delegates discovery, driver options, preferences and submission to
-[`craft-print`](https://github.com/storytold/craft-libs/tree/main/crates/print).
+[`asdesign-print`](../asdesign-print).
 ASDReader retains page selection, imposition, annotations and print-permission checks.
 CUPS jobs stream through stdin with `fit-to-page=false`. Windows renders sheets through
 `Windows.Data.Pdf` and spools them at their physical PDF size with per-page paper and
@@ -61,7 +61,7 @@ defaults as before. CUPS jobs already use the queue's defaults and the user's `l
 image keeps the dots per inch the Print dialog asks for. This needs checking on a real printer.
 
 The shared dependency requires Rust 1.95. Transport and native Windows regression tests
-live in craft-libs; local tests retain composition, facade, engine, automation and UI coverage.
+live in asdesign-libs; local tests retain composition, facade, engine, automation and UI coverage.
 The desktop UI discovers printers and submits jobs on workers, so neither operation blocks
 the dialog; the Windows backend starts without a console window. Physical printer output
 still needs hardware validation.
@@ -90,7 +90,7 @@ this is not per-page paper-source selection.
 
 **PDF scale** describes the source-to-sheet transform in the previewed print-ready
 PDF, not measured physical output. Fit reserves an 18 pt margin and can reduce even
-a matching page. On Windows craft-print sends the sheets as vectors with a PrintTicket
+a matching page. On Windows asdesign-print sends the sheets as vectors with a PrintTicket
 for the sheet's exact paper and no scaling (#599's approach), validated by the driver:
 a job is refused, not shrunk, when the driver lacks the paper or would change it. Verify
 the driver's paper settings and physical calibration before relying on drawing scale.

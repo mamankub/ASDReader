@@ -30,7 +30,7 @@ release_arch() {
   esac
 }
 # The release workflow cross-compiles aarch64 in an x86_64 VM with CARGO_BUILD_TARGET set to
-# aarch64-unknown-freebsd (craft-common-actions#39): name the archive after the target.
+# aarch64-unknown-freebsd (asdesign-common-actions#39): name the archive after the target.
 case "${CARGO_BUILD_TARGET:-}" in
   "") ARCH="$(release_arch "$(uname -m)")" ;;
   aarch64-unknown-freebsd | x86_64-unknown-freebsd) ARCH="$(release_arch "${CARGO_BUILD_TARGET%%-*}")" ;;

@@ -1170,6 +1170,10 @@ fn open_editor(
     view.pending_text_open = None;
     let (Some(l), Some(b)) = (lines.get(block), boxes.get(block)) else { return };
     view.image_selection = None;
+    // Start finding the installed fonts now: if the typing needs a letter the paragraph's embedded
+    // subset lacks, its full face is looked for among them when the edit is applied.
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = crate::files::installed_font_files(ui.ctx());
     let source_lines = doc.text_lines(page);
     let text = l.editor_text.clone();
     // Screen pixels per point, from the box's width.

@@ -1,4 +1,4 @@
-//! CMS read as BER: the bounds on what a crafted /Contents can make the reader do.
+//! CMS read as BER: the bounds on what a made /Contents can make the reader do.
 //!
 //! The BER reader itself is `der::Tlv::parse_ber`; these tests go through `SignedData::parse`,
 //! the way a PDF's signature reaches it.

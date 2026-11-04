@@ -150,7 +150,7 @@ while making edits to the second document so the comparison has a stable baselin
 
 ## Common command tools
 
-Following FilmCraft's MCP conventions, `command_list {doc?, filter?, enabled_only?}` keeps its
+Following the ASDesign apps' MCP conventions, `command_list {doc?, filter?, enabled_only?}` keeps its
 `{commands: [...]}` result and adds each mapped tool's parameter schema. `command_run {id, params?}`
 runs that command through its existing headless tool: include `doc` and other tool arguments in
 `params`. Commands without a headless mapping return a tool error. Unknown parameter keys are

@@ -3269,7 +3269,7 @@ impl eframe::App for ASDReaderApp {
         }
         self.guard_quit(ctx);
         // macOS: quit through `terminate:` instead of dropping the window (Touch Bar crash, #1136).
-        craft_quit::on_close_request(ctx);
+        asdesign_quit::on_close_request(ctx);
         let now = ctx.input(|i| i.time);
         self.autosave_tick(ctx, now);
         // Reload documents whose files a build rewrote (#431).

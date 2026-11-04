@@ -10,9 +10,9 @@ rust-version = "1.95"
 workspace = true
 
 [dependencies]
-craft-ui = { workspace = true }
+asdesign-ui = { workspace = true }
 # macOS: a window close quits through `terminate:` (the Touch Bar crash, #1136); elsewhere a no-op.
-craft-quit = { workspace = true, features = ["egui"] }
+asdesign-quit = { workspace = true, features = ["egui"] }
 asdreader-fonts = { workspace = true }
 asdreader-engine = { workspace = true }
 asdreader-cos = { workspace = true }

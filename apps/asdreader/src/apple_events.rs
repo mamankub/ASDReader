@@ -5,7 +5,7 @@
 //! `kAEOpenDocuments` ('odoc') Apple event. winit 0.30 doesn't handle it and owns the
 //! `NSApplicationDelegate`, so AppKit answered "ASDReader cannot open files in the PDF document
 //! format". Handling it ourselves needs Objective-C class declarations, i.e. `unsafe`, which this
-//! workspace forbids. The audited `fmv-macos-events` crate (also used by PhotoCraft) wraps exactly
+//! workspace forbids. The audited `fmv-macos-events` crate (also used by ASDesign Photo) wraps exactly
 //! that, an `NSAppleEventManager` handler registered before Finder's launch event that leaves
 //! winit's delegate alone, behind a safe main-thread API. This module adapts it to the
 //! [`OsEvent`]s that the UI polls every frame.

@@ -353,7 +353,7 @@ fn real_file_discovery_cache_diagnostic() {
     assert_eq!(scans(&cache), 2);
 }
 
-/// A store's arrays only "grew" when every old element is still there; huge arrays (a crafted
+/// A store's arrays only "grew" when every old element is still there; huge arrays (a made
 /// `/Certs` of 200,000 references) are compared in linear time, and huge arrays of values that
 /// aren't references are not taken as growth at all, rather than compared quadratically.
 #[test]
