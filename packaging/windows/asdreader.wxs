@@ -79,6 +79,23 @@
     </Property>
     <SetProperty Id="INSTALLIMAGECONTEXTMENU" Value="1" After="AppSearch" Sequence="first"
         Condition="NOT INSTALLIMAGECONTEXTMENU AND (NOT IMAGECONTEXTMENURELEASE OR EXISTINGIMAGECONTEXTMENU)" />
+    <!-- The ASD PDF Printer print queue: on by default, a welcome-dialog checkbox, and
+         INSTALLPDFPRINTER=0 leaves it out of unattended installs. Secure, like the others. -->
+    <Property Id="INSTALLPDFPRINTER" Secure="yes" />
+    <SetProperty Id="INSTALLPDFPRINTER" Value="1" After="AppSearch" Sequence="first" Condition="NOT INSTALLPDFPRINTER" />
+    <!-- The queue itself (packaging/windows/asd-pdf-printer.ps1) is made and removed by the script,
+         run by PowerShell as SYSTEM (deferred, not impersonating), once when the component below is
+         installed and once when it goes. The script never fails the install: a problem is written to
+         %ProgramData%\ASDReader\printer-install.log. The queue uses Windows' own "Microsoft Print To
+         PDF" driver, so no driver is installed. -->
+    <CustomAction Id="InstallPdfPrinter" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="no" Return="ignore"
+        ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]asd-pdf-printer.ps1&quot; -Install" />
+    <CustomAction Id="RemovePdfPrinter" Directory="INSTALLFOLDER" Execute="deferred" Impersonate="no" Return="ignore"
+        ExeCommand="&quot;[SystemFolder]WindowsPowerShell\v1.0\powershell.exe&quot; -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;[INSTALLFOLDER]asd-pdf-printer.ps1&quot; -Remove" />
+    <InstallExecuteSequence>
+      <Custom Action="InstallPdfPrinter" After="InstallFiles" Condition="$ASDReaderPrinter = 3" />
+      <Custom Action="RemovePdfPrinter" Before="RemoveFiles" Condition="$ASDReaderPrinter = 2 AND ?ASDReaderPrinter = 3" />
+    </InstallExecuteSequence>
     <UIRef Id="ASDReaderInstallerUI" />
 
     <StandardDirectory Id="ProgramFiles6432Folder">
@@ -200,6 +217,15 @@
         <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.jpx\shell\ASDReader.CreatePdf" Value="Create PDF with ASDReader…" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.jpx\shell\ASDReader.CreatePdf" Name="MultiSelectModel" Value="Single" Type="string" />
         <RegistryValue Root="HKLM" Key="Software\Classes\SystemFileAssociations\.jpx\shell\ASDReader.CreatePdf\command" Value="&quot;[#ASDReaderExe]&quot; --create-images &quot;%1&quot;" Type="string" />
+      </Component>
+
+      <!-- ASD PDF Printer: the script that makes the queue and the entry that starts its receiver
+           (ASDReader.exe started with the printer-listener option, no window) when a user signs in. ASDReader also starts
+           the receiver when it is opened, if it is not running. Its own component, so
+           INSTALLPDFPRINTER=0 leaves it out and uninstall removes it (and the queue, above). -->
+      <Component Id="ASDReaderPrinter" Guid="A3B1C5D7-4E2F-4B6A-9C8D-1F0E2D3C4B5A" Condition="INSTALLPDFPRINTER = 1">
+        <File Id="ASDReaderPrinterScript" Source="$(var.BinDir)\asd-pdf-printer.ps1" KeyPath="yes" />
+        <RegistryValue Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="ASDReaderPrinter" Value="&quot;[#ASDReaderExe]&quot; --printer-listener" Type="string" />
       </Component>
 
       <Component Id="ASDReaderCli">

@@ -1713,6 +1713,10 @@ pub enum Edit {
         /// Formatting changes (font, size, colour, alignment); default keeps the paragraph's.
         style: asdreader_edit::BlockStyle,
     },
+    /// Rewrite the `/ToUnicode` of embedded fonts whose glyph texts are invented code points (the
+    /// text layer of a PDF printed through Microsoft Print To PDF), so searched, copied and edited Thai
+    /// is the Thai that was printed ([`asdreader_fonts::thai_repair`]).
+    RepairThaiText,
     /// An explicit open-licensed full font program, completing subsets or selected by a user.
     RegisterTextFont {
         page: usize,
@@ -2153,6 +2157,7 @@ impl Edit {
             Edit::SetDocumentScript { .. } => Label::of("Edit document JavaScript"),
             Edit::EditTextLine { .. } | Edit::EditTextBlock { .. } => Label::of("Edit text"),
             Edit::RegisterTextFont { .. } => Label::of("Load document font"),
+            Edit::RepairThaiText => Label::of("Repair Thai text"),
             Edit::MoveObjects { objects, .. } => plural("Move object", "Move objects", objects.len()),
             Edit::EditPageImage { change, .. } => Label::of(match change {
                 ImageEdit::Move(_) => "Move image",
@@ -2360,6 +2365,7 @@ fn check_permission(edit: &Edit, p: &asdreader_cos::Permissions) -> Result<(), E
         | Edit::EditTextLine { .. }
         | Edit::EditTextBlock { .. }
         | Edit::RegisterTextFont { .. }
+        | Edit::RepairThaiText
         | Edit::EditPageImage { .. }
         | Edit::Flatten { .. }
         | Edit::FlattenFillSign => {
@@ -2725,6 +2731,9 @@ fn run_edit(doc: &mut asdreader_cos::Document, edit: &Edit, cx: &mut EditCtx) ->
         }
         Edit::RegisterTextFont { page, bytes } => {
             asdreader_edit::text::register_text_font(doc, *page, bytes)?;
+        }
+        Edit::RepairThaiText => {
+            asdreader_fonts::thai_repair::repair_thai_text(doc);
         }
         Edit::MarkDecorative { figure } => {
             let r = asdreader_cos::ObjRef::new(*figure, doc.generation(*figure));
@@ -3842,6 +3851,10 @@ impl Session {
         };
         // Nothing to bake: leave undo history and the dirty flag alone.
         if matches!(&edit, Edit::FlattenFillSign) && !asdreader_annot::has_visible_fill_sign(&editor.cos) {
+            return Ok(());
+        }
+        // Nothing to repair: the same.
+        if matches!(&edit, Edit::RepairThaiText) && !asdreader_fonts::thai_repair::repair_thai_text(&mut editor.cos.clone()).changed() {
             return Ok(());
         }
         let mut next = editor.cos.clone();

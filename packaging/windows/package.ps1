@@ -104,6 +104,8 @@ foreach ($f in 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE') {
   Copy-Item (Join-Path $Root $f) $Stage
 }
 Copy-Item (Join-Path $Root 'assets\app-icon\LICENSE-document.txt') $Stage
+# The ASD PDF Printer queue script (the MSI installs it beside the program).
+Copy-Item (Join-Path $PSScriptRoot 'asd-pdf-printer.ps1') $Stage
 
 & (Join-Path $PSScriptRoot 'sign.ps1') (Join-Path $Stage 'ASDReader.exe') (Join-Path $Stage 'asdreader-cli.exe')
 

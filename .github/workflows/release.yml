@@ -104,6 +104,11 @@ jobs:
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: ./packaging/windows/package.ps1 -Arch x64
+      - name: Print Thai through the ASD PDF Printer (queue, receiver and saved file)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./packaging/windows/test-pdf-printer.ps1 -App "$PWD/target/x86_64-pc-windows-msvc/release/ASDReader.exe" -Cli "$PWD/target/x86_64-pc-windows-msvc/release/asdreader-cli.exe"
       - name: Check the Windows signatures
         if: runner.os == 'Windows'
         shell: pwsh

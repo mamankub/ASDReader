@@ -155,6 +155,31 @@ foreach ($control in 'LookIn', 'Folders', 'Path') {
 }
 $installDir = Read-Row 'SELECT `Directory_Parent`, `DefaultDir` FROM `Directory` WHERE `Directory` = ''INSTALLFOLDER''' 2
 if ($installDir[0] -ne 'ProgramFiles6432Folder' -or $installDir[1] -notmatch '(^|\|)ASDReader$') { throw "default install folder: $($installDir -join ' ')" }
+# The ASD PDF Printer: a welcome-page checkbox (on by default, secure), a component that holds the
+# queue script and the receiver's Run entry, and deferred custom actions that run the script as
+# SYSTEM when the component is installed and when it is removed.
+if (($secure[0] -split ';') -notcontains 'INSTALLPDFPRINTER') { throw "INSTALLPDFPRINTER is not secure: '$($secure[0])'" }
+$printerBox = Read-Row 'SELECT `Type`, `Property` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''PdfPrinter''' 2
+Assert-Equal $printerBox[0] 'CheckBox' 'Welcome ASD PDF Printer checkbox'
+Assert-Equal $printerBox[1] 'INSTALLPDFPRINTER' 'Welcome ASD PDF Printer property'
+$printerDefault = Read-Row 'SELECT `Value` FROM `CheckBox` WHERE `Property` = ''INSTALLPDFPRINTER''' 1
+Assert-Equal $printerDefault[0] '1' 'ASD PDF Printer checkbox value'
+$printerFile = Read-Row 'SELECT `Component_` FROM `File` WHERE `FileName` LIKE ''%asd-pdf-printer.ps1''' 1
+Assert-Equal $printerFile[0] 'ASDReaderPrinter' 'The printer script component'
+$printerCondition = Read-Row 'SELECT `Condition` FROM `Component` WHERE `Component` = ''ASDReaderPrinter''' 1
+Assert-Equal $printerCondition[0] 'INSTALLPDFPRINTER = 1' 'The printer component condition'
+$runEntry = Read-Row 'SELECT `Name`, `Value` FROM `Registry` WHERE `Component_` = ''ASDReaderPrinter''' 2
+Assert-Equal $runEntry[0] 'ASDReaderPrinter' 'The receiver Run entry'
+if ($runEntry[1] -notmatch '--printer-listener') { throw "the Run entry does not start the receiver: '$($runEntry[1])'" }
+foreach ($action in @(@('InstallPdfPrinter', '-Install', '$ASDReaderPrinter = 3'), @('RemovePdfPrinter', '-Remove', '$ASDReaderPrinter = 2 AND ?ASDReaderPrinter = 3'))) {
+  $ca = Read-Row ('SELECT `Type`, `Target` FROM `CustomAction` WHERE `Action` = ''' + $action[0] + '''') 2
+  # Type 34 (directory + command line) with the deferred (0x400) and no-impersonate (0x800) flags,
+  # and the return code ignored (0x40): 34 + 1024 + 2048 + 64.
+  Assert-Equal ([int] $ca[0]) 3170 "$($action[0]) type"
+  if ($ca[1] -notmatch [regex]::Escape($action[1]) -or $ca[1] -notmatch 'asd-pdf-printer\.ps1') { throw "$($action[0]) runs the wrong command: '$($ca[1])'" }
+  $seq = Read-Row ('SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action` = ''' + $action[0] + '''') 1
+  Assert-Equal $seq[0] $action[2] "$($action[0]) condition"
+}
 $checkbox = Read-Row 'SELECT `Type`, `Property`, `Text` FROM `Control` WHERE `Dialog_` = ''InstallWelcome'' AND `Control` = ''DesktopShortcut''' 3
 Assert-Equal $checkbox[0] 'CheckBox' 'Welcome desktop-shortcut control'
 Assert-Equal $checkbox[1] 'INSTALLDESKTOPSHORTCUT' 'Welcome checkbox property'

@@ -512,12 +512,39 @@ impl TextDevice {
         self.replaced.push(Replaced { at, text, originals });
     }
 
+    /// A writer that draws glyphs (Microsoft Print To PDF, most CAD exporters) splits Thai SARA AM
+    /// into the nikhahit and SARA AA the font draws it with, so `น้ำ` is read back as `นํ้า`. When a
+    /// nikhahit is followed, straight away or after a tone mark, by a SARA AA, the pair is the one
+    /// vowel: the nikhahit reads as nothing and the SARA AA as SARA AM, which puts the tone mark
+    /// first, as it is typed and searched for.
+    fn join_sara_am(&mut self) {
+        for i in 0..self.glyphs.len() {
+            if self.glyphs.get(i).is_none_or(|g| g.2.text != "\u{0E4D}") {
+                continue;
+            }
+            // The SARA AA is the next glyph, or the one after a tone mark.
+            let mut j = i + 1;
+            if self.glyphs.get(j).is_some_and(|g| matches!(g.2.text.as_str(), "\u{0E48}" | "\u{0E49}" | "\u{0E4A}" | "\u{0E4B}")) {
+                j += 1;
+            }
+            if self.glyphs.get(j).is_some_and(|g| g.2.text == "\u{0E32}") {
+                if let Some(g) = self.glyphs.get_mut(i) {
+                    g.2.text = String::new();
+                }
+                if let Some(g) = self.glyphs.get_mut(j) {
+                    g.2.text = "\u{0E33}".to_owned();
+                }
+            }
+        }
+    }
+
     /// Ends the page. Some producers draw text twice, the copy for an outline, shadow or
     /// glow, and mark only one drawing with `/ActualText` (Canva). The unmarked redraw of a
     /// replacement's glyphs (the same text at the same places, in content order) takes the same
     /// replacement, so the two read alike and line layout drops the copy as a redraw.
     fn finish(&mut self) {
         self.end_actual_text();
+        self.join_sara_am();
         if self.replaced.is_empty() {
             return;
         }
@@ -2019,6 +2046,48 @@ mod tests {
         let lines: Vec<&str> = plain.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
         assert_eq!(lines, ["ศัย", "บ้า"], "{plain:?}");
         assert_eq!(text.find("บ้า").len(), 1, "found with the real mai tho");
+    }
+
+    /// SARA AM drawn as the font draws it, glyph by glyph (a consonant, the nikhahit, a tone mark and
+    /// SARA AA, as Microsoft Print To PDF writes `น้ำ`), reads as the one vowel with the tone mark before it.
+    #[test]
+    fn a_split_sara_am_reads_as_one_vowel_after_the_tone_mark() {
+        use lopdf::{Document, Object, Stream, dictionary};
+        let mut doc = Document::with_version("1.7");
+        // A น, B nikhahit, C mai tho, D sara aa, E ท.
+        let cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /TestThai def /CMapType 2 def \
+            1 begincodespacerange <00> <FF> endcodespacerange \
+            5 beginbfchar <41> <0E19> <42> <0E4D> <43> <0E49> <44> <0E32> <45> <0E17> endbfchar \
+            endcmap CMapName currentdict /CMap defineresource pop end end";
+        let to_unicode = doc.add_object(Stream::new(dictionary! {}, cmap.as_bytes().to_vec()));
+        let widths: Vec<Object> = [600, 0, 0, 600, 600].into_iter().map(Object::Integer).collect();
+        let font = doc.add_object(dictionary! { "Type" => "Font", "Subtype" => "Type1", "BaseFont" => "Helvetica", "FirstChar" => 65, "LastChar" => 69, "Widths" => widths, "ToUnicode" => to_unicode });
+        let glyph = |code: &str, x: f64, y: f64| format!("BT /F1 20 Tf {x} {y} Td ({code}) Tj ET ");
+        // น + ํ + ้ + า, then ท + ํ + า (no tone mark).
+        let content = [
+            glyph("A", 100.0, 150.0),
+            glyph("B", 108.0, 150.0),
+            glyph("C", 108.0, 150.0),
+            glyph("D", 112.0, 150.0),
+            glyph("E", 100.0, 100.0),
+            glyph("B", 108.0, 100.0),
+            glyph("D", 112.0, 100.0),
+        ]
+        .concat();
+        let content = doc.add_object(Stream::new(dictionary! {}, content.into_bytes()));
+        let pages = doc.new_object_id();
+        let page = doc.add_object(dictionary! { "Type" => "Page", "Parent" => pages, "MediaBox" => vec![Object::Integer(0), Object::Integer(0), Object::Integer(300), Object::Integer(300)], "Resources" => dictionary! {"Font" => dictionary! {"F1" => font}}, "Contents" => content });
+        doc.objects.insert(pages, dictionary! {"Type" => "Pages", "Kids" => vec![Object::Reference(page)], "Count" => 1}.into());
+        let catalog = doc.add_object(dictionary! {"Type" => "Catalog", "Pages" => pages});
+        doc.trailer.set("Root", catalog);
+        let mut bytes = Vec::new();
+        doc.save_to(&mut bytes).unwrap();
+        let pdf = Pdf::new(std::sync::Arc::new(bytes)).unwrap();
+        let text = extract_page(&pdf, 0, &InterpreterSettings::default()).unwrap();
+        let plain = text.plain_text();
+        let lines: Vec<&str> = plain.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        assert_eq!(lines, ["น\u{0E49}\u{0E33}", "ท\u{0E33}"], "{plain:?}");
+        assert_eq!(text.find("น\u{0E49}\u{0E33}").len(), 1, "found as typed");
     }
 
     /// One page per content stream, in Helvetica (`/F1`), with `/P1` in the resources'

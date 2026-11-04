@@ -37,6 +37,7 @@ mod decorations;
 mod logging;
 #[cfg(target_os = "windows")]
 mod motion;
+mod printer_listener;
 mod reopen;
 mod settings;
 mod single_instance;
@@ -69,6 +70,7 @@ Options:
   --control <file>            enable the UI control channel (asdreader-cli ui --control <file> …)
   --page N, --zoom 150, --layout continuous, --theme dark, …
                               view settings applied once the files are open
+  --printer-listener          run the receiver of the ASD PDF Printer queue (no window; the installer starts it at sign-in)
   -h, --help                  print this and exit
   --version                   print the version and exit
 
@@ -187,6 +189,12 @@ fn main() -> eframe::Result {
     let mut control_file: Option<String> = None;
     let mut create_images = false;
     let mut new_window = false;
+    // `--printer-listener`: the receiver of the ASD PDF Printer queue (src/printer_listener.rs); it opens
+    // no window. `--out-dir DIR`, `--port N` and `--no-open` are for tests and unusual set-ups.
+    let mut printer_listener = false;
+    let mut printed_dir: Option<std::path::PathBuf> = None;
+    let mut printer_port = printer_listener::PORT;
+    let mut open_printed = true;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -196,6 +204,10 @@ fn main() -> eframe::Result {
             "--control" => control_file = args.next(),
             "--create-images" => create_images = true,
             "--new-window" => new_window = true,
+            "--printer-listener" => printer_listener = true,
+            "--no-open" => open_printed = false,
+            "--out-dir" => printed_dir = args.next().map(std::path::PathBuf::from),
+            "--port" => printer_port = args.next().and_then(|p| p.parse().ok()).unwrap_or(printer_listener::PORT),
             flag if flag.starts_with("--") => {
                 let value = args.next().unwrap_or_default();
                 options.push((flag.trim_start_matches("--").to_string(), value));
@@ -219,6 +231,10 @@ fn main() -> eframe::Result {
             Err(e) => log::warn!("no log file: {e}"),
         }
     }
+    if printer_listener {
+        let code = printer_listener::run(printer_listener::Options { port: printer_port, out_dir: printed_dir, open: open_printed });
+        std::process::exit(code);
+    }
     // Windows, Linux and the BSDs: a launch that only names files (an Outlook attachment, an
     // Explorer double-click, a file manager or `xdg-open`) hands them to the ASDReader already
     // running and exits (#282, #317, #1726). Any option means the caller wants this launch's own
@@ -232,6 +248,8 @@ fn main() -> eframe::Result {
         single_instance::Claim::Primary(server) => Some(server),
         single_instance::Claim::Alone => None,
     };
+    // The ASD PDF Printer's receiver, when this install has the printer and it is not running.
+    printer_listener::ensure_running();
     let choice = renderer_choice(std::env::var("ASDREADER_RENDERER").ok().as_deref());
     let launch = Launch { files, options, control_file, create_images, integrated, window_controls };
     // Finder, Open With and the Dock deliver files as Apple events, not arguments; catch the one

@@ -12,7 +12,7 @@
            PathEdit, DirectoryList and DirectoryCombo controls require. -->
       <Property Id="_BrowseProperty" Value="INSTALLFOLDER" />
 
-      <Dialog Id="InstallWelcome" Width="370" Height="180" Title="[ProductName] Setup">
+      <Dialog Id="InstallWelcome" Width="370" Height="200" Title="[ProductName] Setup">
         <Control Id="Title" Type="Text" X="20" Y="20" Width="330" Height="25" Text="{\InstallerTitle}Install [ProductName]" />
         <Control Id="Description" Type="Text" X="20" Y="55" Width="330" Height="40"
             Text="Setup will install [ProductName] for all users and add it to the Start menu. Click Next to choose where to install it." />
@@ -20,10 +20,12 @@
             Property="INSTALLDESKTOPSHORTCUT" CheckBoxValue="1" Text="Create a &amp;desktop shortcut" />
         <Control Id="PdfContextMenu" Type="CheckBox" X="20" Y="123" Width="330" Height="17"
             Property="INSTALLPDFCONTEXTMENU" CheckBoxValue="1" Text="Add &quot;&amp;Edit with ASDReader&quot; to the right-click menu of PDF files" />
-        <Control Id="Next" Type="PushButton" X="195" Y="145" Width="75" Height="23" Default="yes" Text="&amp;Next &gt;">
+        <Control Id="PdfPrinter" Type="CheckBox" X="20" Y="141" Width="330" Height="17"
+            Property="INSTALLPDFPRINTER" CheckBoxValue="1" Text="Install the &amp;ASD PDF Printer (saves what you print as a PDF with correct Thai text)" />
+        <Control Id="Next" Type="PushButton" X="195" Y="165" Width="75" Height="23" Default="yes" Text="&amp;Next &gt;">
           <Publish Event="NewDialog" Value="InstallFolder" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="280" Y="145" Width="70" Height="23" Cancel="yes" Text="Cancel">
+        <Control Id="Cancel" Type="PushButton" X="280" Y="165" Width="70" Height="23" Cancel="yes" Text="Cancel">
           <Publish Event="EndDialog" Value="Exit" />
         </Control>
       </Dialog>

@@ -61,7 +61,7 @@ asdreader-cli info   <file.pdf> [--password PW]            document summary as J
 asdreader-cli render <file.pdf> --page N [--dpi 96] --out x.png   (.png, .jpg, .tif or .pam)
 asdreader-cli text   <file.pdf> [--page N]                  extracted text (pages separated by form feeds)
 asdreader-cli edit   <in.pdf> --out out.pdf [--rotate 1,3:90] [--delete 2,4] [--move 5:1]
-                      [--insert-blank 1] [--title T] [--author A] [--full]
+                      [--insert-blank 1] [--title T] [--author A] [--full] [--repair-thai]
                       (options run in order; page numbers refer to the document after the earlier options)
 asdreader-cli combine <a.pdf> <b.pdf> … --out combined.pdf
 asdreader-cli extract <in.pdf> --pages 1,3,5-8 --out out.pdf    (pages and ranges, in the order given)
@@ -449,7 +449,7 @@ fn page_list(s: &str) -> Result<Vec<usize>, String> {
 }
 
 /// The options `edit` understands, for its "unknown option" message.
-const EDIT_OPTIONS: &str = "--out, --password, --full, --rotate, --delete, --move, --insert-blank, --title, --author";
+const EDIT_OPTIONS: &str = "--out, --password, --full, --repair-thai, --rotate, --delete, --move, --insert-blank, --title, --author";
 
 /// Apply page and metadata edits through the engine and save (incrementally unless `--full`).
 ///
@@ -469,6 +469,12 @@ fn edit(args: &[String]) -> Result<(), CliError> {
         match arg {
             "--full" => {
                 full = true;
+                i += 1;
+                continue;
+            }
+            // Fix the Thai text layer of a PDF printed with Microsoft Print To PDF (no value).
+            "--repair-thai" => {
+                edits.push(Edit::RepairThaiText);
                 i += 1;
                 continue;
             }

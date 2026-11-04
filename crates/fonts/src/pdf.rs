@@ -319,6 +319,24 @@ struct BfRange {
 }
 
 impl Unicode {
+    /// Every code with a meaning and its text, from the explicit entries and the ranges (each code once,
+    /// as [`Unicode::text`] reads it), in code order; at most `limit` of them. Used to rewrite a
+    /// ToUnicode CMap, which never needs the encoding half.
+    pub(crate) fn entries(&self, limit: usize) -> Vec<(u32, String)> {
+        let mut codes: Vec<u32> = self.explicit.keys().copied().collect();
+        for r in &self.ranges {
+            codes.extend((r.lo..=r.hi).take(limit));
+            if codes.len() > limit.saturating_mul(2) {
+                break;
+            }
+        }
+        codes.sort_unstable();
+        codes.dedup();
+        codes.into_iter().take(limit).filter_map(|c| self.text(c).map(|t| (c, t.into_owned()))).collect()
+    }
+}
+
+impl Unicode {
     /// Whether `code` may have an explicit entry; false is certain for codes below 65 536 without one.
     #[inline]
     fn may_be_explicit(&self, code: u32) -> bool {
@@ -849,6 +867,11 @@ impl Metrics {
 }
 
 impl Metrics {
+    /// Every code of the font's ToUnicode map with its text, in code order (at most `limit`).
+    pub(crate) fn to_unicode_entries(&self, limit: usize) -> Vec<(u32, String)> {
+        self.unicode.entries(limit)
+    }
+
     /// The text a string shows (codes without a known meaning are left out).
     pub fn decode(&self, s: &[u8]) -> String {
         self.codes(s).into_iter().filter_map(|(c, _)| self.text_of(c)).collect()

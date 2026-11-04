@@ -13,6 +13,7 @@ mod cjk_scripts;
 pub mod embedding;
 mod encodings;
 pub mod fallback;
+pub mod glyph_text;
 pub mod pdf;
 mod script;
 mod shaping;
@@ -20,6 +21,7 @@ pub mod source_shaping;
 mod std14;
 mod std14_metrics;
 pub mod thai_pua;
+pub mod thai_repair;
 pub use asdesign::{
     ASDESIGN_FONTS, AsdesignFont, SHIPPORI_MINCHO, document_arabic_font, document_devanagari_font, document_hebrew_font, document_japanese_font,
     document_japanese_font_for_style, document_japanese_fonts_for_style, document_latin_fonts, document_thai_font, ui_arabic_fonts, ui_chinese_fonts,
