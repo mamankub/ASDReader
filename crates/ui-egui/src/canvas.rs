@@ -1922,13 +1922,12 @@ impl DocView {
                 && self.frame_visible.contains(&r.page)
                 && !self.errors.contains_key(&r.page)
         });
-        if visible_mains_pending {
-            // Caches are kept; demand is re-evaluated next frame once pixels arrive.
-            return queue;
-        }
+        // Thumbnails nothing shows any more are let go even while a visible page is still being
+        // drawn: on a slow machine that wait can outlast the panel or dialog that wanted them.
         let thumbs = self.thumbnail_requests(info, ppp);
         let mut thumb_bytes = 0usize;
         let mut admitted = HashSet::new();
+        let mut thumb_queue = Vec::new();
         for req in thumbs {
             let Some(p) = info.pages.get(req.page) else { continue };
             let bytes = rgba_bytes(device_pixels(p.width, req.scale) as usize, device_pixels(p.height, req.scale) as usize);
@@ -1938,11 +1937,16 @@ impl DocView {
             thumb_bytes += bytes;
             admitted.insert(req.page);
             if self.thumbs.get(&req.page).is_none_or(|t| t.tag != req.tag) || self.stale_thumbs.contains(&req.page) {
-                queue.push(req);
+                thumb_queue.push(req);
             }
         }
         self.thumbs.retain(|p, _| admitted.contains(p));
         self.stale_thumbs.retain(|p| admitted.contains(p));
+        if visible_mains_pending {
+            // The other caches are kept; demand is re-evaluated next frame once pixels arrive.
+            return queue;
+        }
+        queue.extend(thumb_queue);
         self.retain_text_layers();
         // Visible main pages and thumbnails take precedence over background search work.
         queue.extend(requests.into_iter().filter(|r| r.kind == RequestKind::Text));
@@ -6740,10 +6744,15 @@ trailer << /Root 1 0 R >>
         h.state_mut().print_draft.sheet = 0;
         h.run_steps(2);
         assert_eq!(h.state().views[0].thumb_demand.len(), 2, "booklet only needs its two placed pages");
+        // The dialog closes while the page on screen is still being drawn, as on a slow machine:
+        // the thumbnails it wanted are let go all the same.
+        h.state_mut().views[0].hold_rasters = true;
+        h.state_mut().views[0].pages.clear();
         h.state_mut().dialog = None;
         h.run_steps(2);
         assert!(h.state().views[0].thumb_demand.is_empty());
         assert!(h.state().views[0].thumbs.is_empty());
+        h.state_mut().views[0].hold_rasters = false;
     }
 
     /// One mouse-wheel notch (a line) at `at` seconds.
