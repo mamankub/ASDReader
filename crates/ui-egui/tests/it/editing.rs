@@ -5973,13 +5973,17 @@ fn mode_tabs_keep_the_hand_over_page_text_scrolled_under_them() {
     h.run_steps(4);
     let top = h.state().views[0].page_screen_rect(0).expect("on screen").top();
     let mut cursor = egui::CursorIcon::Default;
-    for _ in 0..50 {
+    // The text comes from a worker thread, so this waits on the clock (a slow machine needs
+    // more than a few frames).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         h.hover_at(text.center() + egui::vec2(0.0, top));
         h.run_steps(2);
         cursor = h.output().platform_output.cursor_icon;
         if cursor == egui::CursorIcon::Text {
             break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert_eq!(cursor, egui::CursorIcon::Text);
     assert_eq!(mode_tab_cursors(&mut h, text), HAND_ON_EVERY_TAB);
