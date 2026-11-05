@@ -4,7 +4,7 @@
 //! text, from a
 //! document's working file (so unsaved edits and hidden layers are respected, as on screen).
 
-use asdreader_render::{PageRenderer, RenderRequest, RequestKind};
+use asdreader_render::{MAX_PIXELS, PageRenderer, RenderRequest, RequestKind, Tile, device_pixels, effective_scale};
 
 use crate::Document;
 
@@ -14,7 +14,24 @@ pub struct Exporter {
     pages: usize,
     /// Each page's displayed size in points, for [`Exporter::dpi_used`].
     sizes: Vec<(f32, f32)>,
+    /// Pages are drawn on a transparent background (`RenderConfig::transparent`).
+    transparent: bool,
+    /// Most pixels in one band of a page drawn in bands ([`BAND_PIXELS`]; smaller in tests).
+    pub(crate) band_pixels: f64,
 }
+
+/// Most pixels on a side of an exported image: JPEG's limit, and the renderer's (a u16).
+pub const EXPORT_MAX_SIDE: f64 = 65_500.0;
+/// Most pixels in an exported PNG. A page larger than the renderer draws at once is drawn in bands
+/// and a PNG is written a band at a time, so this bounds the file, not the memory: a sheet of
+/// 168 × 91 cm (66 × 36 in) at 600 dpi is 855 million pixels.
+pub const EXPORT_MAX_PIXELS: f64 = 1.0e9;
+/// Most pixels in an exported JPEG or TIFF, which are encoded from the whole page held as RGB
+/// (750 MB): that sheet at 300 dpi is 214 million. (The `tiff` crate compresses only an image
+/// written whole, so a TIFF can't be written a band at a time.)
+pub const EXPORT_MAX_WHOLE_PIXELS: f64 = 250.0e6;
+/// The rows of one band are at most this many pixels (the renderer's own limit for one picture).
+const BAND_PIXELS: f64 = MAX_PIXELS as f64;
 
 /// What an export needs from a document, as plain values that can move to a worker thread.
 #[derive(Clone)]
@@ -65,7 +82,23 @@ impl Exporter {
     /// resolution they allow, as the interactive Export does; [`Exporter::dpi_used`] says at what.
     /// A source whose `config.reject_oversize` is set refuses such pages instead.
     pub fn from_source(src: ExportSource) -> Self {
-        Self { renderer: PageRenderer::new(src.bytes, src.config), pages: src.pages, sizes: src.sizes }
+        let transparent = src.config.transparent;
+        Self { renderer: PageRenderer::new(src.bytes, src.config), pages: src.pages, sizes: src.sizes, transparent, band_pixels: BAND_PIXELS }
+    }
+
+    /// The resolution page `page` is exported at as an image of `format` when asked for `dpi`:
+    /// as asked, unless the image would be larger than [`EXPORT_MAX_SIDE`] on a side or than the
+    /// format's pixel limit ([`EXPORT_MAX_PIXELS`], [`EXPORT_MAX_WHOLE_PIXELS`]). Pages larger
+    /// than the renderer draws at once are drawn in bands, so its own limits don't apply.
+    pub fn image_dpi(&self, page: usize, dpi: f64, format: ImageFormat) -> f64 {
+        let dpi = dpi.clamp(18.0, 1200.0);
+        let Some(&(w, h)) = self.sizes.get(page) else { return dpi };
+        let (w, h) = (f64::from(w.max(1.0)), f64::from(h.max(1.0)));
+        let pixels = if format == ImageFormat::Png { EXPORT_MAX_PIXELS } else { EXPORT_MAX_WHOLE_PIXELS };
+        let by_side = EXPORT_MAX_SIDE / w.max(h) * 72.0;
+        let by_area = (pixels / (w * h)).sqrt() * 72.0;
+        // One pixel of slack: `device_pixels` rounds up.
+        dpi.min(by_side * (1.0 - 1e-6)).min(by_area * (1.0 - 1e-6))
     }
 
     /// The resolution page `page` is actually exported at when asked for `dpi`: lower than asked
@@ -93,14 +126,50 @@ impl Exporter {
         encode_png(r.width, r.height, &r.rgba)
     }
 
-    /// Page `page` as an image file of `format`, which says the resolution it was drawn at.
+    /// Page `page` as an image file of `format` at `dpi` (see [`Exporter::image_dpi`]), which says
+    /// the resolution it was drawn at. A page larger than the renderer draws at once (an
+    /// engineering sheet at a few hundred dpi) is drawn in bands as wide as the page and joined.
     pub fn image(&mut self, page: usize, dpi: f64, format: ImageFormat) -> Result<Vec<u8>, String> {
         self.check(page)?;
-        let r = self.renderer.render(RenderRequest { page, scale: (dpi.clamp(18.0, 1200.0) / 72.0) as f32, ..Default::default() });
-        if let Some(e) = r.error {
-            return Err(format!("page {}: {e}", page + 1));
+        let dpi = self.image_dpi(page, dpi, format);
+        let scale = (dpi / 72.0) as f32;
+        let (w_pt, h_pt) = self.sizes.get(page).copied().unwrap_or((612.0, 792.0));
+        if effective_scale(w_pt, h_pt, scale) >= scale && self.band_pixels >= BAND_PIXELS {
+            let r = self.renderer.render(RenderRequest { page, scale, ..Default::default() });
+            if let Some(e) = r.error {
+                return Err(format!("page {}: {e}", page + 1));
+            }
+            return encode_image(r.width, r.height, &r.rgba, format, dpi);
         }
-        encode_image(r.width, r.height, &r.rgba, format, self.dpi_used(page, dpi))
+        let (width, height) = (device_pixels(w_pt, scale), device_pixels(h_pt, scale));
+        let band_rows = ((self.band_pixels.min(BAND_PIXELS) / f64::from(width)) as u32).clamp(1, height);
+        let renderer = &mut self.renderer;
+        let mut band = |y: u32| -> Result<Vec<u8>, String> {
+            let tile = Tile { x: 0, y, w: width, h: band_rows.min(height - y) };
+            let r = renderer.render(RenderRequest { page, scale, tile: Some(tile), ..Default::default() });
+            if let Some(e) = r.error {
+                return Err(format!("page {}: {e}", page + 1));
+            }
+            if (r.width, r.height) != (tile.w, tile.h) {
+                return Err(format!("page {}: a band came out {}×{}, not {}×{}", page + 1, r.width, r.height, tile.w, tile.h));
+            }
+            Ok(r.rgba.to_vec())
+        };
+        let ys = (0..height).step_by(band_rows as usize);
+        if format == ImageFormat::Png {
+            return encode_png_bands(width, height, dpi, self.transparent, ys.map(&mut band));
+        }
+        // JPEG and TIFF: the whole page as RGB, then encoded.
+        let len = (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(3)).ok_or("the image is too large")?;
+        let mut rgb = Vec::new();
+        rgb.try_reserve_exact(len).map_err(|_| "not enough memory for this image".to_string())?;
+        for y in ys {
+            rgb.extend_from_slice(&over_white(&band(y)?));
+        }
+        match format {
+            ImageFormat::Jpeg { quality } => encode_jpeg_rgb(width, height, &rgb, quality, dpi),
+            _ => encode_tiff_rgb(width, height, &rgb, dpi),
+        }
     }
 
     /// The reading-order text of a page.
@@ -132,7 +201,7 @@ impl Exporter {
 /// pixels per metre, so 72 dpi would read back as 72.009 and a page made from it would shrink.
 pub fn encode_image(width: u32, height: u32, premultiplied: &[u8], format: ImageFormat, dpi: f64) -> Result<Vec<u8>, String> {
     match format {
-        ImageFormat::Png => encode_png(width, height, premultiplied),
+        ImageFormat::Png => encode_png_at(width, height, premultiplied, Some(dpi)),
         ImageFormat::Jpeg { quality } => encode_jpeg(width, height, premultiplied, quality, dpi),
         ImageFormat::Tiff => encode_tiff(width, height, premultiplied, dpi),
     }
@@ -147,6 +216,11 @@ pub fn encode_image(width: u32, height: u32, premultiplied: &[u8], format: Image
 /// (4.46 → 4.47 MB), a text page at 220 dpi 70 → 40 ms (0.85 → 0.89 MB), and an annual
 /// report page at 150 dpi 179 → 64 ms (1.41 → 1.38 MB).
 pub fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u8>, String> {
+    encode_png_at(width, height, premultiplied, None)
+}
+
+/// [`encode_png`], saying it is `dpi` dots per inch when given (`pHYs`, in pixels per metre).
+pub fn encode_png_at(width: u32, height: u32, premultiplied: &[u8], dpi: Option<f64>) -> Result<Vec<u8>, String> {
     check_raster(width, height, premultiplied)?;
     let pixels = premultiplied.as_chunks::<4>().0;
     let opaque = pixels.iter().all(|px| px[3] == 255);
@@ -154,14 +228,7 @@ pub fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u
         (png::ColorType::Rgb, pixels.iter().flat_map(|px| [px[0], px[1], px[2]]).collect::<Vec<u8>>())
     } else {
         let mut rgba = premultiplied.to_vec();
-        for px in rgba.as_chunks_mut::<4>().0 {
-            let a = u32::from(px[3]);
-            if a != 0 && a != 255 {
-                for c in &mut px[..3] {
-                    *c = ((u32::from(*c) * 255 + a / 2) / a).min(255) as u8;
-                }
-            }
-        }
+        unpremultiply(&mut rgba);
         (png::ColorType::Rgba, rgba)
     };
     let mut out = Vec::new();
@@ -170,10 +237,86 @@ pub fn encode_png(width: u32, height: u32, premultiplied: &[u8]) -> Result<Vec<u
     enc.set_depth(png::BitDepth::Eight);
     enc.set_deflate_compression(png::DeflateCompression::Level(3));
     enc.set_filter(png::Filter::Adaptive);
+    enc.set_pixel_dims(dpi.map(png_density));
     let mut w = enc.write_header().map_err(|e| e.to_string())?;
     w.write_image_data(&data).map_err(|e| e.to_string())?;
     w.finish().map_err(|e| e.to_string())?;
     Ok(out)
+}
+
+/// `dpi` as a PNG's `pHYs`: whole pixels per metre. 300 dpi is 11,811 per metre (299.9994 dpi);
+/// ASDReader reads a value that rounds back to a whole number of dpi as that number.
+fn png_density(dpi: f64) -> png::PixelDimensions {
+    let ppm = (dpi / 0.0254).round().clamp(1.0, f64::from(u32::MAX)) as u32;
+    png::PixelDimensions { xppu: ppm, yppu: ppm, unit: png::Unit::Meter }
+}
+
+/// Premultiplied RGBA → straight RGBA, in place.
+fn unpremultiply(rgba: &mut [u8]) {
+    for px in rgba.as_chunks_mut::<4>().0 {
+        let a = u32::from(px[3]);
+        if a != 0 && a != 255 {
+            for c in &mut px[..3] {
+                *c = ((u32::from(*c) * 255 + a / 2) / a).min(255) as u8;
+            }
+        }
+    }
+}
+
+/// A page drawn in bands (premultiplied RGBA, top to bottom, `width` wide) → PNG at `dpi`,
+/// written a band at a time: RGB, or straight RGBA when the page was drawn `transparent`.
+fn encode_png_bands(
+    width: u32,
+    height: u32,
+    dpi: f64,
+    transparent: bool,
+    bands: impl Iterator<Item = Result<Vec<u8>, String>>,
+) -> Result<Vec<u8>, String> {
+    use std::io::Write;
+    let err = |e: png::EncodingError| e.to_string();
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, width, height);
+    enc.set_color(if transparent { png::ColorType::Rgba } else { png::ColorType::Rgb });
+    enc.set_depth(png::BitDepth::Eight);
+    enc.set_deflate_compression(png::DeflateCompression::Level(3));
+    enc.set_filter(png::Filter::Adaptive);
+    enc.set_pixel_dims(Some(png_density(dpi)));
+    let mut writer = enc.write_header().map_err(err)?;
+    let mut stream = writer.stream_writer().map_err(err)?;
+    let mut rows = 0u64;
+    for band in bands {
+        let mut band = band?;
+        check_raster(width, (band.len() / 4 / width as usize) as u32, &band)?;
+        rows += (band.len() / 4 / width as usize) as u64;
+        let data = if transparent {
+            unpremultiply(&mut band);
+            band
+        } else {
+            band.as_chunks::<4>().0.iter().flat_map(|px| [px[0], px[1], px[2]]).collect()
+        };
+        stream.write_all(&data).map_err(|e| e.to_string())?;
+    }
+    if rows != u64::from(height) {
+        return Err(format!("the bands came to {rows} rows, not {height}"));
+    }
+    stream.finish().map_err(err)?;
+    drop(writer);
+    Ok(out)
+}
+
+/// The resolution tags of a TIFF, in hundredths of a dpi: a page drawn at a lowered
+/// resolution (`Exporter::image_dpi`) is rarely a whole number.
+fn tiff_resolution<W: std::io::Write + std::io::Seek, C: tiff::encoder::colortype::ColorType, K: tiff::encoder::TiffKind>(
+    image: &mut tiff::encoder::ImageEncoder<'_, W, C, K>,
+    dpi: f64,
+) -> tiff::TiffResult<()> {
+    use tiff::encoder::Rational;
+    use tiff::tags::{ResolutionUnit, Tag};
+    let resolution = Rational { n: (dpi * 100.0).round() as u32, d: 100 };
+    let tags = image.encoder();
+    tags.write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch)?;
+    tags.write_tag(Tag::XResolution, resolution.clone())?;
+    tags.write_tag(Tag::YResolution, resolution)
 }
 
 /// Image file formats for Export ▸ Image.
@@ -236,15 +379,19 @@ fn over_white(premultiplied: &[u8]) -> Vec<u8> {
 
 /// Premultiplied RGBA → baseline JPEG at `dpi` (pages are opaque: transparency becomes white paper).
 pub fn encode_jpeg(width: u32, height: u32, premultiplied: &[u8], quality: u8, dpi: f64) -> Result<Vec<u8>, String> {
+    check_raster(width, height, premultiplied)?;
+    encode_jpeg_rgb(width, height, &over_white(premultiplied), quality, dpi)
+}
+
+/// RGB → baseline JPEG at `dpi`.
+fn encode_jpeg_rgb(width: u32, height: u32, rgb: &[u8], quality: u8, dpi: f64) -> Result<Vec<u8>, String> {
     use image::ImageEncoder;
     use image::codecs::jpeg::{JpegEncoder, PixelDensity};
-    check_raster(width, height, premultiplied)?;
-    let rgb = over_white(premultiplied);
     let mut out = Vec::new();
     let mut enc = JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100));
     // The JFIF density is whole dots per inch.
     enc.set_pixel_density(PixelDensity::dpi(dpi.round() as u16));
-    enc.write_image(&rgb, width, height, image::ExtendedColorType::Rgb8).map_err(|e| e.to_string())?;
+    enc.write_image(rgb, width, height, image::ExtendedColorType::Rgb8).map_err(|e| e.to_string())?;
     Ok(out)
 }
 
@@ -252,21 +399,19 @@ pub fn encode_jpeg(width: u32, height: u32, premultiplied: &[u8], quality: u8, d
 /// `image`'s `TiffEncoder` always says 1 × 1 with no unit and leaves the strips uncompressed.
 /// No predictor: LZW alone is the compression TIFF readers support most widely after none.
 pub fn encode_tiff(width: u32, height: u32, premultiplied: &[u8], dpi: f64) -> Result<Vec<u8>, String> {
-    use tiff::encoder::{Compression, Rational, TiffEncoder, colortype::RGB8};
-    use tiff::tags::{ResolutionUnit, Tag};
-    let err = |e: tiff::TiffError| e.to_string();
     check_raster(width, height, premultiplied)?;
-    let rgb = over_white(premultiplied);
+    encode_tiff_rgb(width, height, &over_white(premultiplied), dpi)
+}
+
+/// RGB → TIFF (LZW-compressed) at `dpi`.
+fn encode_tiff_rgb(width: u32, height: u32, rgb: &[u8], dpi: f64) -> Result<Vec<u8>, String> {
+    use tiff::encoder::{Compression, TiffEncoder, colortype::RGB8};
+    let err = |e: tiff::TiffError| e.to_string();
     let mut out = std::io::Cursor::new(Vec::new());
     let mut tiff = TiffEncoder::new(&mut out).map_err(err)?.with_compression(Compression::Lzw);
     let mut image = tiff.new_image::<RGB8>(width, height).map_err(err)?;
-    // In hundredths: a page drawn at a lowered resolution (`Exporter::dpi_used`) is rarely a whole number.
-    let resolution = Rational { n: (dpi * 100.0).round() as u32, d: 100 };
-    let tags = image.encoder();
-    tags.write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch).map_err(err)?;
-    tags.write_tag(Tag::XResolution, resolution.clone()).map_err(err)?;
-    tags.write_tag(Tag::YResolution, resolution).map_err(err)?;
-    image.write_data(&rgb).map_err(err)?;
+    tiff_resolution(&mut image, dpi).map_err(err)?;
+    image.write_data(rgb).map_err(err)?;
     Ok(out.into_inner())
 }
 

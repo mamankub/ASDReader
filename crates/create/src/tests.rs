@@ -1250,3 +1250,16 @@ fn a_tiny_gif_on_a_huge_screen_is_refused() {
     let doc = reopen(&from_images(&[("small.gif".into(), gif_on_screen(40, 30))]).unwrap());
     assert_eq!(media(&pages(&doc)[0]), [0.0, 0.0, 40.0, 30.0]);
 }
+
+/// A PNG's density is whole pixels per metre, so a whole number of dpi comes back a little off
+/// (72 dpi is 2,835 per metre, 72.009 dpi): read as the whole number it rounds from, a page made
+/// from an exported PNG keeps its size.
+#[test]
+fn png_densities_read_as_the_whole_dpi_they_were_written_from() {
+    for dpi in [72.0, 96.0, 144.0, 150.0, 200.0, 300.0, 600.0, 1200.0] {
+        assert_eq!(super::png_dpi((dpi / 0.0254_f64).round() as u32), dpi);
+    }
+    // A density no whole dpi rounds to stays as it is: 3,000 per metre is 76.2 dpi.
+    assert!((super::png_dpi(3000) - 76.2).abs() < 1e-9);
+    assert!((super::png_dpi(1) - 0.0254).abs() < 1e-12);
+}

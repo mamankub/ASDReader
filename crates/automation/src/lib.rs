@@ -1456,8 +1456,8 @@ impl Automation {
             let path = child(&folder, &format!("{stem}_page_{}.{}", p + 1, format.extension()));
             write_atomic(&path, &img)?;
             files.push(path.to_string_lossy().into_owned());
-            // A page too large for the renderer at `dpi` is drawn at the most it allows.
-            let used = ex.dpi_used(p, dpi);
+            // A page too large for an image at `dpi` is drawn at the most it allows.
+            let used = ex.image_dpi(p, dpi, format);
             if used < dpi.clamp(18.0, 1200.0) - 0.5 {
                 lowered.push(json!({ "page": p + 1, "dpi": used.floor() }));
             }
