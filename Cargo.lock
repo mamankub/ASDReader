@@ -258,11 +258,11 @@ checksum = "175571dd1d178ced59193a6fc02dde1b972eb0bc56c892cde9beeceac5bf0f6b"
 
 [[package]]
 name = "asdesign-docpath"
-version = "0.13.4"
+version = "0.13.5"
 
 [[package]]
 name = "asdesign-print"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "miniz_oxide 0.8.9",
  "roxmltree",
@@ -273,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "asdesign-quit"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "dispatch2",
  "egui",
@@ -284,7 +284,7 @@ dependencies = [
 
 [[package]]
 name = "asdesign-ui"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "egui",
  "egui_extras",
@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdesign-quit",
  "asdreader-engine",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-a11y"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-content",
  "asdreader-cos",
@@ -335,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-annot"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-fonts",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-audit"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-content",
  "asdreader-cos",
@@ -357,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-automation"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-engine",
@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-cli"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-audit",
  "asdreader-automation",
@@ -397,11 +397,11 @@ dependencies = [
 
 [[package]]
 name = "asdreader-compare"
-version = "0.13.4"
+version = "0.13.5"
 
 [[package]]
 name = "asdreader-content"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "hayro-syntax",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-cos"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-crypt",
  "asdreader-filters",
@@ -424,7 +424,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-create"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-fonts",
@@ -440,7 +440,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-crypt"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "aes",
  "md-5",
@@ -452,7 +452,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-edit"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-annot",
  "asdreader-content",
@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-engine"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdesign-docpath",
  "asdreader-a11y",
@@ -509,14 +509,14 @@ dependencies = [
 
 [[package]]
 name = "asdreader-export"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "flate2",
 ]
 
 [[package]]
 name = "asdreader-filters"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "flate2",
  "proptest",
@@ -526,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-fonts"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "harfrust",
@@ -536,7 +536,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-forms"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-content",
  "asdreader-cos",
@@ -549,11 +549,11 @@ dependencies = [
 
 [[package]]
 name = "asdreader-geom"
-version = "0.13.4"
+version = "0.13.5"
 
 [[package]]
 name = "asdreader-js"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "boa_engine",
  "chrono",
@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-measure"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-annot",
  "asdreader-content",
@@ -574,14 +574,14 @@ dependencies = [
 
 [[package]]
 name = "asdreader-model"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
 ]
 
 [[package]]
 name = "asdreader-ocr"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-fonts",
  "ocrs",
@@ -591,7 +591,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-optimize"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-annot",
  "asdreader-content",
@@ -604,11 +604,11 @@ dependencies = [
 
 [[package]]
 name = "asdreader-oracle"
-version = "0.13.4"
+version = "0.13.5"
 
 [[package]]
 name = "asdreader-organize"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-content",
  "asdreader-cos",
@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-platform"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "async-channel",
  "futures-lite",
@@ -629,7 +629,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-preflight"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-content",
  "asdreader-cos",
@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-print"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdesign-print",
  "asdreader-content",
@@ -652,7 +652,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-redact"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-annot",
  "asdreader-content",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-render"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-fonts",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-sign"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "aes",
  "asdreader-annot",
@@ -723,11 +723,11 @@ dependencies = [
 
 [[package]]
 name = "asdreader-testkit"
-version = "0.13.4"
+version = "0.13.5"
 
 [[package]]
 name = "asdreader-ui-egui"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "arboard",
  "asdesign-quit",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-web"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-ui-egui",
  "eframe",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-xfa"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-fonts",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "asdreader-xfdf"
-version = "0.13.4"
+version = "0.13.5"
 dependencies = [
  "asdreader-annot",
  "asdreader-cos",
