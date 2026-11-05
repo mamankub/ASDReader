@@ -401,7 +401,9 @@ jobs:
           export PYTHON_COVERAGE_SOURCE_REAL="$source_dir"
           export PYTHON_COVERAGE_SCRIPT_REAL="$test_script"
           coverage_config="$coverage_env/coverage.ini"
-          # Environment substitution keeps paths literal and shares selection with reporting.
+          # Environment substitution keeps paths literal and shares selection with reporting:
+          # coverage expands ${...} when it reads the file, so the shell must not.
+          # shellcheck disable=SC2016
           printf '%s\n' '[run]' 'branch = true' 'source = ${PYTHON_COVERAGE_SOURCE_REAL}' 'omit = ${PYTHON_COVERAGE_SCRIPT_REAL}' > "$coverage_config"
           status=0
           "$coverage_env/bin/python" -m coverage run --rcfile="$coverage_config" "$test_script" || status=$?
