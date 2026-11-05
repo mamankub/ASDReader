@@ -20,19 +20,18 @@ pub struct Exporter {
     pub(crate) band_pixels: f64,
 }
 
-/// Most pixels on a side of an exported image: JPEG's limit, and the renderer's (a u16).
-pub const EXPORT_MAX_SIDE: f64 = 65_500.0;
-/// Most pixels in an exported PNG. A page larger than the renderer draws at once is drawn in bands
-/// and a PNG is written a band at a time, so this bounds the file, not the memory: an A0L2 sheet
-/// (841 × 2378 mm) at 600 dpi is 1,116 million pixels.
-pub const EXPORT_MAX_PIXELS: f64 = 2.0e9;
-/// Most pixels in an exported JPEG or TIFF, which are encoded from the whole page held as RGB
-/// (1.8 GB, asked for fallibly): an A0L2 sheet at 300 dpi is 279 million, at 400 dpi 497 million.
-/// (The `tiff` crate compresses only an image written whole, so a TIFF can't be written a band
-/// at a time.)
-pub const EXPORT_MAX_WHOLE_PIXELS: f64 = 600.0e6;
+/// Most pixels on a side of an exported JPEG: the format's limit.
+pub const JPEG_MAX_SIDE: f64 = 65_500.0;
+/// Most pixels on a side of an exported PNG or TIFF (8.5 m at 600 dpi).
+pub const EXPORT_MAX_SIDE: f64 = 200_000.0;
+/// Most pixels in an exported image. A page larger than the renderer draws at once is drawn in
+/// bands and every format is written a band at a time, so this bounds the file and the time, not
+/// the memory: an A0L2 sheet (841 × 2378 mm) at 600 dpi is 1,116 million pixels.
+pub const EXPORT_MAX_PIXELS: f64 = 4.0e9;
 /// The rows of one band are at most this many pixels (the renderer's own limit for one picture).
 const BAND_PIXELS: f64 = MAX_PIXELS as f64;
+/// The widest piece of a band the renderer draws at once (its sizes are u16).
+const BAND_TILE: u32 = 32_768;
 
 /// What an export needs from a document, as plain values that can move to a worker thread.
 #[derive(Clone)]
@@ -88,16 +87,16 @@ impl Exporter {
     }
 
     /// The resolution page `page` is exported at as an image of `format` when asked for `dpi`:
-    /// as asked, unless the image would be larger than [`EXPORT_MAX_SIDE`] on a side or than the
-    /// format's pixel limit ([`EXPORT_MAX_PIXELS`], [`EXPORT_MAX_WHOLE_PIXELS`]). Pages larger
-    /// than the renderer draws at once are drawn in bands, so its own limits don't apply.
+    /// as asked, unless the image would be over [`EXPORT_MAX_PIXELS`] or longer on a side than
+    /// the format allows ([`JPEG_MAX_SIDE`], [`EXPORT_MAX_SIDE`]). Pages larger than the renderer
+    /// draws at once are drawn in bands, so its own limits don't apply.
     pub fn image_dpi(&self, page: usize, dpi: f64, format: ImageFormat) -> f64 {
         let dpi = dpi.clamp(18.0, 1200.0);
         let Some(&(w, h)) = self.sizes.get(page) else { return dpi };
         let (w, h) = (f64::from(w.max(1.0)), f64::from(h.max(1.0)));
-        let pixels = if format == ImageFormat::Png { EXPORT_MAX_PIXELS } else { EXPORT_MAX_WHOLE_PIXELS };
-        let by_side = EXPORT_MAX_SIDE / w.max(h) * 72.0;
-        let by_area = (pixels / (w * h)).sqrt() * 72.0;
+        let side = if matches!(format, ImageFormat::Jpeg { .. }) { JPEG_MAX_SIDE } else { EXPORT_MAX_SIDE };
+        let by_side = side / w.max(h) * 72.0;
+        let by_area = (EXPORT_MAX_PIXELS / (w * h)).sqrt() * 72.0;
         // One pixel of slack: `device_pixels` rounds up.
         dpi.min(by_side * (1.0 - 1e-6)).min(by_area * (1.0 - 1e-6))
     }
@@ -143,33 +142,17 @@ impl Exporter {
             return encode_image(r.width, r.height, &r.rgba, format, dpi);
         }
         let (width, height) = (device_pixels(w_pt, scale), device_pixels(h_pt, scale));
-        let band_rows = ((self.band_pixels.min(BAND_PIXELS) / f64::from(width)) as u32).clamp(1, height);
+        // Whole MCU rows (8) per band, so a JPEG block never spans two bands.
+        let band_rows = (((self.band_pixels.min(BAND_PIXELS) / f64::from(width)) as u32) / 8 * 8).clamp(8, height.next_multiple_of(8));
         let renderer = &mut self.renderer;
-        let mut band = |y: u32| -> Result<Vec<u8>, String> {
-            let tile = Tile { x: 0, y, w: width, h: band_rows.min(height - y) };
-            let r = renderer.render(RenderRequest { page, scale, tile: Some(tile), ..Default::default() });
-            if let Some(e) = r.error {
-                return Err(format!("page {}: {e}", page + 1));
-            }
-            if (r.width, r.height) != (tile.w, tile.h) {
-                return Err(format!("page {}: a band came out {}×{}, not {}×{}", page + 1, r.width, r.height, tile.w, tile.h));
-            }
-            Ok(r.rgba.to_vec())
-        };
-        let ys = (0..height).step_by(band_rows as usize);
-        if format == ImageFormat::Png {
-            return encode_png_bands(width, height, dpi, self.transparent, ys.map(&mut band));
-        }
-        // JPEG and TIFF: the whole page as RGB, then encoded.
-        let len = (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(3)).ok_or("the image is too large")?;
-        let mut rgb = Vec::new();
-        rgb.try_reserve_exact(len).map_err(|_| "not enough memory for this image".to_string())?;
-        for y in ys {
-            rgb.extend_from_slice(&over_white(&band(y)?));
-        }
+        let band = |y: u32| -> Result<Vec<u8>, String> { render_band(renderer, page, scale, width, y, band_rows.min(height - y)) };
         match format {
-            ImageFormat::Jpeg { quality } => encode_jpeg_rgb(width, height, &rgb, quality, dpi),
-            _ => encode_tiff_rgb(width, height, &rgb, dpi),
+            ImageFormat::Png => encode_png_bands(width, height, dpi, self.transparent, (0..height).step_by(band_rows as usize).map(band)),
+            ImageFormat::Tiff => {
+                let rgb = (0..height).step_by(band_rows as usize).map(band).map(|b| b.map(|b| over_white(&b)));
+                encode_tiff_bands(width, height, dpi, rgb)
+            }
+            ImageFormat::Jpeg { quality } => encode_jpeg_bands(width, height, band_rows, quality, dpi, band),
         }
     }
 
@@ -318,6 +301,194 @@ fn tiff_resolution<W: std::io::Write + std::io::Seek, C: tiff::encoder::colortyp
     tags.write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch)?;
     tags.write_tag(Tag::XResolution, resolution.clone())?;
     tags.write_tag(Tag::YResolution, resolution)
+}
+
+/// Rows `y..y + rows` of page `page` at `scale`, `width` pixels wide, as premultiplied RGBA: drawn
+/// in pieces at most [`BAND_TILE`] wide and joined.
+fn render_band(renderer: &mut PageRenderer, page: usize, scale: f32, width: u32, y: u32, rows: u32) -> Result<Vec<u8>, String> {
+    let row_bytes = width as usize * 4;
+    let mut band = Vec::new();
+    band.try_reserve_exact(row_bytes * rows as usize).map_err(|_| "not enough memory for a band of the image".to_string())?;
+    band.resize(row_bytes * rows as usize, 0);
+    for x in (0..width).step_by(BAND_TILE as usize) {
+        let tile = Tile { x, y, w: BAND_TILE.min(width - x), h: rows };
+        let r = renderer.render(RenderRequest { page, scale, tile: Some(tile), ..Default::default() });
+        if let Some(e) = r.error {
+            return Err(format!("page {}: {e}", page + 1));
+        }
+        if (r.width, r.height) != (tile.w, tile.h) || r.rgba.len() != tile.w as usize * tile.h as usize * 4 {
+            return Err(format!("page {}: a piece came out {}×{}, not {}×{}", page + 1, r.width, r.height, tile.w, tile.h));
+        }
+        let piece = tile.w as usize * 4;
+        for (row, src) in r.rgba.chunks_exact(piece).enumerate() {
+            let at = row * row_bytes + x as usize * 4;
+            band[at..at + piece].copy_from_slice(src);
+        }
+    }
+    Ok(band)
+}
+
+/// Bands of RGB rows (top to bottom, `width` wide) → a baseline TIFF (RGB, LZW, strips of about
+/// 64 KB) at `dpi`, written here: the `tiff` crate compresses only an image written whole.
+fn encode_tiff_bands(width: u32, height: u32, dpi: f64, bands: impl Iterator<Item = Result<Vec<u8>, String>>) -> Result<Vec<u8>, String> {
+    let row_bytes = width as usize * 3;
+    let rows_per_strip = (65_536 / row_bytes).clamp(1, height as usize);
+    let mut out = b"II*\0\0\0\0\0".to_vec();
+    let (mut offsets, mut counts) = (Vec::new(), Vec::new());
+    let mut strip = Vec::with_capacity(rows_per_strip * row_bytes);
+    let mut rows = 0usize;
+    let mut flush = |strip: &mut Vec<u8>, out: &mut Vec<u8>| -> Result<(), String> {
+        let packed = weezl::encode::Encoder::with_tiff_size_switch(weezl::BitOrder::Msb, 8).encode(strip).map_err(|e| e.to_string())?;
+        offsets.push(out.len());
+        counts.push(packed.len());
+        out.extend_from_slice(&packed);
+        if out.len() % 2 == 1 {
+            out.push(0);
+        }
+        strip.clear();
+        Ok(())
+    };
+    for band in bands {
+        let band = band?;
+        if band.len() % row_bytes != 0 {
+            return Err(format!("a band of {} bytes is not whole rows of {row_bytes}", band.len()));
+        }
+        for row in band.chunks_exact(row_bytes) {
+            strip.extend_from_slice(row);
+            rows += 1;
+            if strip.len() == rows_per_strip * row_bytes {
+                flush(&mut strip, &mut out)?;
+            }
+        }
+    }
+    if !strip.is_empty() {
+        flush(&mut strip, &mut out)?;
+    }
+    if rows != height as usize {
+        return Err(format!("the bands came to {rows} rows, not {height}"));
+    }
+    // The directory, after the strips; its arrays and rationals after it.
+    let long = |v: usize| u32::try_from(v).map_err(|_| "the TIFF would be over 4 GB; choose PNG or a lower resolution".to_string());
+    let resolution = [(dpi * 100.0).round() as u32, 100];
+    let n_strips = offsets.len();
+    let ifd = out.len();
+    let entries = 13usize;
+    let extra = ifd + 2 + entries * 12 + 4;
+    let bits_at = extra;
+    let xres_at = bits_at + 6 + 2;
+    let yres_at = xres_at + 8;
+    let offsets_at = yres_at + 8;
+    let counts_at = offsets_at + 4 * n_strips;
+    let array = |at: usize, n: usize, inline: u32| -> Result<u32, String> { if n == 1 { Ok(inline) } else { long(at) } };
+    let mut dir: Vec<(u16, u16, u32, u32)> = vec![
+        (256, 4, 1, width),
+        (257, 4, 1, height),
+        (258, 3, 3, long(bits_at)?),
+        (259, 3, 1, 5),
+        (262, 3, 1, 2),
+        (273, 4, n_strips as u32, array(offsets_at, n_strips, long(offsets.first().copied().unwrap_or(0))?)?),
+        (277, 3, 1, 3),
+        (278, 4, 1, rows_per_strip as u32),
+        (279, 4, n_strips as u32, array(counts_at, n_strips, long(counts.first().copied().unwrap_or(0))?)?),
+        (282, 5, 1, long(xres_at)?),
+        (283, 5, 1, long(yres_at)?),
+        (284, 3, 1, 1),
+        (296, 3, 1, 2),
+    ];
+    dir.sort_by_key(|e| e.0);
+    out.extend_from_slice(&(entries as u16).to_le_bytes());
+    for (tag, kind, count, value) in dir {
+        out.extend_from_slice(&tag.to_le_bytes());
+        out.extend_from_slice(&kind.to_le_bytes());
+        out.extend_from_slice(&count.to_le_bytes());
+        // A single SHORT sits in the low half of the value field.
+        if kind == 3 && count == 1 {
+            out.extend_from_slice(&(value as u16).to_le_bytes());
+            out.extend_from_slice(&[0, 0]);
+        } else {
+            out.extend_from_slice(&value.to_le_bytes());
+        }
+    }
+    out.extend_from_slice(&0u32.to_le_bytes());
+    out.extend_from_slice(&[8, 0, 8, 0, 8, 0, 0, 0]);
+    for r in [resolution, resolution] {
+        out.extend_from_slice(&r[0].to_le_bytes());
+        out.extend_from_slice(&r[1].to_le_bytes());
+    }
+    if n_strips > 1 {
+        for o in &offsets {
+            out.extend_from_slice(&long(*o)?.to_le_bytes());
+        }
+        for c in &counts {
+            out.extend_from_slice(&long(*c)?.to_le_bytes());
+        }
+    }
+    long(out.len())?;
+    out[4..8].copy_from_slice(&long(ifd)?.to_le_bytes());
+    Ok(out)
+}
+
+/// A page drawn in bands of `band_rows` rows (a multiple of 8), read by the JPEG encoder as it
+/// goes: it takes the image a row of 8 × 8 blocks at a time, top to bottom.
+struct Banded<F> {
+    width: u32,
+    height: u32,
+    band_rows: u32,
+    state: std::cell::RefCell<BandState<F>>,
+}
+
+struct BandState<F> {
+    draw: F,
+    top: Option<u32>,
+    rgb: Vec<u8>,
+    error: Option<String>,
+}
+
+impl<F: FnMut(u32) -> Result<Vec<u8>, String>> image::GenericImageView for Banded<F> {
+    type Pixel = image::Rgb<u8>;
+
+    fn dimensions(&self) -> (u32, u32) {
+        (self.width, self.height)
+    }
+
+    fn get_pixel(&self, x: u32, y: u32) -> image::Rgb<u8> {
+        const PAPER: image::Rgb<u8> = image::Rgb([255, 255, 255]);
+        let Ok(mut s) = self.state.try_borrow_mut() else { return PAPER };
+        let top = y / self.band_rows * self.band_rows;
+        if s.top != Some(top) && s.error.is_none() {
+            s.top = Some(top);
+            match (s.draw)(top) {
+                Ok(band) => s.rgb = over_white(&band),
+                Err(e) => s.error = Some(e),
+            }
+        }
+        let at = ((y - top) as usize * self.width as usize + x as usize) * 3;
+        match s.rgb.get(at..at + 3) {
+            Some(px) => image::Rgb([px[0], px[1], px[2]]),
+            None => PAPER,
+        }
+    }
+}
+
+/// A page drawn in bands → baseline JPEG at `dpi`, encoded as the bands are drawn.
+fn encode_jpeg_bands(
+    width: u32,
+    height: u32,
+    band_rows: u32,
+    quality: u8,
+    dpi: f64,
+    draw: impl FnMut(u32) -> Result<Vec<u8>, String>,
+) -> Result<Vec<u8>, String> {
+    use image::codecs::jpeg::{JpegEncoder, PixelDensity};
+    let source = Banded { width, height, band_rows, state: std::cell::RefCell::new(BandState { draw, top: None, rgb: Vec::new(), error: None }) };
+    let mut out = Vec::new();
+    let mut enc = JpegEncoder::new_with_quality(&mut out, quality.clamp(1, 100));
+    enc.set_pixel_density(PixelDensity::dpi(dpi.round() as u16));
+    enc.encode_image(&source).map_err(|e| e.to_string())?;
+    if let Some(e) = source.state.into_inner().error {
+        return Err(e);
+    }
+    Ok(out)
 }
 
 /// Image file formats for Export ▸ Image.

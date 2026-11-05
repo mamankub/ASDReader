@@ -504,6 +504,7 @@ dependencies = [
  "tiff",
  "unicode-segmentation",
  "url",
+ "weezl 0.1.12",
 ]
 
 [[package]]

@@ -980,7 +980,7 @@ pub fn tools() -> Vec<ToolDef> {
         t("doc_remove_marks", "Remove header & footer, watermark or background", "Remove every header and footer, watermark or background ASDReader (or a compatible tool) added. Undoable.")
             .destructive()
             .with(schema(json!({ "doc": doc(), "kind": { "type": "string", "enum": ["header_footer", "watermark", "background"] } }), &["doc", "kind"])),
-        t("doc_export_images", "Export pages as images", "Write pages as PNG, JPEG or TIFF files (`<name>_page_<n>.png|jpg|tif`) into a folder, at a resolution (default 150 dpi). JPEG and TIFF are flattened onto white paper. Large pages are drawn in bands at the full resolution; a page that would be over 65,500 pixels on a side, or over 2,000 megapixels for PNG (600 for JPEG and TIFF), is drawn at the most that allows, listed in `lower_dpi` ({page, dpi}). Includes unsaved edits.")
+        t("doc_export_images", "Export pages as images", "Write pages as PNG, JPEG or TIFF files (`<name>_page_<n>.png|jpg|tif`) into a folder, at a resolution (default 150 dpi). JPEG and TIFF are flattened onto white paper. Large pages are drawn and written in bands at the full resolution (an A0L2 sheet at 600 dpi in every format). An image that would be over 4,000 megapixels, or longer than 65,500 px (JPEG) or 200,000 px (PNG, TIFF) on a side, is drawn at the most that allows, listed in `lower_dpi` ({page, dpi}). Includes unsaved edits.")
             .cmd("export.image")
             .with(schema(
                 json!({

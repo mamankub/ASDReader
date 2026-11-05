@@ -3119,18 +3119,20 @@ fn exported_pages_record_the_resolution_they_were_drawn_at() {
     let dims = png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap().info().pixel_dims;
     assert!(matches!(dims, Some(png::PixelDimensions { xppu: 11_811, yppu: 11_811, unit: png::Unit::Meter })), "{dims:?}");
 
-    // A page that would be over 65,500 pixels wide at the asked resolution says the one it was
-    // drawn at (14,400 pt at 600 dpi is 120,000 px).
+    // A JPEG that would be over 65,500 pixels wide at the asked resolution says the one it was
+    // drawn at (14,400 pt at 600 dpi is 120,000 px; JPEG allows 65,535). A TIFF is drawn as asked.
     let mut s = Session::new().with_clock(|| 1_700_000_000);
-    let bytes = s.create_blank(14_400.0, 72.0, 1).unwrap();
+    let bytes = s.create_blank(14_400.0, 36.0, 1).unwrap();
     let id = s.open("wide.pdf", None, bytes, None).unwrap();
     let mut ex = Exporter::new(s.get(id).unwrap());
-    let used = ex.image_dpi(0, 600.0, ImageFormat::Tiff);
+    let used = ex.image_dpi(0, 600.0, ImageFormat::Jpeg { quality: 85 });
     assert!((used - 327.5).abs() < 0.01, "{used}");
+    let jpg = ex.image(0, 600.0, ImageFormat::Jpeg { quality: 85 }).unwrap();
+    assert_eq!(image::load_from_memory(&jpg).unwrap().width(), 65_500);
+    assert_eq!(ex.image_dpi(0, 600.0, ImageFormat::Tiff), 600.0);
     let tiff = ex.image(0, 600.0, ImageFormat::Tiff).unwrap();
-    let (unit, x, y) = tiff_resolution(&tiff);
-    assert!(unit == 2 && (x - used).abs() < 0.01 && (y - used).abs() < 0.01, "{x} × {y}, drawn at {used}");
-    assert_eq!(image::load_from_memory(&tiff).unwrap().width(), 65_500);
+    assert_eq!(tiff_resolution(&tiff), (2, 600.0, 600.0));
+    assert_eq!(image::load_from_memory(&tiff).unwrap().width(), 120_000);
 }
 
 /// A page larger than the renderer draws at once came out at the most it allowed, whatever was
@@ -3166,7 +3168,7 @@ fn large_pages_export_at_the_resolution_asked_in_bands() {
     assert!(asdreader_render::effective_scale(9000.0, 120.0, 1.0) < 1.0, "too wide for one picture");
 
     let mut whole = Exporter::new(doc);
-    // Bands of 9,000 × 13 px: 10 of them, the last 3 rows.
+    // Bands of 9,000 × 8 px (whole JPEG block rows): 15 of them.
     let mut banded = Exporter::new(doc);
     banded.band_pixels = 9000.0 * 13.0;
     for format in [ImageFormat::Png, ImageFormat::Tiff, ImageFormat::Jpeg { quality: 95 }] {
@@ -3178,11 +3180,8 @@ fn large_pages_export_at_the_resolution_asked_in_bands() {
         assert!(img.get_pixel(8940, 60).0.iter().all(|&c| c < 40), "{format:?}: the far end is drawn");
         assert!(img.get_pixel(8995, 60).0.iter().all(|&c| c > 215), "{format:?}: paper beside it");
         let bands = image::load_from_memory(&banded.image(0, 72.0, format).unwrap()).unwrap().to_rgb8();
-        if format == (ImageFormat::Jpeg { quality: 95 }) {
-            assert_eq!(bands.dimensions(), img.dimensions());
-        } else {
-            assert_eq!(bands, img, "{format:?}: bands join without a seam");
-        }
+        // JPEG too: bands are whole rows of 8 × 8 blocks, so it encodes the same blocks.
+        assert_eq!(bands, img, "{format:?}: bands join without a seam");
     }
     let png = whole.image(0, 72.0, ImageFormat::Png).unwrap();
     let dims = png::Decoder::new(std::io::Cursor::new(png)).read_info().unwrap().info().pixel_dims;
@@ -3191,20 +3190,25 @@ fn large_pages_export_at_the_resolution_asked_in_bands() {
     let jpg = whole.image(0, 72.0, ImageFormat::Jpeg { quality: 85 }).unwrap();
     assert_eq!(jpg[13..18], [1, 0, 72, 0, 72], "JFIF density in dots per inch");
 
-    // The limits are the formats', not the renderer's: an A0L2 sheet (841 × 2378 mm) at 600 dpi
-    // (1,116 Mpx) is drawn as asked in PNG; JPEG and TIFF, held whole in memory, stop at 600 Mpx
-    // (about 440 dpi), and at 300 or 400 dpi all three are as asked.
+    // The limits are the formats', not the renderer's: every format is written a band at a time,
+    // so an A0L2 sheet (841 × 2378 mm, 1,116 Mpx at 600 dpi) is drawn at 600 dpi in all three.
+    // JPEG can't be over 65,535 px on a side: an A0L3 sheet (841 × 3567 mm) at 600 dpi would be
+    // 84,268 px long, so its JPEG is drawn at about 466 dpi, its PNG and TIFF at 600.
     let mut s = Session::new().with_clock(|| 1_700_000_000);
     let bytes = s.create_blank(2384.0, 6741.0, 1).unwrap();
     let id = s.open("a0l2.pdf", None, bytes, None).unwrap();
     let ex = Exporter::new(s.get(id).unwrap());
-    assert_eq!(ex.image_dpi(0, 600.0, ImageFormat::Png), 600.0);
-    for format in [ImageFormat::Tiff, ImageFormat::Jpeg { quality: 85 }] {
-        let dpi = ex.image_dpi(0, 600.0, format);
-        assert!((439.0..441.0).contains(&dpi), "{format:?}: {dpi}");
-        assert_eq!(ex.image_dpi(0, 300.0, format), 300.0);
-        assert_eq!(ex.image_dpi(0, 400.0, format), 400.0);
+    for format in [ImageFormat::Png, ImageFormat::Tiff, ImageFormat::Jpeg { quality: 85 }] {
+        assert_eq!(ex.image_dpi(0, 600.0, format), 600.0, "{format:?}");
     }
+    let mut s = Session::new().with_clock(|| 1_700_000_000);
+    let bytes = s.create_blank(2384.0, 10_112.0, 1).unwrap();
+    let id = s.open("a0l3.pdf", None, bytes, None).unwrap();
+    let ex = Exporter::new(s.get(id).unwrap());
+    assert_eq!(ex.image_dpi(0, 600.0, ImageFormat::Png), 600.0);
+    assert_eq!(ex.image_dpi(0, 600.0, ImageFormat::Tiff), 600.0);
+    let jpeg = ex.image_dpi(0, 600.0, ImageFormat::Jpeg { quality: 85 });
+    assert!((466.0..467.0).contains(&jpeg), "{jpeg}");
 }
 
 #[test]
