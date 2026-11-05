@@ -280,6 +280,8 @@ pub struct LineEditor {
     size: f32,
     /// Take the keyboard focus on the next frame.
     pub(crate) focus: bool,
+    /// Where the caret was last frame (characters), to tell which way it moved.
+    caret: Option<usize>,
     /// The Format text panel's values, and what the paragraph had (to send only changes).
     pub look: asdreader_engine::AddedText,
     look0: asdreader_engine::AddedText,
@@ -1236,6 +1238,7 @@ fn open_editor(
         max_width,
         size: (l.size as f32 * scale).clamp(8.0, 72.0),
         focus: true,
+        caret: None,
         look: look_of(l),
         look0: look_of(l),
         family_chosen: false,
@@ -1525,6 +1528,31 @@ fn unseen(mut galley: Arc<egui::Galley>) -> Arc<egui::Galley> {
     galley
 }
 
+/// A Thai mark drawn on the letter before it: an above or below vowel, a tone mark, or another
+/// sign that takes no room of its own.
+fn is_thai_mark(c: char) -> bool {
+    matches!(c, '\u{0E31}' | '\u{0E34}'..='\u{0E3A}' | '\u{0E47}'..='\u{0E4E}')
+}
+
+/// Whether a caret before character `index` would be inside a Thai character: between a letter
+/// and the marks on it, or between NIKHAHIT and SARA AA (a SARA AM written in two, as Microsoft
+/// Print to PDF leaves it). A mark sits at its letter's edge, so a click there can put the caret
+/// on either side of it; typed text then went between the letter and its mark, and the mark
+/// moved onto the last letter typed (ก่อ became กทดสอบ่อ).
+fn inside_thai_character(chars: &[char], index: usize) -> bool {
+    let (Some(&c), Some(&before)) = (chars.get(index), index.checked_sub(1).and_then(|i| chars.get(i))) else { return false };
+    is_thai_mark(c) || (c == '\u{0E32}' && before == '\u{0E4D}')
+}
+
+/// The caret position `index` (characters) moved out of a Thai character: past its marks, or,
+/// when the caret is moving back, to before its letter.
+fn outside_thai_character(chars: &[char], mut index: usize, back: bool) -> usize {
+    while inside_thai_character(chars, index) {
+        index = if back { index - 1 } else { index + 1 };
+    }
+    index
+}
+
 /// Align the editable galley's baselines to the source rows instead of egui's interface
 /// leading. Glyphs, meshes, caret and selection receive the same transform.
 fn editor_galley(ui: &egui::Ui, ed: &LineEditor, text: &str, scale: f32, width: f32) -> Arc<egui::Galley> {
@@ -1735,7 +1763,26 @@ pub(crate) fn overlay(ctx: &egui::Context, view: &mut DocView, info: &DocInfo) -
                     }
                 }
                 look = Some((Arc::clone(&output.galley), output.galley_pos));
-                if let Some(cursor) = output.cursor_range {
+                // Keep the caret and the selection's ends out of the middle of a Thai character.
+                let mut cursor_range = output.cursor_range;
+                if let Some(range) = cursor_range {
+                    let chars: Vec<char> = ed.text.chars().collect();
+                    let back = ed.caret.is_some_and(|before| range.primary.index.0 < before);
+                    let snap = |c: egui::text::CCursor| egui::text::CCursor {
+                        index: egui::text::CharIndex(outside_thai_character(&chars, c.index.0, back)),
+                        ..c
+                    };
+                    let kept = egui::text::CCursorRange { primary: snap(range.primary), secondary: snap(range.secondary), ..range };
+                    if kept != range {
+                        let mut state = output.state.clone();
+                        state.cursor.set_char_range(Some(kept));
+                        state.store(ui.ctx(), egui::Id::new("edit-text-line-input"));
+                        ui.ctx().request_repaint();
+                        cursor_range = Some(kept);
+                    }
+                    ed.caret = Some(kept.primary.index.0);
+                }
+                if let Some(cursor) = cursor_range {
                     let selected = cursor.as_sorted_char_range();
                     let byte = |index| ed.text.char_indices().nth(index).map_or(ed.text.len(), |(at, _)| at);
                     ed.selection = (!selected.is_empty()).then(|| byte(selected.start.into())..byte(selected.end.into()));
@@ -1846,6 +1893,7 @@ mod tests {
             max_width: 400.0,
             size: block.size as f32,
             focus: true,
+            caret: None,
             look: look_of(&block),
             look0: look_of(&block),
             family_chosen: false,
@@ -1870,6 +1918,25 @@ mod tests {
         }
         out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objects.len() + 1).as_bytes());
         out
+    }
+
+    #[test]
+    fn the_caret_stays_out_of_the_middle_of_a_thai_character() {
+        let chars: Vec<char> = "ก่อสร้าง ทํา".chars().collect();
+        // ก ่ อ ส ร ้ า ง ␠ ท ํ า
+        let inside: Vec<usize> = (0..=chars.len()).filter(|&i| inside_thai_character(&chars, i)).collect();
+        assert_eq!(inside, vec![1, 5, 10, 11], "before a tone mark, and inside a SARA AM written in two");
+        assert_eq!(outside_thai_character(&chars, 1, false), 2, "past the mark");
+        assert_eq!(outside_thai_character(&chars, 1, true), 0, "moving back: before the letter");
+        assert_eq!(outside_thai_character(&chars, 10, false), 12);
+        assert_eq!(outside_thai_character(&chars, 11, true), 9);
+        for free in [0, 2, 3, 4, 6, 7, 8, 9, 12] {
+            assert_eq!(outside_thai_character(&chars, free, false), free);
+            assert_eq!(outside_thai_character(&chars, free, true), free);
+        }
+        // Leading vowels and SARA AM written as one character take a caret before them.
+        let chars: Vec<char> = "เก็บน้ำ".chars().collect();
+        assert_eq!((0..=chars.len()).filter(|&i| inside_thai_character(&chars, i)).collect::<Vec<_>>(), vec![2, 5]);
     }
 
     #[test]
@@ -1933,6 +2000,7 @@ mod tests {
             max_width: 400.0,
             size: block.size as f32,
             focus: true,
+            caret: None,
             look: look_of(&block),
             look0: look_of(&block),
             family_chosen: false,

@@ -521,6 +521,10 @@ pub struct DocView {
     /// line being edited.
     pub(crate) edit_lines: HashMap<usize, (u64, Vec<asdreader_engine::TextBlock>)>,
     pub line_editor: Option<crate::edit_text_ui::LineEditor>,
+    /// The pointer went down while a paragraph was open for editing. That click finishes the
+    /// paragraph (it takes the editor's focus away); with Add text on, it must not also start a
+    /// new text box where it lands. Cleared once the pointer is up again.
+    pub(crate) finishing_click: bool,
     /// The paragraph editor whose edit was just queued. It opens again with its typing if the
     /// edit fails, as a refused form field does.
     pub(crate) applied_editor: Option<crate::edit_text_ui::LineEditor>,
@@ -807,6 +811,7 @@ impl DocView {
             pending_edit: None,
             edit_lines: HashMap::new(),
             line_editor: None,
+            finishing_click: false,
             applied_editor: None,
             pending_text_open: None,
             text_background: Default::default(),
@@ -3203,6 +3208,9 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
             view.links.context = None;
         }
         let mut calc_hover = None;
+        if view.line_editor.is_some() && ui.input(|i| i.pointer.any_pressed()) {
+            view.finishing_click = true;
+        }
         for &i in &visible_pages {
             badge_hover = None;
             let r = snap_to_pixels(rects[i].translate(origin.to_vec2()), ppp);
@@ -3526,7 +3534,7 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
                         i,
                         info,
                         &added,
-                        tool == QuickTool::AddText && !over_source,
+                        tool == QuickTool::AddText && !over_source && !view.finishing_click,
                         matches!(tool, QuickTool::AddText | QuickTool::EditText),
                         &text_style,
                         view,
@@ -3917,6 +3925,9 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
             if hover_text.is_none() {
                 hover_text = badge_hover.take();
             }
+        }
+        if !ui.input(|i| i.pointer.any_down()) {
+            view.finishing_click = false;
         }
         if calc_order {
             view.calc_order.set_hover_page(calc_hover);
