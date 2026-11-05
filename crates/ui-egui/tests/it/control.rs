@@ -1679,15 +1679,18 @@ fn control_open_replies_pending_while_the_worker_opens_and_focuses_once_it_has()
     assert_eq!(first["pending"], true, "{first}");
 
     // The worker completes the open on later frames; the tab shows, and only then does a
-    // repeated open focus it instead of reporting another pending open.
+    // repeated open focus it instead of reporting another pending open. The worker is a thread:
+    // on a slow machine it takes more than a few frames, so this waits on the clock.
     let mut documents = 0;
-    for _ in 0..30 {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         h.run_steps(1);
         let state = ok(&mut h, &c, "ui.state", json!({}));
         documents = state["documents"].as_array().map(|d| d.len()).unwrap_or_default();
         if documents == 1 {
             break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert_eq!(documents, 1, "the pending open completed into a tab");
 
