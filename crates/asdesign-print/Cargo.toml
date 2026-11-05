@@ -17,7 +17,7 @@ workspace = true
 # feature downloads PDFium at build time and is off. The maintained BSD-3-Clause fork
 # preserves terminal failures/cancellation and bounds the completion notification wait.
 # Pinned to an immutable revision; review before bumping.
-winprint = { path = "../../vendor/winprint", default-features = false }
+winprint = { path = "../../vendor/winprint", version = "0.2.1", default-features = false }
 # GetDefaultPrinter (MIT).
 winsafe = { version = "0.0.29", default-features = false, features = ["winspool"] }
 # The job file's private folder.

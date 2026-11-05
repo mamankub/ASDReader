@@ -79,9 +79,26 @@ const INSTALLED_ROWS: f32 = 12.0;
 /// to the paragraph, as Load font… does.
 #[cfg(not(target_arch = "wasm32"))]
 fn installed_fonts_menu(ui: &mut egui::Ui, out: &mut Outcome) {
-    ui.menu_button(tl!("Installed fonts…"), |ui| {
+    installed_fonts_submenu(ui, out, crate::files::installed_font_files);
+}
+
+/// The submenu of [`installed_fonts_menu`], with the fonts from `list` (`None` while they are
+/// still being found).
+///
+/// The font list is a menu, which closes on any click, and a submenu takes its parent's way of
+/// closing: a click into the search box closed the list before anything could be typed. This one
+/// closes on a click outside it, or when a font is picked.
+#[cfg(not(target_arch = "wasm32"))]
+fn installed_fonts_submenu(
+    ui: &mut egui::Ui,
+    out: &mut Outcome,
+    list: impl FnOnce(&egui::Context) -> Option<Vec<asdreader_engine::text_fonts::FontFile>>,
+) {
+    use egui::containers::menu::{MenuButton, MenuConfig, SubMenuButton};
+    let config = MenuConfig::new().close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+    let contents = |ui: &mut egui::Ui| {
         ui.set_min_width(280.0);
-        let Some(list) = crate::files::installed_font_files(ui.ctx()) else {
+        let Some(list) = list(ui.ctx()) else {
             ui.label(tl!("Finding document fonts…"));
             return;
         };
@@ -94,11 +111,14 @@ fn installed_fonts_menu(ui: &mut egui::Ui, out: &mut Outcome) {
         ui.add(egui::TextEdit::singleline(&mut query).hint_text(tl!("Search fonts")).desired_width(f32::INFINITY));
         ui.data_mut(|d| d.insert_temp(id, query.clone()));
         let query = query.trim().to_lowercase();
-        let shown: Vec<(String, &asdreader_engine::text_fonts::FontFile)> = list
+        let mut shown: Vec<(String, &asdreader_engine::text_fonts::FontFile)> = list
             .iter()
             .map(|font| (font.label(), font))
             .filter(|(label, font)| query.is_empty() || label.to_lowercase().contains(&query) || font.face.to_lowercase().contains(&query))
             .collect();
+        // A face installed both for everyone and for the user is listed once (the list comes
+        // sorted by family and face, so the copies are side by side).
+        shown.dedup_by(|a, b| a.1.family.eq_ignore_ascii_case(&b.1.family) && a.1.face.eq_ignore_ascii_case(&b.1.face));
         if shown.is_empty() {
             ui.label(tl!("No fonts match."));
             return;
@@ -112,7 +132,12 @@ fn installed_fonts_menu(ui: &mut egui::Ui, out: &mut Outcome) {
                 }
             }
         });
-    });
+    };
+    if egui::containers::menu::is_in_menu(ui) {
+        SubMenuButton::new(tl!("Installed fonts…")).config(config).ui(ui, contents);
+    } else {
+        MenuButton::new(tl!("Installed fonts…")).config(config).ui(ui, contents);
+    }
 }
 
 pub(crate) fn panel(ui: &mut egui::Ui, t: &Tokens, look: &mut AddedText, extras: Option<&mut Extras>, fonts: Fonts) -> Outcome {
@@ -359,5 +384,55 @@ mod tests {
         assert_eq!(super::number(-0.5), "-0.5");
         assert_eq!(super::number(0.0), "0");
         assert_eq!(super::number(1.15), "1.15");
+    }
+
+    /// A click into the search box of Installed fonts… keeps the list open, so a name can be typed
+    /// and the font picked.
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_installed_font_search_box_takes_a_click_and_typing() {
+        use super::{FontChoice, Outcome, installed_fonts_submenu};
+        use asdreader_engine::text_fonts::FontFile;
+        use egui_kittest::{Harness, kittest::Queryable};
+
+        let font =
+            |family: &str, face: &str| FontFile { path: format!("/fonts/{face}.ttf").into(), index: 0, family: family.into(), face: face.into() };
+        let mut user_copy = font("Tahoma", "Tahoma-Bold");
+        user_copy.path = "/user/fonts/tahomabd.ttf".into();
+        let fonts = vec![font("Arial", "Arial"), font("Consolas", "Consolas"), font("Tahoma", "Tahoma"), font("Tahoma", "Tahoma-Bold"), user_copy];
+        let mut h = Harness::builder().with_size(egui::vec2(800.0, 600.0)).build_ui_state(
+            move |ui, picked: &mut Option<FontChoice>| {
+                egui::ComboBox::from_id_salt("format-font").selected_text("AngsanaNew").width(240.0).show_ui(ui, |ui| {
+                    let _ = ui.selectable_label(false, "Helvetica");
+                    let mut out = Outcome::default();
+                    installed_fonts_submenu(ui, &mut out, |_| Some(fonts.clone()));
+                    if out.font.is_some() {
+                        *picked = out.font;
+                    }
+                });
+            },
+            None,
+        );
+        h.run();
+        h.get_by_role(egui::accesskit::Role::ComboBox).click();
+        h.run();
+        h.get_by_label_contains("Installed fonts").hover();
+        h.run();
+        h.get_by_label_contains("Installed fonts").click();
+        h.run();
+        assert!(h.query_by_label("Arial").is_some(), "the installed fonts are listed");
+
+        h.get_by_role(egui::accesskit::Role::TextInput).click();
+        h.run();
+        assert!(h.query_by_label("Helvetica").is_some(), "a click into the search box keeps the font list open");
+        h.get_by_role(egui::accesskit::Role::TextInput).type_text("taho");
+        h.run();
+        assert!(h.query_by_label("Arial").is_none(), "the search leaves out what does not match");
+        assert_eq!(h.query_all_by_label("Tahoma Bold").count(), 1, "the search keeps what matches, a face installed twice once");
+
+        h.get_by_label("Tahoma Bold").click();
+        h.run();
+        assert!(matches!(h.state(), Some(FontChoice::Installed(f)) if f.face == "Tahoma-Bold"));
+        assert!(h.query_by_label("Helvetica").is_none(), "picking a font closes the list");
     }
 }

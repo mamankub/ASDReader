@@ -5973,13 +5973,17 @@ fn mode_tabs_keep_the_hand_over_page_text_scrolled_under_them() {
     h.run_steps(4);
     let top = h.state().views[0].page_screen_rect(0).expect("on screen").top();
     let mut cursor = egui::CursorIcon::Default;
-    for _ in 0..50 {
+    // The text comes from a worker thread, so this waits on the clock (a slow machine needs
+    // more than a few frames).
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    while std::time::Instant::now() < deadline {
         h.hover_at(text.center() + egui::vec2(0.0, top));
         h.run_steps(2);
         cursor = h.output().platform_output.cursor_icon;
         if cursor == egui::CursorIcon::Text {
             break;
         }
+        std::thread::sleep(std::time::Duration::from_millis(5));
     }
     assert_eq!(cursor, egui::CursorIcon::Text);
     assert_eq!(mode_tab_cursors(&mut h, text), HAND_ON_EVERY_TAB);
@@ -6020,4 +6024,137 @@ fn mode_tabs_keep_the_hand_over_a_paragraph_scrolled_under_them() {
     h.run_steps(4);
     click_at(&mut h, convert);
     assert_eq!(h.state().mode, asdreader_ui_egui::Mode::Convert, "the tab takes the click, not the paragraph's editor");
+}
+
+/// A page with one line, "ก่อ x", in a font whose encoding names the Thai letters.
+fn thai_line_fixture() -> Vec<u8> {
+    let content = "BT /F1 24 Tf 20 150 Td (\\200\\201\\202 x) Tj ET";
+    let cmap = "/CIDInit /ProcSet findresource begin 12 dict begin begincmap /CMapName /Thai def \
+                1 begincodespacerange <00> <FF> endcodespacerange \
+                4 beginbfchar <80> <0E01> <81> <0E48> <82> <0E2D> <20> <0020> endbfchar \
+                1 beginbfrange <78> <78> <0078> endbfrange \
+                endcmap CMapName currentdict /CMap defineresource pop end end";
+    let objs = [
+        "<< /Type /Catalog /Pages 2 0 R >>".to_string(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 /MediaBox [0 0 200 300] >>".into(),
+        "<< /Type /Page /Parent 2 0 R /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding << /Differences [128 /kokaithai /maiekthai /oangthai] >> /ToUnicode 6 0 R >>"
+            .into(),
+        format!("<< /Length {} >>\nstream\n{cmap}\nendstream", cmap.len()),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offsets = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offsets.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let xref = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offsets {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n", objs.len() + 1).as_bytes());
+    out
+}
+
+#[test]
+fn typing_never_goes_between_a_thai_letter_and_its_tone_mark() {
+    // The tone mark sits at its letter's edge, so the caret could stop between them: typed text
+    // went in there and the mark moved onto the last letter typed (ก่อ became กทดสอบ่อ).
+    let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
+        let mut app = ASDReaderApp::new();
+        app.set_option("language", "en").unwrap();
+        app.open_bytes("thai.pdf", None, thai_line_fixture()).expect("fixture opens");
+        app
+    });
+    h.run_steps(4);
+    assert!(h.state_mut().execute("edit.edit_text"));
+    h.run_steps(2);
+    let r = h.state().views[0].page_screen_rect(0).unwrap();
+    let at = egui::pos2(r.left() + 30.0 / 200.0 * r.width(), r.top() + (300.0 - 158.0) / 300.0 * r.height());
+    h.hover_at(at);
+    h.run_steps(1);
+    h.drag_at(at);
+    h.run_steps(1);
+    h.drop_at(at);
+    h.run_steps(3);
+    assert_eq!(h.state().views[0].line_editor.as_ref().map(|e| e.text.as_str()), Some("ก่อ x"), "the paragraph opens");
+    h.key_press(Key::End);
+    h.run_steps(2);
+    // ก ่ อ ␠ x: four steps back from the end pass x, the space and อ, and the fourth would stop
+    // between ก and its mark; it goes on to before ก.
+    for _ in 0..4 {
+        h.key_press(Key::ArrowLeft);
+        h.run_steps(2);
+    }
+    h.event(egui::Event::Text("ท".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].line_editor.as_ref().map(|e| e.text.as_str()), Some("ทก่อ x"));
+    // Forward from after ท: one step passes ก with its mark, never stopping between them.
+    h.key_press(Key::ArrowRight);
+    h.run_steps(2);
+    h.event(egui::Event::Text("น".into()));
+    h.run_steps(2);
+    assert_eq!(h.state().views[0].line_editor.as_ref().map(|e| e.text.as_str()), Some("ทก่นอ x"));
+}
+
+#[test]
+fn the_click_that_finishes_a_paragraph_does_not_start_a_text_box() {
+    // With the Text tool, a click on a paragraph opens it for editing and a click on empty page
+    // starts a new box. The click away that finishes the paragraph used to do both: it applied
+    // the edit and left an empty box where it landed.
+    for quick in [false, true] {
+        let mut h = harness(1, |_| {});
+        assert!(h.state_mut().execute("edit.text"));
+        let settle = |h: &mut Harness<'static, ASDReaderApp>| {
+            for _ in 0..200 {
+                h.run_steps(2);
+                if !h.state().render_pending() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        };
+        settle(&mut h);
+        let r = h.state().views[0].page_screen_rect(0).unwrap();
+        let at = |x: f32, y: f32| egui::pos2(r.left() + x / 200.0 * r.width(), r.top() + (300.0 - y) / 300.0 * r.height());
+        let text = at(40.0, 158.0);
+        h.hover_at(text);
+        h.run_steps(1);
+        h.drag_at(text);
+        h.run_steps(1);
+        h.drop_at(text);
+        h.run_steps(3);
+        assert!(h.state().views[0].line_editor.is_some(), "the paragraph opens");
+        h.key_press(Key::End);
+        h.event(egui::Event::Text("!".into()));
+        h.run_steps(2);
+        settle(&mut h);
+        let away = at(150.0, 230.0);
+        h.hover_at(away);
+        h.run_steps(1);
+        if quick {
+            for pressed in [true, false] {
+                h.event(egui::Event::PointerButton { pos: away, button: egui::PointerButton::Primary, pressed, modifiers: Modifiers::NONE });
+            }
+        } else {
+            h.drag_at(away);
+            h.run_steps(1);
+            h.drop_at(away);
+        }
+        h.run_steps(4);
+        assert!(h.state().views[0].line_editor.is_none(), "the paragraph is finished");
+        assert_eq!(page_texts(h.state())[0].trim(), "Page 1!", "and its edit applied");
+        assert!(h.state().views[0].content.draft.is_none(), "no new box (quick click: {quick})");
+        // The next click on empty page starts one.
+        settle(&mut h);
+        h.hover_at(away);
+        h.run_steps(1);
+        h.drag_at(away);
+        h.run_steps(1);
+        h.drop_at(away);
+        h.run_steps(3);
+        assert!(h.state().views[0].content.draft.is_some(), "a click on empty page starts a box");
+    }
 }

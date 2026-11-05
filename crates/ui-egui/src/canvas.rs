@@ -521,6 +521,10 @@ pub struct DocView {
     /// line being edited.
     pub(crate) edit_lines: HashMap<usize, (u64, Vec<asdreader_engine::TextBlock>)>,
     pub line_editor: Option<crate::edit_text_ui::LineEditor>,
+    /// The pointer went down while a paragraph was open for editing. That click finishes the
+    /// paragraph (it takes the editor's focus away); with Add text on, it must not also start a
+    /// new text box where it lands. Cleared once the pointer is up again.
+    pub(crate) finishing_click: bool,
     /// The paragraph editor whose edit was just queued. It opens again with its typing if the
     /// edit fails, as a refused form field does.
     pub(crate) applied_editor: Option<crate::edit_text_ui::LineEditor>,
@@ -807,6 +811,7 @@ impl DocView {
             pending_edit: None,
             edit_lines: HashMap::new(),
             line_editor: None,
+            finishing_click: false,
             applied_editor: None,
             pending_text_open: None,
             text_background: Default::default(),
@@ -1917,13 +1922,12 @@ impl DocView {
                 && self.frame_visible.contains(&r.page)
                 && !self.errors.contains_key(&r.page)
         });
-        if visible_mains_pending {
-            // Caches are kept; demand is re-evaluated next frame once pixels arrive.
-            return queue;
-        }
+        // Thumbnails nothing shows any more are let go even while a visible page is still being
+        // drawn: on a slow machine that wait can outlast the panel or dialog that wanted them.
         let thumbs = self.thumbnail_requests(info, ppp);
         let mut thumb_bytes = 0usize;
         let mut admitted = HashSet::new();
+        let mut thumb_queue = Vec::new();
         for req in thumbs {
             let Some(p) = info.pages.get(req.page) else { continue };
             let bytes = rgba_bytes(device_pixels(p.width, req.scale) as usize, device_pixels(p.height, req.scale) as usize);
@@ -1933,11 +1937,16 @@ impl DocView {
             thumb_bytes += bytes;
             admitted.insert(req.page);
             if self.thumbs.get(&req.page).is_none_or(|t| t.tag != req.tag) || self.stale_thumbs.contains(&req.page) {
-                queue.push(req);
+                thumb_queue.push(req);
             }
         }
         self.thumbs.retain(|p, _| admitted.contains(p));
         self.stale_thumbs.retain(|p| admitted.contains(p));
+        if visible_mains_pending {
+            // The other caches are kept; demand is re-evaluated next frame once pixels arrive.
+            return queue;
+        }
+        queue.extend(thumb_queue);
         self.retain_text_layers();
         // Visible main pages and thumbnails take precedence over background search work.
         queue.extend(requests.into_iter().filter(|r| r.kind == RequestKind::Text));
@@ -3203,6 +3212,9 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
             view.links.context = None;
         }
         let mut calc_hover = None;
+        if view.line_editor.is_some() && ui.input(|i| i.pointer.any_pressed()) {
+            view.finishing_click = true;
+        }
         for &i in &visible_pages {
             badge_hover = None;
             let r = snap_to_pixels(rects[i].translate(origin.to_vec2()), ppp);
@@ -3526,7 +3538,7 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
                         i,
                         info,
                         &added,
-                        tool == QuickTool::AddText && !over_source,
+                        tool == QuickTool::AddText && !over_source && !view.finishing_click,
                         matches!(tool, QuickTool::AddText | QuickTool::EditText),
                         &text_style,
                         view,
@@ -3917,6 +3929,9 @@ pub fn document_area(app: &mut ASDReaderApp, index: usize, ui: &mut egui::Ui) {
             if hover_text.is_none() {
                 hover_text = badge_hover.take();
             }
+        }
+        if !ui.input(|i| i.pointer.any_down()) {
+            view.finishing_click = false;
         }
         if calc_order {
             view.calc_order.set_hover_page(calc_hover);
@@ -6729,10 +6744,15 @@ trailer << /Root 1 0 R >>
         h.state_mut().print_draft.sheet = 0;
         h.run_steps(2);
         assert_eq!(h.state().views[0].thumb_demand.len(), 2, "booklet only needs its two placed pages");
+        // The dialog closes while the page on screen is still being drawn, as on a slow machine:
+        // the thumbnails it wanted are let go all the same.
+        h.state_mut().views[0].hold_rasters = true;
+        h.state_mut().views[0].pages.clear();
         h.state_mut().dialog = None;
         h.run_steps(2);
         assert!(h.state().views[0].thumb_demand.is_empty());
         assert!(h.state().views[0].thumbs.is_empty());
+        h.state_mut().views[0].hold_rasters = false;
     }
 
     /// One mouse-wheel notch (a line) at `at` seconds.

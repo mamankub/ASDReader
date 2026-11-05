@@ -308,6 +308,7 @@ dependencies = [
  "log",
  "pollster 1.0.1",
  "raw-window-handle",
+ "rfd",
  "rustls-native-certs",
  "serde_json",
  "uds_windows",

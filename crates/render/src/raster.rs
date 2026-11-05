@@ -9,9 +9,7 @@
 //! rebuild loop, and a timed-out shared initialization is never started again in that pool.
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
-#[cfg(not(target_arch = "wasm32"))]
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc::SyncSender;
 #[cfg(not(target_arch = "wasm32"))]
 use std::sync::mpsc::{Receiver, sync_channel};

@@ -70,7 +70,8 @@ Options:
   --control <file>            enable the UI control channel (asdreader-cli ui --control <file> …)
   --page N, --zoom 150, --layout continuous, --theme dark, …
                               view settings applied once the files are open
-  --printer-listener          run the receiver of the ASD PDF Printer queue (no window; the installer starts it at sign-in)
+  --printer-listener          run the receiver of the ASD PDF Printer queue (no window; the installer starts it at sign-in);
+                              it asks where to save each printed file, or saves it in --out-dir <folder> without asking
   -h, --help                  print this and exit
   --version                   print the version and exit
 
@@ -190,7 +191,8 @@ fn main() -> eframe::Result {
     let mut create_images = false;
     let mut new_window = false;
     // `--printer-listener`: the receiver of the ASD PDF Printer queue (src/printer_listener.rs); it opens
-    // no window. `--out-dir DIR`, `--port N` and `--no-open` are for tests and unusual set-ups.
+    // no window of its own, only a Save dialog for each printed file. `--out-dir DIR` (save there
+    // without asking), `--port N` and `--no-open` are for tests and unusual set-ups.
     let mut printer_listener = false;
     let mut printed_dir: Option<std::path::PathBuf> = None;
     let mut printer_port = printer_listener::PORT;
@@ -232,7 +234,8 @@ fn main() -> eframe::Result {
         }
     }
     if printer_listener {
-        let code = printer_listener::run(printer_listener::Options { port: printer_port, out_dir: printed_dir, open: open_printed });
+        let state_dir = asdreader_ui_egui::portable::data_dir().map(std::path::Path::to_path_buf).or_else(|| eframe::storage_dir("ASDReader"));
+        let code = printer_listener::run(printer_listener::Options { port: printer_port, out_dir: printed_dir, open: open_printed, state_dir });
         std::process::exit(code);
     }
     // Windows, Linux and the BSDs: a launch that only names files (an Outlook attachment, an

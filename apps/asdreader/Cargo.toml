@@ -24,6 +24,8 @@ asdreader-engine = { workspace = true }
 # driver (#461, #435, #392), and can be chosen with ASDREADER_RENDERER=gl.
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "glow", "accesskit", "wayland", "x11", "persistence", "links"] }
 egui = { workspace = true }
+# The ASD PDF Printer's Save dialog (src/printer_listener.rs); already used by the UI crate.
+rfd = { workspace = true }
 serde_json = { workspace = true }
 # Records from every crate go to standard error and the log file (src/logging.rs).
 log = { workspace = true }

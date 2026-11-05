@@ -6,7 +6,7 @@
   The queue uses Windows' own "Microsoft Print To PDF" driver (nothing is bundled or signed here) on
   a TCP port at 127.0.0.1:19100. The driver turns whatever is printed into a PDF and the spooler sends
   it to that port, where `ASDReader.exe --printer-listener` (started at sign-in) repairs the Thai text
-  layer, saves the file in Documents\ASDReader Printed and opens it.
+  layer, asks where to save the file (a Save dialog) and opens it.
 
   Run by the installer (as SYSTEM) and usable by hand as an administrator:
     powershell -NoProfile -ExecutionPolicy Bypass -File asd-pdf-printer.ps1 -Install

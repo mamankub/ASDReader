@@ -6681,3 +6681,84 @@ fn a_flatten_refused_on_a_later_page_changes_nothing() {
     assert!(matches!(flatten(&mut doc, &[0, 1], true, false), Err(EditError::Invalid(_))));
     assert_eq!((*doc.get(first)).clone(), before, "the first page keeps its comment and content");
 }
+
+/// The Thai faces these tests may write with: the files named in `ASDREADER_TEST_THAI_FONTS`
+/// (paths separated by the platform's path separator, e.g. a static Sarabun Regular and Bold),
+/// else Windows' own Tahoma, else none.
+fn test_thai_faces() -> Vec<asdreader_fonts::installed::InstalledFace> {
+    let paths: Vec<std::path::PathBuf> = match std::env::var_os("ASDREADER_TEST_THAI_FONTS") {
+        Some(list) => std::env::split_paths(&list).collect(),
+        None if cfg!(windows) => {
+            let fonts = std::path::PathBuf::from(std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into())).join("Fonts");
+            vec![fonts.join("tahoma.ttf"), fonts.join("tahomabd.ttf")]
+        }
+        None => Vec::new(),
+    };
+    paths.into_iter().filter_map(|p| std::fs::read(p).ok()).filter_map(asdreader_fonts::installed::InstalledFace::new).collect()
+}
+
+/// Thai typed into a paragraph whose font was never embedded (a manual set in a Japanese system
+/// font, drawn with a substitute) is written with an installed Thai face of the paragraph's weight,
+/// embedded and shaped. It used to be refused because the Japanese Type 3 fallback has no Thai:
+/// "the BIZ UDPGothic fallback font has no glyph for ท". With no Thai face to embed, the refusal
+/// says what to do about Thai, and the document is left as it was.
+#[test]
+fn thai_typed_into_a_paragraph_whose_font_is_not_embedded_uses_an_installed_thai_face() {
+    asdreader_fonts::installed::set_installed_thai_provider(test_thai_faces);
+    let content = "BT /F1 24 Tf 72 700 Td (ShutdownAgent 2012) Tj ET";
+    let objs: Vec<String> = vec![
+        "<< /Type /Catalog /Pages 2 0 R >>".into(),
+        "<< /Type /Pages /Kids [3 0 R] /Count 1 >>".into(),
+        "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>".into(),
+        format!("<< /Length {} >>\nstream\n{content}\nendstream", content.len()),
+        format!(
+            "<< /Type /Font /Subtype /TrueType /BaseFont /MeiryoUI-Bold /FirstChar 32 /LastChar 126 /Widths [{}] /Encoding /WinAnsiEncoding >>",
+            vec!["600"; 95].join(" ")
+        ),
+    ];
+    let mut out = b"%PDF-1.7\n".to_vec();
+    let mut offs = Vec::new();
+    for (i, o) in objs.iter().enumerate() {
+        offs.push(out.len());
+        out.extend_from_slice(format!("{} 0 obj\n{o}\nendobj\n", i + 1).as_bytes());
+    }
+    let x = out.len();
+    out.extend_from_slice(format!("xref\n0 {}\n0000000000 65535 f \n", objs.len() + 1).as_bytes());
+    for o in offs {
+        out.extend_from_slice(format!("{o:010} 00000 n \n").as_bytes());
+    }
+    out.extend_from_slice(format!("trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{x}\n%%EOF\n", objs.len() + 1).as_bytes());
+    let mut doc = Document::open(Arc::new(out)).unwrap();
+    let draft = "ShutdownAgent 2012\nทดสอบ น้ำ ผู้ใช้";
+    let before = text::text_lines(&doc, 0).unwrap();
+    let result = text::rewrite_block(&mut doc, 0, 0, Some(draft), &text::BlockStyle::default());
+    let embeddable_bundled = asdreader_fonts::document_thai_font().is_some_and(|f| asdreader_fonts::embedding::validate(f.bytes).is_ok());
+    let faces = asdreader_fonts::installed::installed_thai_faces();
+    if faces.is_empty() && !embeddable_bundled {
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("no Thai") && err.contains("Installed fonts"), "{err}");
+        assert!(!err.contains("Gothic") && !err.contains("fallback font has no glyph"), "{err}");
+        assert_eq!(text::text_lines(&doc, 0).unwrap().len(), before.len(), "the document is left as it was");
+        return;
+    }
+    result.unwrap();
+    let reopened = reopen(&doc);
+    let text: String = text::text_lines(&reopened, 0).unwrap().iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n");
+    assert!(text.contains("ShutdownAgent 2012"), "{text}");
+    assert!(text.contains("ทดสอบ") && text.contains("น้ำ") && text.contains("ผู้ใช้"), "{text}");
+    let page = asdreader_model::pages(&reopened).remove(0);
+    let res = reopened.resolve(page.dict.get(b"Resources").unwrap()).as_dict().unwrap().clone();
+    let fonts = reopened.resolve(res.get(b"Font").unwrap()).as_dict().unwrap().clone();
+    let base_fonts: Vec<String> = fonts
+        .iter()
+        .filter_map(|(_, f)| {
+            reopened.resolve(f).as_dict().and_then(|d| d.get(b"BaseFont")).and_then(|b| b.as_name()).map(|n| String::from_utf8_lossy(n).into_owned())
+        })
+        .collect();
+    assert!(!base_fonts.iter().any(|b| b.contains("Gothic") || b.contains("Mincho")), "no Japanese fallback: {base_fonts:?}");
+    // The paragraph is bold: the bold face, when there is one.
+    if let Some(face) = asdreader_fonts::installed::installed_thai_face("ทดสอบ", true) {
+        let family = face.family.replace(' ', "");
+        assert!(base_fonts.iter().any(|b| b.replace(' ', "").contains(&family)), "{} is embedded: {base_fonts:?}", face.family);
+    }
+}
