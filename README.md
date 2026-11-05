@@ -145,7 +145,9 @@ cargo xtask assets
 ## สิทธิ์การใช้งาน
 
 ซอร์สโค้ดใช้สิทธิ์ [MIT](LICENSE-MIT) หรือ [Apache-2.0](LICENSE-APACHE) ตามที่ผู้ใช้เลือก
-ASDReader พัฒนาต่อจากโค้ดโอเพนซอร์สภายใต้สิทธิ์เดียวกัน ประกาศลิขสิทธิ์ของผู้เขียนเดิมและของไลบรารีที่ใช้อยู่ใน [NOTICE](NOTICE)
+ASDReader พัฒนาต่อจาก PdfCraft ของ ArtCraft Team และผู้ร่วมพัฒนา PdfCraft ภายใต้สิทธิ์เดียวกัน
+ลิขสิทธิ์โค้ดส่วนที่มาจาก PdfCraft ยังเป็นของผู้เขียนเดิม ผู้ร่วมพัฒนา ASDReader ถือลิขสิทธิ์เฉพาะส่วนที่แก้ไขและเพิ่มเติม
+ประกาศลิขสิทธิ์ฉบับเต็ม รวมถึงของ shared libraries และไลบรารีอื่นที่ใช้ อยู่ใน [NOTICE](NOTICE)
 
 โลโก้ ASDReader ([docs/brand](docs/brand/)) ฟอนต์ ไอคอน และไฟล์อื่น ๆ เป็นไปตามสิทธิ์ของแต่ละรายการใน
 [ATTRIBUTION.md](ATTRIBUTION.md) ส่วนฟอนต์จาก build input ดูที่

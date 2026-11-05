@@ -1,21 +1,31 @@
 ASDReader
-Copyright (c) 2026 ArtCraft Team and the ASDReader contributors.
+Copyright (c) 2026 ArtCraft Team and the PdfCraft contributors.
+Modifications Copyright (c) 2026 ASDReader contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option
 (LICENSE-MIT, LICENSE-APACHE).
 
+ASDReader is developed from PdfCraft (https://github.com/storytold/pdfcraft), by the ArtCraft Team
+and the PdfCraft contributors, under the same licences. The code taken from PdfCraft remains the
+copyright of its authors; the ASDReader contributors hold copyright only in their own changes and
+additions. The changes made since the fork are recorded in this repository's git history.
+
 ASDReader artwork is contributor-original under MIT OR Apache-2.0 (docs/brand/LICENSE-asdreader.txt).
-No trademark, wordmark or logo of the upstream project is included.
+No trademark, wordmark or logo of PdfCraft or the ArtCraft Team is included; their names appear here
+only as credit for their work, not as endorsement of ASDReader.
 
 The crates crates/asdesign-ui, crates/asdesign-quit, crates/asdesign-print and crates/asdesign-docpath
-are derived from the upstream project's shared crate library, under the same licences:
-Copyright (c) 2026 ArtCraft Team and contributors. MIT OR Apache-2.0.
+are derived from craft-ui, craft-quit, craft-print and craft-docpath in the ArtCraft Team's shared
+crate library craft-libs (https://github.com/storytold/craft-libs), under the same licences:
+Copyright (c) 2026 ArtCraft Team and the craft-libs contributors. MIT OR Apache-2.0.
+Modifications Copyright (c) 2026 ASDReader contributors.
 
 Third-party material
 
 This product bundles third-party material under its own licenses, listed below. The per-file
 list (author, source, license) is in ATTRIBUTION.md.
 
-- Lucide icons (assets/icons/*.svg) — ISC License. See assets/icons/LICENSE-lucide.txt.
+- Lucide icons (assets/icons/*.svg) — ISC License, and the MIT License (Copyright (c) 2013-present
+  Cole Bemis) for the icons Lucide derived from Feather. See assets/icons/LICENSE-lucide.txt.
   ASDReader's replacement PDF file icon is contributor-original (MIT OR Apache-2.0). The prior
   Lucide-based icon's historical notices remain in assets/app-icon/LICENSE-document.txt, also
   packaged as LICENSE-document.txt beside the Windows executables.
@@ -36,7 +46,8 @@ list (author, source, license) is in ATTRIBUTION.md.
   Adobe CMap resources under BSD-3-Clause.
 - lopdf (bootstrap document inspection, via crates.io) — MIT.
 - egui default fonts (epaint_default_fonts, via eframe) — Ubuntu Light (Ubuntu Font Licence 1.0),
-  Hack (MIT / Bitstream Vera licence), Noto Emoji (SIL OFL 1.1), emoji-icon-font (MIT).
+  Hack (MIT / Bitstream Vera licence), Noto Emoji (SIL OFL 1.1), emoji-icon-font (MIT, Copyright (c)
+  2014 John Slegers, https://github.com/jslegers/emoji-icon-font).
   Full font licence texts: assets/licenses/LICENSE-egui-default-fonts.txt (epaint_default_fonts 0.36.2).
 - Colour profile in hayro-interpret — CGATS001Compat-v2-micro.icc (CC0-1.0, Clinton Ingram).
 
@@ -64,3 +75,45 @@ dependencies change (plan/adr/0002, 0006).
 Vendored (vendor/, patched; see vendor/README.md):
 - hayro 0.7.1 — Apache-2.0 OR MIT, Copyright the hayro authors (licence files kept in vendor/hayro).
 - hayro-interpret 0.7.0 — Apache-2.0 OR MIT, Copyright the hayro authors (LICENSE-APACHE, LICENSE-MIT kept in vendor/hayro-interpret).
+- hayro-syntax 0.7.2, hayro-cmap 0.1.0 and hayro-jbig2 0.3.0 — Apache-2.0 OR MIT, Copyright the hayro
+  authors (LICENSE-APACHE, LICENSE-MIT kept in each directory).
+- vello_common 0.0.8 — Apache-2.0 OR MIT, Copyright 2020 the Vello Authors (LICENSE-APACHE, LICENSE-MIT
+  kept in vendor/vello_common).
+- egui-wgpu 0.36.2 — MIT OR Apache-2.0, Copyright (c) 2018-2021 Emil Ernerfeldt (LICENSE-APACHE,
+  LICENSE-MIT kept in vendor/egui-wgpu).
+- lopdf 0.45.0 — MIT, Copyright (c) 2016 Junfeng Liu (LICENSE kept in vendor/lopdf).
+- winit 0.30.13 — Apache-2.0, Copyright the winit contributors and Pierre Krieger (LICENSE kept in
+  vendor/winit).
+- winprint 0.2.1 (Windows builds) — BSD-3-Clause, Copyright (c) 2021 - 2024, alampy.com (LICENSE.md
+  kept in vendor/winprint; its notice is reproduced in full below).
+
+winprint licence (vendor/winprint/LICENSE.md):
+
+  BSD 3-Clause License
+
+  Copyright (c) 2021 - 2024, alampy.com
+
+  Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the following conditions are met:
+
+  1. Redistributions of source code must retain the above copyright notice, this
+     list of conditions and the following disclaimer.
+
+  2. Redistributions in binary form must reproduce the above copyright notice,
+     this list of conditions and the following disclaimer in the documentation
+     and/or other materials provided with the distribution.
+
+  3. Neither the name of the copyright holder nor the names of its
+     contributors may be used to endorse or promote products derived from
+     this software without specific prior written permission.
+
+  THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+  IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+  DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+  FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+  DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+  SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+  CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
