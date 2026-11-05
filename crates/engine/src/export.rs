@@ -23,13 +23,14 @@ pub struct Exporter {
 /// Most pixels on a side of an exported image: JPEG's limit, and the renderer's (a u16).
 pub const EXPORT_MAX_SIDE: f64 = 65_500.0;
 /// Most pixels in an exported PNG. A page larger than the renderer draws at once is drawn in bands
-/// and a PNG is written a band at a time, so this bounds the file, not the memory: a sheet of
-/// 168 × 91 cm (66 × 36 in) at 600 dpi is 855 million pixels.
-pub const EXPORT_MAX_PIXELS: f64 = 1.0e9;
+/// and a PNG is written a band at a time, so this bounds the file, not the memory: an A0L2 sheet
+/// (841 × 2378 mm) at 600 dpi is 1,116 million pixels.
+pub const EXPORT_MAX_PIXELS: f64 = 2.0e9;
 /// Most pixels in an exported JPEG or TIFF, which are encoded from the whole page held as RGB
-/// (750 MB): that sheet at 300 dpi is 214 million. (The `tiff` crate compresses only an image
-/// written whole, so a TIFF can't be written a band at a time.)
-pub const EXPORT_MAX_WHOLE_PIXELS: f64 = 250.0e6;
+/// (1.8 GB, asked for fallibly): an A0L2 sheet at 300 dpi is 279 million, at 400 dpi 497 million.
+/// (The `tiff` crate compresses only an image written whole, so a TIFF can't be written a band
+/// at a time.)
+pub const EXPORT_MAX_WHOLE_PIXELS: f64 = 600.0e6;
 /// The rows of one band are at most this many pixels (the renderer's own limit for one picture).
 const BAND_PIXELS: f64 = MAX_PIXELS as f64;
 

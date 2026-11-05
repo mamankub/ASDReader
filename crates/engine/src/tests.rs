@@ -3191,18 +3191,19 @@ fn large_pages_export_at_the_resolution_asked_in_bands() {
     let jpg = whole.image(0, 72.0, ImageFormat::Jpeg { quality: 85 }).unwrap();
     assert_eq!(jpg[13..18], [1, 0, 72, 0, 72], "JFIF density in dots per inch");
 
-    // The limits are the formats', not the renderer's: an A0 sheet at 600 dpi (558 Mpx) is drawn
-    // as asked in PNG; JPEG and TIFF, held whole in memory, stop at 250 Mpx (about 401 dpi), and
-    // at 300 dpi all three are as asked.
+    // The limits are the formats', not the renderer's: an A0L2 sheet (841 × 2378 mm) at 600 dpi
+    // (1,116 Mpx) is drawn as asked in PNG; JPEG and TIFF, held whole in memory, stop at 600 Mpx
+    // (about 440 dpi), and at 300 or 400 dpi all three are as asked.
     let mut s = Session::new().with_clock(|| 1_700_000_000);
-    let bytes = s.create_blank(2384.0, 3370.0, 1).unwrap();
-    let id = s.open("a0.pdf", None, bytes, None).unwrap();
+    let bytes = s.create_blank(2384.0, 6741.0, 1).unwrap();
+    let id = s.open("a0l2.pdf", None, bytes, None).unwrap();
     let ex = Exporter::new(s.get(id).unwrap());
     assert_eq!(ex.image_dpi(0, 600.0, ImageFormat::Png), 600.0);
     for format in [ImageFormat::Tiff, ImageFormat::Jpeg { quality: 85 }] {
         let dpi = ex.image_dpi(0, 600.0, format);
-        assert!((400.0..402.0).contains(&dpi), "{format:?}: {dpi}");
+        assert!((439.0..441.0).contains(&dpi), "{format:?}: {dpi}");
         assert_eq!(ex.image_dpi(0, 300.0, format), 300.0);
+        assert_eq!(ex.image_dpi(0, 400.0, format), 400.0);
     }
 }
 
