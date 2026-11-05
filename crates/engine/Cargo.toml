@@ -40,6 +40,8 @@ png = "0.18"
 # Already in the graph (through image and asdreader-create): image's TiffEncoder can't set the
 # resolution or the compression of an exported page.
 tiff = "0.11"
+# LZW for TIFF strips written a band at a time (export of large pages): the version `tiff` uses.
+weezl = "0.1.12"
 # Already in the graph (url and idna through webbrowser, icu_properties through boa): they show
 # the host of a document's link the way the browser reads it (links::display_host).
 url = "2.5"

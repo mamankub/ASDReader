@@ -5,7 +5,7 @@ exclude = ["vendor"]
 default-members = ["crates/*", "apps/asdreader", "apps/asdreader-cli", "xtask"]
 
 [workspace.package]
-version = "0.13.4"
+version = "0.13.5"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 rust-version = "1.95"
@@ -13,47 +13,47 @@ repository = "https://github.com/mamankub/ASDReader"
 
 [workspace.dependencies]
 # Shared frontend components; engines remain independent of egui (crates/asdesign-ui).
-asdesign-ui = { path = "crates/asdesign-ui", version = "0.13.4", features = ["serde"] }
+asdesign-ui = { path = "crates/asdesign-ui", version = "0.13.5", features = ["serde"] }
 # Quit the macOS way (#1136): ⌘Q asks about unsaved changes, and closing quits through `terminate:`.
-asdesign-quit = { path = "crates/asdesign-quit", version = "0.13.4" }
+asdesign-quit = { path = "crates/asdesign-quit", version = "0.13.5" }
 # Shared system spooler; document composition remains in asdreader-print.
-asdesign-print = { path = "crates/asdesign-print", version = "0.13.4" }
+asdesign-print = { path = "crates/asdesign-print", version = "0.13.5" }
 # Whether a path stored in a document may be opened (GoToR link targets).
-asdesign-docpath = { path = "crates/asdesign-docpath", version = "0.13.4" }
+asdesign-docpath = { path = "crates/asdesign-docpath", version = "0.13.5" }
 # internal
-asdreader-geom = { path = "crates/geom", version = "0.13.4" }
-asdreader-filters = { path = "crates/filters", version = "0.13.4" }
-asdreader-cos = { path = "crates/cos", version = "0.13.4" }
-asdreader-crypt = { path = "crates/crypt", version = "0.13.4" }
-asdreader-organize = { path = "crates/organize", version = "0.13.4" }
-asdreader-measure = { path = "crates/measure", version = "0.13.4" }
-asdreader-annot = { path = "crates/annot", version = "0.13.4" }
-asdreader-audit = { path = "crates/audit", version = "0.13.4" }
-asdreader-fonts = { path = "crates/fonts", version = "0.13.4" }
-asdreader-model = { path = "crates/model", version = "0.13.4" }
-asdreader-content = { path = "crates/content", version = "0.13.4" }
-asdreader-redact = { path = "crates/redact", version = "0.13.4" }
-asdreader-print = { path = "crates/print", version = "0.13.4" }
-asdreader-xfdf = { path = "crates/xfdf", version = "0.13.4" }
-asdreader-sign = { path = "crates/sign", version = "0.13.4" }
-asdreader-optimize = { path = "crates/optimize", version = "0.13.4" }
-asdreader-a11y = { path = "crates/a11y", version = "0.13.4" }
-asdreader-oracle = { path = "crates/oracle", version = "0.13.4" }
-asdreader-testkit = { path = "crates/testkit", version = "0.13.4" }
-asdreader-ocr = { path = "crates/ocr", version = "0.13.4" }
-asdreader-js = { path = "crates/js", version = "0.13.4" }
-asdreader-compare = { path = "crates/compare", version = "0.13.4" }
-asdreader-preflight = { path = "crates/preflight", version = "0.13.4" }
-asdreader-export = { path = "crates/export", version = "0.13.4" }
-asdreader-edit = { path = "crates/edit", version = "0.13.4" }
-asdreader-create = { path = "crates/create", version = "0.13.4" }
-asdreader-forms = { path = "crates/forms", version = "0.13.4" }
-asdreader-xfa = { path = "crates/xfa", version = "0.13.4" }
-asdreader-render = { path = "crates/render", version = "0.13.4" }
-asdreader-engine = { path = "crates/engine", version = "0.13.4" }
-asdreader-platform = { path = "crates/platform", version = "0.13.4" }
-asdreader-ui-egui = { path = "crates/ui-egui", version = "0.13.4" }
-asdreader-automation = { path = "crates/automation", version = "0.13.4", default-features = false }
+asdreader-geom = { path = "crates/geom", version = "0.13.5" }
+asdreader-filters = { path = "crates/filters", version = "0.13.5" }
+asdreader-cos = { path = "crates/cos", version = "0.13.5" }
+asdreader-crypt = { path = "crates/crypt", version = "0.13.5" }
+asdreader-organize = { path = "crates/organize", version = "0.13.5" }
+asdreader-measure = { path = "crates/measure", version = "0.13.5" }
+asdreader-annot = { path = "crates/annot", version = "0.13.5" }
+asdreader-audit = { path = "crates/audit", version = "0.13.5" }
+asdreader-fonts = { path = "crates/fonts", version = "0.13.5" }
+asdreader-model = { path = "crates/model", version = "0.13.5" }
+asdreader-content = { path = "crates/content", version = "0.13.5" }
+asdreader-redact = { path = "crates/redact", version = "0.13.5" }
+asdreader-print = { path = "crates/print", version = "0.13.5" }
+asdreader-xfdf = { path = "crates/xfdf", version = "0.13.5" }
+asdreader-sign = { path = "crates/sign", version = "0.13.5" }
+asdreader-optimize = { path = "crates/optimize", version = "0.13.5" }
+asdreader-a11y = { path = "crates/a11y", version = "0.13.5" }
+asdreader-oracle = { path = "crates/oracle", version = "0.13.5" }
+asdreader-testkit = { path = "crates/testkit", version = "0.13.5" }
+asdreader-ocr = { path = "crates/ocr", version = "0.13.5" }
+asdreader-js = { path = "crates/js", version = "0.13.5" }
+asdreader-compare = { path = "crates/compare", version = "0.13.5" }
+asdreader-preflight = { path = "crates/preflight", version = "0.13.5" }
+asdreader-export = { path = "crates/export", version = "0.13.5" }
+asdreader-edit = { path = "crates/edit", version = "0.13.5" }
+asdreader-create = { path = "crates/create", version = "0.13.5" }
+asdreader-forms = { path = "crates/forms", version = "0.13.5" }
+asdreader-xfa = { path = "crates/xfa", version = "0.13.5" }
+asdreader-render = { path = "crates/render", version = "0.13.5" }
+asdreader-engine = { path = "crates/engine", version = "0.13.5" }
+asdreader-platform = { path = "crates/platform", version = "0.13.5" }
+asdreader-ui-egui = { path = "crates/ui-egui", version = "0.13.5" }
+asdreader-automation = { path = "crates/automation", version = "0.13.5", default-features = false }
 
 # pdf
 hayro = "0.7.1"

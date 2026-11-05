@@ -305,13 +305,23 @@ fn jpeg(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
     Ok(Embedded { dict: d, data: bytes.to_vec(), filtered: true, smask: None, icc, px: (w, h), dpi })
 }
 
+/// A PNG's `pHYs` density (whole pixels per metre) in dots per inch. A whole number of dpi
+/// written as pixels per metre comes back a little off (72 dpi is 2,835 per metre, 72.009 dpi),
+/// so a density that is the rounding of a whole number of dpi reads as that number: a page made
+/// from an exported PNG keeps the size of the page it was drawn from.
+fn png_dpi(per_metre: u32) -> f64 {
+    let dpi = f64::from(per_metre) * 0.0254;
+    let whole = dpi.round();
+    if whole > 0.0 && (whole / 0.0254).round() == f64::from(per_metre) { whole } else { dpi }
+}
+
 fn png_image(name: &str, bytes: &[u8]) -> Result<Embedded, CreateError> {
     let bad = |m: String| CreateError::Image(name.into(), m);
     let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
     dec.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = dec.read_info().map_err(|e| bad(e.to_string()))?;
     let dpi = match reader.info().pixel_dims {
-        Some(png::PixelDimensions { xppu, yppu, unit: png::Unit::Meter }) if xppu > 0 && yppu > 0 => (xppu as f64 * 0.0254, yppu as f64 * 0.0254),
+        Some(png::PixelDimensions { xppu, yppu, unit: png::Unit::Meter }) if xppu > 0 && yppu > 0 => (png_dpi(xppu), png_dpi(yppu)),
         _ => (72.0, 72.0),
     };
     let icc = reader.info().icc_profile.as_ref().map(|p| p.to_vec());

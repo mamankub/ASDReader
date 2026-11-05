@@ -188,9 +188,10 @@ fn run(
             } else {
                 crate::i18n::fmt(tl!("Exported {n} images"), &[("n", &total.to_string())])
             };
-            // Pages too large for the renderer at the chosen resolution are drawn at the most it
+            // Pages too large for an image at the chosen resolution are drawn at the most it
             // allows: say so, rather than leave a smaller image unexplained.
-            let lowered: Vec<f64> = pages.iter().map(|p| ex.dpi_used(*p, dpi)).filter(|used| *used < dpi.clamp(18.0, 1200.0) - 0.5).collect();
+            let lowered: Vec<f64> =
+                pages.iter().map(|p| ex.image_dpi(*p, dpi, format)).filter(|used| *used < dpi.clamp(18.0, 1200.0) - 0.5).collect();
             if let Some(lowest) = lowered.iter().copied().reduce(f64::min) {
                 msg.push_str(&crate::i18n::fmt(
                     tl!(" ({n} at {dpi} dpi, the largest size they can be drawn at)"),

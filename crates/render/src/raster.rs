@@ -445,10 +445,13 @@ fn render_page<'a>(
         };
         let bg_color = if config.transparent { TRANSPARENT } else { bg_color };
         let rs = match req.tile {
-            // Tiles are bounded by construction, so the page itself may be arbitrarily large.
+            // Tiles are bounded by construction, so the page itself may be arbitrarily large. A
+            // tile is at most a u16 on a side (the renderer's sizes) and MAX_PIXELS in all, as a
+            // whole page is: small squares for the canvas, bands as wide as the page for Export.
             Some(t) => {
                 let scale = req.scale.clamp(0.01, 400.0);
-                let (tw, th) = (t.w.clamp(1, 4096), t.h.clamp(1, 4096));
+                let tw = t.w.clamp(1, u32::from(u16::MAX));
+                let th = t.h.clamp(1, u32::from(u16::MAX)).min((MAX_PIXELS as u32 / tw).max(1));
                 RenderSettings {
                     x_scale: scale,
                     y_scale: scale,
