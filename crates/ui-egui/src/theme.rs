@@ -184,7 +184,8 @@ pub fn hand(resp: Response) -> Response {
 
 pub fn install_fonts(ctx: &egui::Context) {
     // Thai typed into a document paragraph whose font has no Thai is written with an installed
-    // Thai face; read when first needed.
+    // Thai face; read when first needed. The web build reads no installed fonts.
+    #[cfg(not(target_arch = "wasm32"))]
     asdreader_fonts::installed::set_installed_thai_provider(crate::system_fonts::document_thai_faces);
     install_fonts_for(ctx, CjkPreference::Default);
 }

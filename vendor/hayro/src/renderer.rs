@@ -472,7 +472,9 @@ pub(crate) struct Renderer {
     pub(crate) needs_page_group: bool,
 }
 
-/// ASDReader patch: when and where a renderer sends pictures of the page it is drawing.
+/// ASDReader patch: when and where a renderer sends pictures of the page it is drawing. The web
+/// build has no clock to pace them by, so it never sends any.
+#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 pub(crate) struct Progress {
     pub(crate) sink: Box<dyn FnMut(&[u8])>,
     #[cfg(not(target_arch = "wasm32"))]

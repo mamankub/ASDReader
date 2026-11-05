@@ -2010,9 +2010,11 @@ mod tests {
         ed.text.push_str(" and more");
         let ctx = egui::Context::default();
         let mut size = egui::Vec2::ZERO;
-        let _ = ctx.run_ui(egui::RawInput::default(), |ui| {
+        ctx.run_ui(egui::RawInput::default(), |ui| {
             size = editor_galley(ui, &ed, &ed.text, 1.0, f32::INFINITY).rect.size();
-        });
+        })
+        .textures_delta
+        .clear();
         // 12 pt Helvetica, one pixel per point: a row about 12 tall, and the 27 letters about
         // half an em each.
         assert!(size.y > 8.0 && size.y < 20.0, "one row of 12 pt text: {size:?}");
