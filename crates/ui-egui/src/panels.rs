@@ -222,18 +222,25 @@ fn tool_detail(app: &mut ASDReaderApp, ui: &mut egui::Ui, t: &Tokens, g: &'stati
                     17.0,
                     if ready { hue(g) } else { t.text_faint },
                 );
-                let (chip, fill, cfg) = match item.availability {
-                    Availability::Ready => (tl!("Ready"), Color32::from_rgb(0xDD, 0xF3, 0xE4), Color32::from_rgb(0x1E, 0x7B, 0x43)),
-                    Availability::Planned(m) => (m, t.pressed, t.text_muted),
-                    Availability::Provider => ("AI", t.pressed, t.text_muted),
+                // A tool that works carries no chip: only planned and AI-provider tools are marked.
+                let chip = match item.availability {
+                    Availability::Ready => None,
+                    Availability::Planned(m) => Some((m, t.pressed, t.text_muted)),
+                    Availability::Provider => Some(("AI", t.pressed, t.text_muted)),
                 };
                 let font = theme::semibold(9.5);
-                let chip_label = tl!(chip).to_string();
-                let w = crate::widgets::text_width(ui, &chip_label, &font);
-                let r = Rect::from_center_size(body.right_center() - vec2(w / 2.0 + 10.0, 0.0), vec2(w + 10.0, 16.0));
+                let chip = chip.map(|(chip, fill, cfg)| {
+                    let label = tl!(chip).to_string();
+                    let w = crate::widgets::text_width(ui, &label, &font);
+                    (Rect::from_center_size(body.right_center() - vec2(w / 2.0 + 10.0, 0.0), vec2(w + 10.0, 16.0)), label, fill, cfg)
+                });
+                // Where the chip, or with none the row's right edge, begins.
+                let r = chip.as_ref().map_or(Rect::from_center_size(body.right_center() - vec2(4.0, 0.0), vec2(0.0, 16.0)), |c| c.0);
                 row_label(ui, tl!(item.label), theme::regular(13.0), fg, body.left_center() + vec2(34.0, 0.0), r.left() - body.left() - 42.0);
-                ui.painter().rect_filled(r, CornerRadius::same(4), fill);
-                ui.painter().text(r.center(), Align2::CENTER_CENTER, chip_label, font, cfg);
+                if let Some((r, label, fill, cfg)) = chip {
+                    ui.painter().rect_filled(r, CornerRadius::same(4), fill);
+                    ui.painter().text(r.center(), Align2::CENTER_CENTER, label, font, cfg);
+                }
                 let resp = theme::hand(resp).on_hover_text(format!("{} — {}", tl!(item.label), item.command));
                 // An entry with further commands opens a menu; its caret goes before the chip.
                 if item.actions.is_empty() {

@@ -345,6 +345,7 @@ pub const COMMANDS: &[CommandSpec] = &[
     c("a11y.autotag_fields", "Tag form fields", None, None, Modification, "tag"),
     c("a11y.tags", "Tags panel", None, None, Document, "tag"),
     c("export.all_images", "Export all images…", FILE, None, Copying, "image"),
+    c("export.dxf", "Export to AutoCAD DXF…", FILE, None, Copying, "compass"),
     c("edit.header_footer", "Add header & footer…", None, None, Modification, "heading"),
     c("edit.header_footer.update", "Update header & footer…", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),
     c("edit.header_footer.remove", "Remove header & footer", None, None, Marks(crate::MarkKind::HeaderFooter), "heading"),

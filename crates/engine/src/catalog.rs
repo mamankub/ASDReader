@@ -88,6 +88,7 @@ pub static TOOL_GROUPS: &[ToolGroup] = &[
                 item("Presentation (.pptx)", "presentation", "export.pptx", Ready),
                 item("Image (PNG)", "image", "export.image", Ready),
                 item("Export all images", "image", "export.all_images", Ready),
+                item("AutoCAD drawing (.dxf)", "compass", "export.dxf", Ready),
                 item("HTML web page", "file-symlink", "export.html", Ready),
                 item("Rich Text Format (.rtf)", "file-text", "export.rtf", Ready),
                 item("Text (plain)", "type", "export.text", Ready),

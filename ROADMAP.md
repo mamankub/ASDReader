@@ -191,6 +191,7 @@ Ranked; detail and the full milestone table in [docs/roadmap.md](docs/roadmap.md
 
 ## Progress log
 
+- **2026-11-06 (ASDReader Convert ▸ AutoCAD DXF):** Each page exports as an AutoCAD 2013 DXF at full size (units and 1:N scale, read from the page's SCALE label by default): lines, recognised circles and arcs (Bézier and plot-driver polylines), splines, solid hatches, text in its own font or as outlines, colours, lineweights, linetypes, PDF layers and images. A 26-page house plan exports in about 0.1 s a page with a clean ezdxf audit; the outline mode matches the page's ink within 0.2%. Working tools no longer carry a "Ready" chip.
 - **2026-11-03 (ASDReader release security):** CI passed 4,616 tests before the advisory gate rejected inherited crypto-bigint 0.7.5. Updated only crypto-bigint/ctutils to patched, non-yanked 0.7.10/0.4.8; cargo-deny passes without new exceptions. Release candidates must be rebuilt from the patched commit.
 - **2026-11-03 (ASDReader archive notices):** Archives now carry ATTRIBUTION.md and complete notices for embedded UI fonts, icons and PDF resources; source-relative licence paths are shared by Linux/Windows packaging.
 - **2026-11-03 (ASDReader release packaging repair):** The first Linux binary compiled, but deprecated RTEN model URLs returned HTTP 403. Migrated downloads to the author's supported ONNX pair with pinned hashes and complete-pair legacy fallback; added download preflight before application builds.

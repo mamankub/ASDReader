@@ -10,6 +10,7 @@
 
 use std::collections::HashMap;
 
+pub mod dxf;
 mod pptx;
 mod zip;
 

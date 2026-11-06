@@ -66,6 +66,16 @@ pub trait Device<'a> {
     fn actual_text(&mut self, _text: &[u8]) {}
     /// Called at the end of a marked content sequence (EMC).
     fn end_marked_content(&mut self) {}
+    /// ASDReader patch (51): the marked content sequence that just began is optional content
+    /// (`/OC`) of the group named `name` (a layer, as CAD programs export them; the text string's
+    /// raw bytes). Called right after `begin_marked_content`, for a visible group only; the layer
+    /// ends with the matching `end_marked_content`.
+    fn marked_content_layer(&mut self, _name: &[u8]) {}
+    /// ASDReader patch (51): a visible form or image XObject of the optional content group named
+    /// `name` begins (its `/OC` entry); it ends with `end_layer`.
+    fn begin_layer(&mut self, _name: &[u8]) {}
+    /// ASDReader patch (51): the XObject `begin_layer` announced ends.
+    fn end_layer(&mut self) {}
     /// ASDReader patch (29): the page's annotations are about to be drawn (until
     /// `end_annotations`), as page content finishes. Devices can use this to treat their
     /// paints as annotation colours rather than document colours — the reading-colours

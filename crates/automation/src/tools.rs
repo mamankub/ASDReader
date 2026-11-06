@@ -993,6 +993,19 @@ pub fn tools() -> Vec<ToolDef> {
                 }),
                 &["doc", "folder"],
             )),
+        t("doc_export_dxf", "Export pages to AutoCAD DXF", "Write each page as an AutoCAD DXF drawing (`<name>_page_<n>.dxf`, AutoCAD 2013 format) into a folder, at full size: page points become drawing units at the scale (`scale` N for 1:N; `stated`, the default, reads the page's own \"SCALE 1:N\" label and uses 1:1 without one). Lines, polylines, circles and arcs (also when the PDF cut them into short straight lines), exact splines, solid fills (hatches), text in its own font (or glyph outlines with text_as_outlines), true colours, lineweights, dash patterns as linetypes and PDF layers are kept; images are written next to the drawing (`<name>_page_<n>_image_<k>.png|jpg`) and placed as IMAGE entities. Fills painted with patterns or shadings are left out and counted in left_out. Includes unsaved edits.")
+            .cmd("export.dxf")
+            .with(schema(
+                json!({
+                    "doc": doc(),
+                    "folder": { "type": "string" },
+                    "units": { "type": "string", "enum": ["mm", "cm", "m", "in"], "description": "Drawing units (default mm)." },
+                    "scale": { "description": "1:N drawing scale as N, or \"stated\" (default).", "oneOf": [{ "type": "number", "exclusiveMinimum": 0 }, { "type": "string", "enum": ["stated"] }] },
+                    "text_as_outlines": { "type": "boolean" },
+                    "pages": pages("to export (default: all)"),
+                }),
+                &["doc", "folder"],
+            )),
         t("accessibility_autotag_preview", "Preview automatic tags", "Propose paragraph and heading tags for visible text blocks on one page. Returns page bounds, tentative roles and reasons. Does not change the PDF or claim accessibility compliance. Images, tables, lists, annotations and existing structure require separate review.")
             .ro()
             .with(schema(json!({ "doc": doc(), "page": { "type": "integer", "minimum": 1 } }), &["doc", "page"])),

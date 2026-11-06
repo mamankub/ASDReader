@@ -137,6 +137,10 @@ pub(crate) fn draw_form_xobject<'a, 'b>(
         context.end_nested_interpretation();
         return;
     }
+    let layer = if has_oc { xobject_layer(&x_object.dict) } else { None };
+    if let Some(name) = &layer {
+        device.begin_layer(name);
+    }
 
     let iter = TypedIter::new(x_object.decoded.as_ref());
 
@@ -241,6 +245,9 @@ pub(crate) fn draw_form_xobject<'a, 'b>(
     context.pop_root_transform();
     context.restore_state(device);
 
+    if layer.is_some() {
+        device.end_layer();
+    }
     if has_oc {
         context.ocg_state.end_marked_content();
     }
@@ -263,6 +270,10 @@ pub(crate) fn draw_image_xobject<'a, 'b>(
             context.ocg_state.end_marked_content();
         }
         return;
+    }
+    let layer = if has_oc { xobject_layer(x_object.stream.dict()) } else { None };
+    if let Some(name) = &layer {
+        device.begin_layer(name);
     }
 
     let width = x_object.width as f64;
@@ -331,9 +342,17 @@ pub(crate) fn draw_image_xobject<'a, 'b>(
 
     context.restore_state(device);
 
+    if layer.is_some() {
+        device.end_layer();
+    }
     if has_oc {
         context.ocg_state.end_marked_content();
     }
+}
+
+/// ASDReader patch (51): the layer an XObject's `/OC` entry names, for `Device::begin_layer`.
+fn xobject_layer(dict: &Dict<'_>) -> Option<Vec<u8>> {
+    crate::ocg::layer_name(&dict.get::<Dict<'_>>(OC)?)
 }
 
 fn xobject_oc(dict: &Dict<'_>, context: &mut Context<'_>) -> bool {

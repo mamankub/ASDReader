@@ -1,6 +1,6 @@
 [package]
 name = "asdreader-export"
-description = "Export a PDF to HTML, Word (.docx) and RTF from its paragraphs and images"
+description = "Export a PDF to HTML, Word (.docx), RTF and AutoCAD DXF"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -11,4 +11,6 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
+# The page content a DXF export writes (`dxf`).
+asdreader-render = { workspace = true }
 flate2.workspace = true

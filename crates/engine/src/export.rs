@@ -680,3 +680,172 @@ mod raster_tests {
         }
     }
 }
+
+/// A DXF drawing's units.
+pub use asdreader_export::dxf::{DxfSummary, Units as DxfUnits};
+
+/// The drawing scale of a DXF export.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DxfScale {
+    /// The scale the page states ("SCALE 1:100"), else 1:1.
+    Stated,
+    /// 1:`n`.
+    Ratio(f64),
+}
+
+/// Export a PDF ▸ AutoCAD DXF settings.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DxfSettings {
+    pub units: DxfUnits,
+    pub scale: DxfScale,
+    /// Text as filled outlines instead of editable text.
+    pub text_as_outlines: bool,
+}
+
+impl Default for DxfSettings {
+    fn default() -> Self {
+        Self { units: DxfUnits::Millimetres, scale: DxfScale::Stated, text_as_outlines: false }
+    }
+}
+
+/// One page as a DXF drawing: `files` are the drawing (first) and the images it refers to, each
+/// (file name, bytes), named after `stem`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DxfExport {
+    pub files: Vec<(String, Vec<u8>)>,
+    /// The scale used (100 for 1:100).
+    pub scale: f64,
+    pub summary: DxfSummary,
+    /// Fills painted with patterns or shadings, and images, that are not in the drawing.
+    pub left_out: usize,
+}
+
+/// The file name of page `page`'s DXF drawing: `<stem>_page_<n>.dxf`.
+pub fn dxf_file_name(stem: &str, page: usize) -> String {
+    format!("{stem}_page_{}.dxf", page + 1)
+}
+
+/// Page `page` (0-based) of `src` as a DXF drawing and its image files.
+pub fn export_dxf(src: &ExportSource, page: usize, stem: &str, settings: DxfSettings) -> Result<DxfExport, String> {
+    if page >= src.pages {
+        return Err(format!("page {} does not exist", page + 1));
+    }
+    // The drawing names its images by file name: one that stays in the drawing's folder.
+    let mut stem: String = stem.chars().map(|c| if matches!(c, '/' | '\\' | ':') || c.is_control() { '_' } else { c }).collect();
+    if stem.chars().all(|c| c == '.') {
+        stem.insert(0, '_');
+    }
+    let stem = stem.as_str();
+    let options = asdreader_render::vector::VectorOptions { text_as_outlines: settings.text_as_outlines };
+    let vectors = asdreader_render::vector::page_vectors(src.bytes.clone(), &src.config, page, options)?;
+    if vectors.skipped.truncated {
+        return Err(format!("page {} draws more than a DXF export holds", page + 1));
+    }
+    let scale = match settings.scale {
+        DxfScale::Ratio(n) if n.is_finite() && n > 0.0 => n,
+        DxfScale::Ratio(_) => 1.0,
+        DxfScale::Stated => asdreader_export::dxf::stated_scale(&vectors).unwrap_or(1.0),
+    };
+    let mut files = Vec::new();
+    let mut image_files = Vec::with_capacity(vectors.images.len());
+    for (k, img) in vectors.images.iter().enumerate() {
+        let (ext, bytes) = match &img.jpeg {
+            Some(jpeg) => ("jpg", Ok(jpeg.clone())),
+            None => ("png", encode_straight_png(img.width, img.height, &img.rgba)),
+        };
+        match bytes {
+            Ok(bytes) => {
+                let name = format!("{stem}_page_{}_image_{}.{ext}", page + 1, k + 1);
+                image_files.push(Some(name.clone()));
+                files.push((name, bytes));
+            }
+            Err(_) => image_files.push(None),
+        }
+    }
+    let left_out = vectors.skipped.patterns + vectors.skipped.images + image_files.iter().filter(|f| f.is_none()).count();
+    let (text, summary) = asdreader_export::dxf::dxf(&vectors, &asdreader_export::dxf::DxfOptions { units: settings.units, scale, image_files });
+    files.insert(0, (dxf_file_name(stem, page), text.into_bytes()));
+    Ok(DxfExport { files, scale, summary, left_out })
+}
+
+/// Straight RGBA → PNG (RGB when every pixel is opaque).
+fn encode_straight_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    if (width as usize).checked_mul(height as usize).and_then(|n| n.checked_mul(4)) != Some(rgba.len()) || width == 0 || height == 0 {
+        return Err("image size does not match its pixels".into());
+    }
+    let pixels = rgba.as_chunks::<4>().0;
+    let opaque = pixels.iter().all(|px| px[3] == 255);
+    let (color, data) = if opaque {
+        (png::ColorType::Rgb, pixels.iter().flat_map(|px| [px[0], px[1], px[2]]).collect::<Vec<u8>>())
+    } else {
+        (png::ColorType::Rgba, rgba.to_vec())
+    };
+    let mut out = Vec::new();
+    let mut enc = png::Encoder::new(&mut out, width, height);
+    enc.set_color(color);
+    enc.set_depth(png::BitDepth::Eight);
+    enc.set_deflate_compression(png::DeflateCompression::Level(6));
+    enc.set_filter(png::Filter::Adaptive);
+    let mut w = enc.write_header().map_err(|e| e.to_string())?;
+    w.write_image_data(&data).map_err(|e| e.to_string())?;
+    w.finish().map_err(|e| e.to_string())?;
+    Ok(out)
+}
+
+#[cfg(test)]
+mod dxf_tests {
+    use super::{DxfScale, DxfSettings, DxfUnits, ExportSource, export_dxf};
+
+    /// One A4-landscape page drawing a line 30 mm long, a "SCALE 1:100" label and a JPEG.
+    fn source(jpeg: &[u8]) -> ExportSource {
+        let bytes = asdreader_testkit::Pdf::new()
+            .obj("<< /Type /Catalog /Pages 2 0 R >>")
+            .obj("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+            .obj("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> /XObject << /Im 6 0 R >> >> >>")
+            .stream("", b"0.72 w 100 100 m 185.03937 100 l S BT /F1 10 Tf 100 80 Td (SCALE 1:100) Tj ET q 40 0 0 30 300 300 cm /Im Do Q")
+            .obj("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+            .obj(asdreader_testkit::stream_obj("/Type /XObject /Subtype /Image /Width 4 /Height 3 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode", jpeg))
+            .build();
+        ExportSource { bytes: std::sync::Arc::new(bytes), config: Default::default(), pages: 1, sizes: vec![(842.0, 595.0)] }
+    }
+
+    fn jpeg() -> Vec<u8> {
+        let mut out = Vec::new();
+        image::RgbImage::from_pixel(4, 3, image::Rgb([200, 40, 40])).write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Jpeg).unwrap();
+        out
+    }
+
+    #[test]
+    fn a_page_is_a_full_size_drawing_with_its_images_beside_it() {
+        let jpeg = jpeg();
+        let src = source(&jpeg);
+        let out = export_dxf(&src, 0, "plan", DxfSettings::default()).unwrap();
+        assert_eq!(out.scale, 100.0, "the page's own scale");
+        let names: Vec<&str> = out.files.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["plan_page_1.dxf", "plan_page_1_image_1.jpg"]);
+        assert_eq!(out.files[1].1, jpeg, "a JPEG is written unchanged");
+        let dxf = String::from_utf8(out.files[0].1.clone()).unwrap();
+        assert!(dxf.contains("\r\nplan_page_1_image_1.jpg\r\n"), "the drawing names the image file");
+        assert_eq!((out.summary.lines, out.summary.texts, out.summary.images, out.left_out), (1, 1, 1, 0));
+        // 85.03937 pt is 30 mm: 3000 mm at 1:100.
+        let line = dxf.split("\r\nLINE\r\n").nth(1).unwrap();
+        let value = |code: &str| -> f64 {
+            line.split("\r\n").collect::<Vec<_>>().windows(2).find(|w| w[0].trim() == code).map(|w| w[1].parse().unwrap()).unwrap()
+        };
+        assert!((value("11") - value("10") - 3000.0).abs() < 1e-3, "{}", value("11") - value("10"));
+        // Metres at a scale chosen by hand.
+        let out = export_dxf(&src, 0, "plan", DxfSettings { units: DxfUnits::Metres, scale: DxfScale::Ratio(50.0), text_as_outlines: true }).unwrap();
+        assert_eq!((out.scale, out.summary.texts), (50.0, 0));
+        assert!(out.summary.hatches >= 9, "the label as glyph outlines");
+        assert!(export_dxf(&src, 1, "plan", DxfSettings::default()).is_err());
+    }
+
+    #[test]
+    fn file_names_stay_in_the_folder() {
+        let out = export_dxf(&source(&jpeg()), 0, "../x:y\\z", DxfSettings::default()).unwrap();
+        let names: Vec<&str> = out.files.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, [".._x_y_z_page_1.dxf", ".._x_y_z_page_1_image_1.jpg"]);
+        let out = export_dxf(&source(&jpeg()), 0, "..", DxfSettings::default()).unwrap();
+        assert_eq!(out.files[0].0, "_.._page_1.dxf");
+    }
+}

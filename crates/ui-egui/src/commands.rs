@@ -444,6 +444,7 @@ impl ASDReaderApp {
             "a11y.tags" => self.choose_right_panel(Some(RightPanel::Tags)),
             "a11y.reading_options" => self.dialog = Some(Dialog::Properties(crate::PropsTab::Advanced)),
             "export.all_images" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::AllImages)),
+            "export.dxf" => self.dialog = Some(Dialog::Export(crate::export_ui::ExportKind::Dxf)),
             "edit.text" => {
                 self.quick_tool = crate::QuickTool::AddText;
                 self.left = crate::LeftPanel::Tool("edit");

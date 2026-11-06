@@ -797,6 +797,18 @@ impl<'a, D: Device<'a>> Device<'a> for BoundsDevice<'_, D> {
         self.inner.end_marked_content();
     }
 
+    fn marked_content_layer(&mut self, name: &[u8]) {
+        self.inner.marked_content_layer(name);
+    }
+
+    fn begin_layer(&mut self, name: &[u8]) {
+        self.inner.begin_layer(name);
+    }
+
+    fn end_layer(&mut self) {
+        self.inner.end_layer();
+    }
+
     fn begin_annotations(&mut self) {
         self.inner.begin_annotations();
     }
