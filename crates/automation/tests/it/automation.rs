@@ -8442,6 +8442,13 @@ fn pages_export_to_autocad_dxf() {
     let dxf = std::fs::read_to_string(dir.join("cad/a_page_1.dxf")).unwrap();
     assert!(dxf.contains("\r\n$INSUNITS\r\n 70\r\n6\r\n"), "metres");
     assert!(dxf.contains("\r\nPage 1\r\n"), "the page's text");
+    assert!(dxf.contains("  0\r\nTEXT\r\n"), "editable TEXT is the default when text_as_outlines is omitted");
+    for page in [1, 3] {
+        let drawing = std::fs::read_to_string(dir.join(format!("cad/a_page_{page}.dxf"))).unwrap();
+        let viewport = drawing.split("  0\r\nVPORT\r\n").nth(1).unwrap().split("  0\r\nENDTAB\r\n").next().unwrap();
+        assert!(viewport.contains(" 16\r\n0.0\r\n 26\r\n0.0\r\n 36\r\n1.0\r\n"), "the active view looks along +Z");
+        assert_eq!(viewport.matches(" 36\r\n").count(), 1, "no extra Z coordinate for strict DXF readers");
+    }
     assert!(dir.join("cad/a_page_3.dxf").is_file() && !dir.join("cad/a_page_2.dxf").exists());
     // Outlines instead of text; the page states no scale, so 1:1.
     let r = ok(&mut a, "doc_export_dxf", json!({ "doc": doc, "folder": "cad", "pages": [2], "text_as_outlines": true }));

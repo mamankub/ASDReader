@@ -376,3 +376,39 @@ fn an_empty_page_is_a_valid_empty_drawing() {
     assert!(dxf.ends_with("  0\r\nEOF\r\n"));
     assert!(entities(&dxf).is_empty());
 }
+
+#[test]
+fn the_active_view_has_one_nonzero_direction_for_empty_small_and_many_layer_drawings() {
+    // VPORT's view direction is one 16/26/36 triplet. An extra 36 is not an
+    // override: readers may reject it or retain the first, zero-length vector.
+    // See Autodesk's VPORT DXF reference, GUID-8CE7CC87-27BD-4490-89DA-C21F516415A9.
+    for count in [0, 1, 500] {
+        let mut p = page(Vec::new());
+        for i in 0..count {
+            p.layers.push(format!("ชั้น {i}"));
+            let mut item = stroke(&[[10.0, 20.0], [50.0, 20.0]], false);
+            if let VectorItem::Path(path) = &mut item {
+                path.layer = Some(i);
+            }
+            p.items.push(item);
+        }
+        let (drawing, summary) = dxf(&p, &opts(Units::Millimetres, 100.0));
+        assert_eq!(summary.lines, count);
+        let tags = pairs(&drawing);
+        let table_records = records(&tags, "TABLES");
+        assert_eq!(table_records.iter().filter(|(kind, _)| *kind == "LAYER").count(), count + 1);
+        let views: Vec<_> = table_records.iter().filter(|(kind, _)| *kind == "VPORT").collect();
+        assert_eq!(views.len(), 1);
+        let view = &views[0].1;
+        assert!(view.contains(&(2, "*Active")));
+        let direction: Vec<_> = view.iter().filter(|(code, _)| matches!(code, 16 | 26 | 36)).copied().collect();
+        assert_eq!(direction, [(16, "0.0"), (26, "0.0"), (36, "1.0")], "{count} layers");
+        // All fields this writer emits in a VPORT are single-valued except
+        // subclass markers. Catch duplicate scalars before a tolerant importer
+        // can silently discard them.
+        let mut codes = std::collections::HashSet::new();
+        for (code, _) in view {
+            assert!(*code == 100 || codes.insert(*code), "duplicate VPORT group {code}");
+        }
+    }
+}

@@ -1171,7 +1171,10 @@ fn write_tables(o: &mut Out, t: &Tables, handles: &mut TableHandles, page: &Vect
     o.xy(13, [0.0, 0.0]);
     o.xy(14, [10.0 * s, 10.0 * s]);
     o.xy(15, [10.0 * s, 10.0 * s]);
-    o.xyz(16, [0.0, 0.0]);
+    // The view direction is (0, 0, 1). xyz() would also write group 36 = 0,
+    // leaving a duplicate Z and a zero-length direction in readers that take
+    // the first triplet. Write X/Y once, then its Z once.
+    o.xy(16, [0.0, 0.0]);
     o.f(36, 1.0);
     o.xyz(17, [0.0, 0.0]);
     o.f(40, (h * 1.05).max(1e-6));
