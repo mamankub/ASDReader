@@ -1,11 +1,12 @@
-//! Export a PDF ▸ Image (PNG, JPEG, TIFF) and Text (Acrobat's Export a PDF tool, first formats).
+//! Export a PDF ▸ Image (PNG, JPEG, TIFF), Text and AutoCAD DXF (Acrobat's Export a PDF tool,
+//! first formats; DXF is ASDReader's own).
 //!
 //! On the desktop the export runs on a worker thread and reports progress in the notice bar;
 //! on the web it runs in place and downloads the files.
 
 use std::sync::{Arc, Mutex};
 
-use asdreader_engine::export::{ExportSource, Exporter, ImageFormat};
+use asdreader_engine::export::{DxfScale, DxfSettings, DxfUnits as Units, ExportSource, Exporter, ImageFormat};
 use egui::{Align, Layout};
 
 use crate::marks_ui::PageRange;
@@ -18,6 +19,8 @@ pub enum ExportKind {
     Text,
     /// Export all images: the images pages use, as files.
     AllImages,
+    /// Each page as an AutoCAD DXF drawing (Convert ▸ AutoCAD DXF).
+    Dxf,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -27,11 +30,32 @@ pub struct ExportDraft {
     pub format: ImageFormat,
     /// Export all images ▸ skip images with fewer pixels than this on their shorter side.
     pub min_side: u32,
+    /// AutoCAD DXF: units, scale and how text is written.
+    pub dxf: DxfSettings,
 }
 
 impl Default for ExportDraft {
     fn default() -> Self {
-        Self { dpi: 150.0, range: PageRange::default(), format: ImageFormat::Png, min_side: 0 }
+        Self { dpi: 150.0, range: PageRange::default(), format: ImageFormat::Png, min_side: 0, dxf: DxfSettings::default() }
+    }
+}
+
+/// The drawing scales offered for a DXF export.
+const DXF_SCALES: [f64; 10] = [1.0, 5.0, 10.0, 20.0, 25.0, 50.0, 100.0, 200.0, 500.0, 1000.0];
+
+fn units_label(u: Units) -> &'static str {
+    match u {
+        Units::Millimetres => tl!("Millimetres"),
+        Units::Centimetres => tl!("Centimetres"),
+        Units::Metres => tl!("Metres"),
+        Units::Inches => tl!("Inches"),
+    }
+}
+
+fn scale_label(s: DxfScale) -> String {
+    match s {
+        DxfScale::Stated => tl!("As the page states (SCALE 1:100…), else 1:1").to_string(),
+        DxfScale::Ratio(n) => format!("1:{n}"),
     }
 }
 
@@ -46,6 +70,7 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut ASDReaderApp, t: &Tokens, kind: 
             ExportKind::Image => tl!("Export to Image"),
             ExportKind::Text => tl!("Export to Text"),
             ExportKind::AllImages => tl!("Export All Images"),
+            ExportKind::Dxf => tl!("Export to AutoCAD DXF"),
         })
         .font(theme::semibold(18.0)),
     );
@@ -104,6 +129,36 @@ pub(crate) fn body(ui: &mut egui::Ui, app: &mut ASDReaderApp, t: &Tokens, kind: 
                 .small()
                 .color(t.text_faint),
         );
+    } else if kind == ExportKind::Dxf {
+        ui.horizontal(|ui| {
+            ui.label(tl!("Units"));
+            egui::ComboBox::from_id_salt("dxf-units").selected_text(units_label(d.dxf.units)).show_ui(ui, |ui| {
+                for u in [Units::Millimetres, Units::Centimetres, Units::Metres, Units::Inches] {
+                    ui.selectable_value(&mut d.dxf.units, u, units_label(u));
+                }
+            });
+        });
+        ui.horizontal(|ui| {
+            ui.label(tl!("Scale"));
+            egui::ComboBox::from_id_salt("dxf-scale").selected_text(scale_label(d.dxf.scale)).width(260.0).show_ui(ui, |ui| {
+                ui.selectable_value(&mut d.dxf.scale, DxfScale::Stated, scale_label(DxfScale::Stated));
+                for n in DXF_SCALES {
+                    ui.selectable_value(&mut d.dxf.scale, DxfScale::Ratio(n), scale_label(DxfScale::Ratio(n)));
+                }
+            });
+        });
+        ui.horizontal(|ui| {
+            ui.label(tl!("Text"));
+            widgets::radio_value(ui, &mut d.dxf.text_as_outlines, false, tl!("Editable text"));
+            widgets::radio_value(ui, &mut d.dxf.text_as_outlines, true, tl!("Outlines (looks exactly as on the page)"));
+        });
+        ui.label(
+            egui::RichText::new(tl!(
+                "One DXF drawing per page, at full size in the units chosen. Lines, circles, arcs, fills, text, layers, colours and line weights are kept; images are saved next to the drawing."
+            ))
+            .small()
+            .color(t.text_faint),
+        );
     } else {
         ui.label(egui::RichText::new(tl!("Plain text in reading order; pages are separated by form feeds.")).small().color(t.text_faint));
     }
@@ -132,6 +187,7 @@ fn run(
     dpi: f64,
     format: ImageFormat,
     min_side: u32,
+    dxf: DxfSettings,
     pages: Vec<usize>,
     stem: String,
     mut sink: impl FnMut(&str, Vec<u8>) -> Result<(), String>,
@@ -146,6 +202,41 @@ fn run(
             *s = Some((done, total, msg));
         }
     };
+    if kind == ExportKind::Dxf {
+        let mut left_out = 0;
+        let mut scales = Vec::new();
+        for (k, p) in pages.iter().enumerate() {
+            set(k, None);
+            let result = asdreader_engine::export::export_dxf(&src, *p, &stem, dxf).and_then(|out| {
+                left_out += out.left_out;
+                scales.push(out.scale);
+                out.files.into_iter().try_for_each(|(name, bytes)| sink(&name, bytes))
+            });
+            if let Err(e) = result {
+                return crate::i18n::fmt(tl!("Export stopped: {e}"), &[("e", &e.to_string())]);
+            }
+        }
+        let mut msg = if total == 1 {
+            crate::i18n::fmt(tl!("Exported 1 drawing"), &[])
+        } else {
+            crate::i18n::fmt(tl!("Exported {n} drawings"), &[("n", &total.to_string())])
+        };
+        // The scales the pages were drawn at, when they were read from the pages.
+        if dxf.scale == DxfScale::Stated {
+            let mut seen: Vec<f64> = Vec::new();
+            for s in scales {
+                if !seen.contains(&s) {
+                    seen.push(s);
+                }
+            }
+            let list = seen.iter().map(|s| format!("1:{s}")).collect::<Vec<_>>().join(", ");
+            msg.push_str(&crate::i18n::fmt(tl!(" (scale {list})"), &[("list", &list)]));
+        }
+        if left_out > 0 {
+            msg.push_str(&crate::i18n::fmt(tl!(" ({n} patterned fills or images left out)"), &[("n", &left_out.to_string())]));
+        }
+        return msg;
+    }
     if kind == ExportKind::AllImages {
         set(0, None);
         let out = match asdreader_engine::export::extract_images(&src, &pages, min_side) {
@@ -174,7 +265,7 @@ fn run(
     let mut ex = Exporter::from_source(src);
     match kind {
         // Handled above.
-        ExportKind::AllImages => String::new(),
+        ExportKind::AllImages | ExportKind::Dxf => String::new(),
         ExportKind::Image => {
             for (k, p) in pages.iter().enumerate() {
                 set(k, None);
@@ -234,6 +325,7 @@ impl ASDReaderApp {
         let dpi = self.export_draft.dpi;
         let format = self.export_draft.format;
         let min_side = self.export_draft.min_side;
+        let dxf = self.export_draft.dxf;
         let status: ExportStatus = Arc::new(Mutex::new(Some((0, pages.len(), None))));
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -245,7 +337,7 @@ impl ASDReaderApp {
                     let sink = |name: &str, bytes: Vec<u8>| {
                         crate::editing::write_atomically(&dir.join(name).to_string_lossy(), &bytes).map_err(|e| format!("{name}: {e}"))
                     };
-                    let msg = run(src, kind, dpi, format, min_side, pages, stem, sink, &st, lang);
+                    let msg = run(src, kind, dpi, format, min_side, dxf, pages, stem, sink, &st, lang);
                     if let Ok(mut s) = st.lock() {
                         let (done, total) = s.as_ref().map_or((0, 0), |(d, t, _)| (*d, *t));
                         let done_msg = crate::i18n::fmt(tl!("{msg} to {dir}"), &[("msg", &msg), ("dir", &shown)]);
@@ -275,6 +367,7 @@ impl ASDReaderApp {
                 dpi,
                 format,
                 min_side,
+                dxf,
                 pages,
                 stem,
                 |name, bytes| crate::editing::download(name, &bytes),

@@ -511,6 +511,7 @@ dependencies = [
 name = "asdreader-export"
 version = "0.13.5"
 dependencies = [
+ "asdreader-render",
  "flate2",
 ]
 
@@ -672,6 +673,7 @@ version = "0.13.5"
 dependencies = [
  "asdreader-cos",
  "asdreader-fonts",
+ "asdreader-testkit",
  "bytemuck",
  "flate2",
  "getrandom 0.4.3",

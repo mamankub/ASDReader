@@ -8427,3 +8427,30 @@ fn bookmark_list_reports_colour_and_style() {
     let re = ok(&mut b, "doc_open", json!({ "path": "restyled.pdf" }))["doc"].as_u64().unwrap();
     assert_eq!(style(&ok(&mut b, "bookmark_list", json!({ "doc": re }))["bookmarks"]), style(&set), "saved");
 }
+
+/// `doc_export_dxf` writes a drawing per page into the folder, at the scale and in the units
+/// asked, and refuses arguments it can't use.
+#[test]
+fn pages_export_to_autocad_dxf() {
+    let dir = workdir("dxf");
+    let mut a = auto(&dir);
+    let doc = ok(&mut a, "doc_open", json!({ "path": "a.pdf" }))["doc"].as_u64().unwrap();
+    let r = ok(&mut a, "doc_export_dxf", json!({ "doc": doc, "folder": "cad", "pages": [1, 3], "units": "m", "scale": 50 }));
+    assert_eq!(r["count"], 2, "{r}");
+    let first = &r["drawings"][0];
+    assert_eq!((first["page"].as_u64(), first["scale"].as_f64(), first["entities"]["texts"].as_u64()), (Some(1), Some(50.0), Some(1)), "{r}");
+    let dxf = std::fs::read_to_string(dir.join("cad/a_page_1.dxf")).unwrap();
+    assert!(dxf.contains("\r\n$INSUNITS\r\n 70\r\n6\r\n"), "metres");
+    assert!(dxf.contains("\r\nPage 1\r\n"), "the page's text");
+    assert!(dir.join("cad/a_page_3.dxf").is_file() && !dir.join("cad/a_page_2.dxf").exists());
+    // Outlines instead of text; the page states no scale, so 1:1.
+    let r = ok(&mut a, "doc_export_dxf", json!({ "doc": doc, "folder": "cad", "pages": [2], "text_as_outlines": true }));
+    assert_eq!((r["drawings"][0]["scale"].as_f64(), r["drawings"][0]["entities"]["texts"].as_u64()), (Some(1.0), Some(0)), "{r}");
+    assert_eq!(r["drawings"][0]["entities"]["hatches"].as_u64(), Some(5), "the five glyphs of \"Page 2\": {r}");
+    for bad in [json!({ "units": "ft" }), json!({ "scale": 0 }), json!({ "scale": "auto" })] {
+        let mut args = json!({ "doc": doc, "folder": "cad" });
+        args.as_object_mut().unwrap().extend(bad.as_object().unwrap().clone());
+        assert!(matches!(err(&mut a, "doc_export_dxf", args), ToolError::InvalidArgs(_)));
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

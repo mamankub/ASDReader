@@ -2693,3 +2693,19 @@ theme	Appearance	ลักษณะที่ปรากฏ
 	Help and development	ช่วยเหลือและติดตามการพัฒนา
 	Repair Thai text	ซ่อมข้อความไทย
 	Save the printed PDF	บันทึกไฟล์ PDF ที่พิมพ์
+	Export to AutoCAD DXF	ส่งออกเป็น AutoCAD DXF
+	Export to AutoCAD DXF…	ส่งออกเป็น AutoCAD DXF…
+	AutoCAD drawing (.dxf)	แบบ AutoCAD (.dxf)
+	Millimetres	มิลลิเมตร
+	Centimetres	เซนติเมตร
+	Metres	เมตร
+	Inches	นิ้ว
+	Scale	มาตราส่วน
+	As the page states (SCALE 1:100…), else 1:1	ตามที่ระบุในหน้า (SCALE 1:100…) ถ้าไม่ระบุใช้ 1:1
+	Editable text	ข้อความที่แก้ไขได้
+	Outlines (looks exactly as on the page)	เส้นรอบรูปตัวอักษร (หน้าตาเหมือนในหน้าทุกประการ)
+	One DXF drawing per page, at full size in the units chosen. Lines, circles, arcs, fills, text, layers, colours and line weights are kept; images are saved next to the drawing.	หนึ่งหน้าต่อหนึ่งไฟล์ DXF ขนาดจริงตามหน่วยที่เลือก คงเส้น วงกลม ส่วนโค้ง พื้นทึบ ข้อความ เลเยอร์ สี และน้ำหนักเส้นไว้ ส่วนรูปภาพจะบันทึกไว้ข้างไฟล์แบบ
+	Exported 1 drawing	ส่งออกแล้ว 1 แบบ
+	Exported {n} drawings	ส่งออกแล้ว {n} แบบ
+	 (scale {list})	 (มาตราส่วน {list})
+	 ({n} patterned fills or images left out)	 (ไม่ได้ส่งออกพื้นลวดลายหรือรูปภาพ {n} รายการ)

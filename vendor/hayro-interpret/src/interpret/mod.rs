@@ -701,13 +701,21 @@ fn interpret_window<'a>(
                         Some((d, r))
                     });
 
+                // ASDReader patch (51): the layer a visible `/OC` sequence puts its content on.
+                let mut layer = None;
                 if let Some((dict, oc_ref)) = oc {
                     context.ocg_state.begin_ocg(&dict, oc_ref.into());
+                    if bdc.0.as_ref() == b"OC" && context.ocg_state.is_visible() {
+                        layer = crate::ocg::layer_name(&dict);
+                    }
                 } else {
                     context.ocg_state.begin_marked_content();
                 }
 
                 device.begin_marked_content(bdc.0, mcid);
+                if let Some(name) = layer {
+                    device.marked_content_layer(&name);
+                }
 
                 // ASDReader patch (25): hand the device the sequence's `/ActualText`, from an inline
                 // property list or one named in the resources' `/Properties`.

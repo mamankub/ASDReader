@@ -242,3 +242,18 @@ impl OcmdPolicy {
         }
     }
 }
+
+/// ASDReader patch (51): the name of the layer an `/OC` entry puts content on: the group's
+/// `/Name`, or for a membership dictionary (`/OCMD`) the first named group it lists. The text
+/// string's raw bytes; `None` when there is none.
+pub(crate) fn layer_name(props: &Dict<'_>) -> Option<Vec<u8>> {
+    use hayro_syntax::object::dict::keys::NAME;
+    let name = |d: &Dict<'_>| d.get::<hayro_syntax::object::String<'_>>(NAME).map(|n| n.as_bytes().to_vec()).filter(|n| !n.is_empty());
+    if props.get::<Name<'_>>(TYPE).as_deref() != Some(OCMD) {
+        return name(props);
+    }
+    if let Some(group) = props.get::<Dict<'_>>(OCGS) {
+        return name(&group);
+    }
+    props.get::<Array<'_>>(OCGS)?.iter::<Dict<'_>>().find_map(|d| name(&d))
+}

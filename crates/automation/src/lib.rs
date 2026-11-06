@@ -792,7 +792,7 @@ impl Automation {
                 let new = self.session.open_revision(id, n).map_err(failed)?;
                 summary(self.session.get(new).ok_or_else(|| failed("the document vanished"))?)
             }
-            "doc_export_images" | "doc_export_text" | "doc_export_all_images" => self.export(name, &a)?,
+            "doc_export_images" | "doc_export_text" | "doc_export_all_images" | "doc_export_dxf" => self.export(name, &a)?,
             "doc_header_footer" | "doc_watermark" | "doc_background" | "doc_remove_marks" => self.marks(name, &a)?,
             "doc_unprotect" => {
                 let mut out = self.apply(&a, Edit::RemoveProtection)?;
@@ -1429,6 +1429,46 @@ impl Automation {
         }
         let folder = self.resolve(a.str("folder")?, true)?;
         std::fs::create_dir_all(&folder).map_err(|e| failed(format!("{}: {e}", folder.display())))?;
+        if tool == "doc_export_dxf" {
+            let units = match a.opt_str("units")?.unwrap_or("mm") {
+                "mm" => asdreader_engine::export::DxfUnits::Millimetres,
+                "cm" => asdreader_engine::export::DxfUnits::Centimetres,
+                "m" => asdreader_engine::export::DxfUnits::Metres,
+                "in" => asdreader_engine::export::DxfUnits::Inches,
+                u => return Err(ToolError::InvalidArgs(format!("unknown units {u:?} (mm, cm, m, in)"))),
+            };
+            let scale = match a.0.get("scale") {
+                None | Some(Value::Null) => asdreader_engine::export::DxfScale::Stated,
+                Some(Value::String(s)) if s == "stated" => asdreader_engine::export::DxfScale::Stated,
+                Some(Value::Number(n)) => match n.as_f64() {
+                    Some(n) if n.is_finite() && n > 0.0 && n <= 1e6 => asdreader_engine::export::DxfScale::Ratio(n),
+                    _ => return Err(ToolError::InvalidArgs("scale must be a number over 0 (N of 1:N) or \"stated\"".into())),
+                },
+                Some(_) => return Err(ToolError::InvalidArgs("scale must be a number over 0 (N of 1:N) or \"stated\"".into())),
+            };
+            let settings = asdreader_engine::export::DxfSettings { units, scale, text_as_outlines: a.opt_bool("text_as_outlines")?.unwrap_or(false) };
+            let src = doc.export_source();
+            let mut drawings = Vec::new();
+            for p in pages {
+                let out = asdreader_engine::export::export_dxf(&src, p, &stem, settings).map_err(failed)?;
+                let mut written = Vec::new();
+                for (name, bytes) in &out.files {
+                    let path = child(&folder, name);
+                    write_atomic(&path, bytes)?;
+                    written.push(path.to_string_lossy().into_owned());
+                }
+                let s = &out.summary;
+                drawings.push(json!({
+                    "page": p + 1,
+                    "path": written.first(),
+                    "images": written.get(1..).unwrap_or_default(),
+                    "scale": out.scale,
+                    "entities": { "lines": s.lines, "polylines": s.polylines, "circles": s.circles, "arcs": s.arcs, "splines": s.splines, "hatches": s.hatches, "texts": s.texts, "images": s.images },
+                    "left_out": out.left_out,
+                }));
+            }
+            return Ok(json!({ "count": drawings.len(), "drawings": drawings }));
+        }
         if tool == "doc_export_all_images" {
             let min = u32::try_from(a.opt_int("min_size")?.unwrap_or(0).max(0)).unwrap_or(u32::MAX);
             let out = asdreader_engine::export::extract_images(&doc.export_source(), &pages, min).map_err(failed)?;
