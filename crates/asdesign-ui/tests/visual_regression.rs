@@ -182,8 +182,20 @@ impl Artifacts {
     }
 }
 
+/// Tests that render take this first, so only one wgpu device exists at a time, as in ui-egui's
+/// integration tests. Mesa's OpenGL on FreeBSD crashes (SIGSEGV) when test threads create and use
+/// devices at once: in a 4-CPU VM about one run in five, with 6 CPUs seven in ten, with one
+/// thread never. Held for the whole test (declared before the renderer, so released after it).
+static GPU: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn gpu() -> std::sync::MutexGuard<'static, ()> {
+    // A test that panicked while holding it leaves nothing to clean up.
+    GPU.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
 #[test]
 fn rendered_controls_match_independent_reference_pixels_and_meshes() {
+    let _gpu = gpu();
     let mut renderer = WgpuTestRenderer::new();
     let mut artifacts = Artifacts::new("controls");
     let mut count = 0;
@@ -213,6 +225,7 @@ fn rendered_controls_match_independent_reference_pixels_and_meshes() {
 
 #[test]
 fn visual_comparisons_detect_color_spacing_and_stroke_mutations() {
+    let _gpu = gpu();
     let mut renderer = WgpuTestRenderer::new();
     let mut artifacts = Artifacts::new("negative-controls");
     let mut count = 0;
@@ -241,6 +254,7 @@ fn toolbar_fitting_matches_literal_group_and_overflow_positions() {
     use asdesign_ui::layout::fit_toolbar;
     use egui::{Align, Layout, Stroke, StrokeKind, UiBuilder, pos2, vec2};
 
+    let _gpu = gpu();
     let mut renderer = WgpuTestRenderer::new();
     let mut artifacts = Artifacts::new("toolbar");
     let mut count = 0;
@@ -295,6 +309,7 @@ fn widget_palette_renders_all_five_states_with_existing_borders_and_expansion() 
     use asdesign_ui::theme::WidgetPalette;
     use egui::{CornerRadius, Stroke, StrokeKind, pos2, vec2};
 
+    let _gpu = gpu();
     let mut renderer = WgpuTestRenderer::new();
     let mut artifacts = Artifacts::new("widget-palette");
     for theme in [Theme::Light, Theme::Dark] {
