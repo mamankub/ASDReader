@@ -6614,27 +6614,74 @@ trailer << /Root 1 0 R >>
         assert_eq!(page.rgba.as_chunks::<4>().0.to_vec(), expected);
     }
 
+    /// Each of `dst` device pixels as the mean of the `src` columns it covers, weighted by how much
+    /// of each it covers, with each colour weighted by its alpha and the result over white paper.
+    /// Worked out here from first principles, independently of the renderer.
+    fn area_reference(gray: &[u8], alpha: &[u8], dst: usize) -> Vec<f64> {
+        let step = gray.len() as f64 / dst as f64;
+        (0..dst)
+            .map(|i| {
+                let (start, end) = (i as f64 * step, (i + 1) as f64 * step);
+                let (mut colour, mut cover) = (0.0, 0.0);
+                for (j, (&g, &a)) in gray.iter().zip(alpha).enumerate() {
+                    let w = (end.min(j as f64 + 1.0) - start.max(j as f64)).max(0.0) / step;
+                    colour += w * f64::from(g) * f64::from(a) / 255.0;
+                    cover += w * f64::from(a) / 255.0;
+                }
+                colour + (1.0 - cover) * 255.0
+            })
+            .collect()
+    }
+
+    /// An enlarged image is drawn smooth (bilinear), as Foxit, Acrobat and poppler draw it, unless it
+    /// doesn't ask for interpolation and is enlarged 4× or more: barcodes, QR codes and pixel art
+    /// keep hard edges then, as in poppler. Nearest sampling made every enlarged photo blocky.
     #[test]
-    fn non_integer_minification_samples_the_same_columns() {
-        // Ten columns drawn six pixels wide: centre sampling reads columns 0, 2, 4, 5, 7 and 9.
+    fn enlarged_images_are_smooth_below_four_times_and_hard_edged_from_four() {
+        let two = [0u8, 255];
+        let grays = |device: u32| -> Vec<u8> {
+            let page = draw_minified_image("DeviceGray", (2, 1), None, &two, None, (device, 1));
+            page.rgba.as_chunks::<4>().0.iter().map(|px| px[0]).collect()
+        };
+        let mid = |g: &[u8]| g.iter().any(|&v| (16..=239).contains(&v));
+        let at_3x = grays(6);
+        assert!(mid(&at_3x), "3× enlargement should blend the edge: {at_3x:?}");
+        let at_4x = grays(8);
+        assert!(!mid(&at_4x), "4× enlargement of a non-interpolated image keeps hard edges: {at_4x:?}");
+        // An image that asks for interpolation is smooth at any enlargement.
+        let page = draw_minified_image("DeviceGray", (2, 1), Some(true), &two, None, (8, 1));
+        let smooth: Vec<u8> = page.rgba.as_chunks::<4>().0.iter().map(|px| px[0]).collect();
+        assert!(mid(&smooth), "/Interpolate true should blend at 4×: {smooth:?}");
+    }
+
+    /// A shrunk image is area-averaged (as Foxit, Acrobat and poppler draw it), whatever its
+    /// `/Interpolate`: nearest sampling read columns 0, 2, 4, 5, 7 and 9 of ten and dropped the
+    /// rest, which broke shrunk photos and scans into speckles.
+    #[test]
+    fn non_integer_minification_averages_the_columns_each_pixel_covers() {
         let ramp = [10u8, 20, 30, 40, 50, 60, 70, 80, 90, 100];
         let page = draw_minified_image("DeviceGray", (10, 1), None, &ramp, None, (6, 1));
         let grays: Vec<u8> = page.rgba.as_chunks::<4>().0.iter().map(|px| px[0]).collect();
-        assert_eq!(grays, [10, 30, 50, 60, 80, 100]);
+        let expected = area_reference(&ramp, &[255; 10], 6);
+        for (got, want) in grays.iter().zip(&expected) {
+            assert!((f64::from(*got) - want).abs() <= 1.0, "{grays:?} against {expected:?}");
+        }
     }
 
+    /// Colour and soft mask are averaged over the same columns, the colour weighted by the mask so
+    /// a transparent column's colour doesn't bleed into the mean.
     #[test]
-    fn non_integer_minification_samples_colour_and_mask_from_the_same_columns() {
-        // Ten gray columns with a soft mask, drawn six pixels wide: columns 0, 2, 4, 5, 7 and 9 are
-        // sampled, so the mask must pick the same columns as the colours.
+    fn non_integer_minification_averages_colour_and_mask_over_the_same_columns() {
         let ramp = [10u8, 20, 30, 40, 50, 60, 70, 80, 90, 100];
         let mask = [255u8, 0, 0, 0, 255, 255, 0, 0, 0, 255];
         let page = draw_minified_image("DeviceGray", (10, 1), None, &ramp, Some(&mask), (6, 1));
-        // Opaque columns keep their gray; transparent columns show the white page.
-        assert_eq!(
-            page.rgba.as_chunks::<4>().0.to_vec(),
-            vec![[10, 10, 10, 255], [255, 255, 255, 255], [50, 50, 50, 255], [60, 60, 60, 255], [255, 255, 255, 255], [100, 100, 100, 255]]
-        );
+        let pixels = page.rgba.as_chunks::<4>().0.to_vec();
+        let expected = area_reference(&ramp, &mask, 6);
+        for (px, want) in pixels.iter().zip(&expected) {
+            assert!(px[..3].iter().all(|&c| (f64::from(c) - want).abs() <= 1.0) && px[3] == 255, "{pixels:?} against {expected:?}");
+        }
+        // Columns 1-3 and 6-8 are fully transparent: pixels 1 and 4 cover only them and show paper.
+        assert_eq!((pixels[1], pixels[4]), ([255; 4], [255; 4]));
     }
 
     #[test]

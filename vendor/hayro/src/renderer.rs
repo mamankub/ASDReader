@@ -186,6 +186,94 @@ pub fn image_resampling_size(
     Some(target)
 }
 
+/// ASDReader patch: how an image drawn below its resolution is shrunk before it is drawn.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Shrink {
+    /// Catmull-Rom, for an image that asks for interpolation.
+    CatmullRom,
+    /// The mean of the samples each target pixel covers: no aliasing, and no blending across
+    /// samples that line up with target pixels.
+    Area,
+    /// Nearest-neighbour, for Type 3 glyph images that don't ask for interpolation.
+    Nearest,
+}
+
+/// ASDReader patch: straight RGBA → premultiplied, in place.
+fn premultiply_rgba(rgba: &mut [u8]) {
+    for chunk in rgba.as_chunks_mut::<4>().0 {
+        let [r, g, b, a] = *chunk;
+        *chunk = AlphaColor::from_rgba8(r, g, b, a).premultiply().to_rgba8().to_u8_array();
+    }
+}
+
+/// ASDReader patch: for each of `dst` target samples along an axis of `src` source samples
+/// (`dst <= src`), the source samples it covers and how much of each, as fractions summing to 1.
+fn area_weights(src: u32, dst: u32) -> Option<Vec<Vec<(usize, f32)>>> {
+    if src == 0 || dst == 0 || dst > src {
+        return None;
+    }
+    let step = f64::from(src) / f64::from(dst);
+    let mut out = Vec::new();
+    out.try_reserve_exact(dst as usize).ok()?;
+    for i in 0..dst {
+        let (start, end) = (f64::from(i) * step, (f64::from(i) + 1.0) * step);
+        let mut taps = Vec::new();
+        let mut j = start.floor() as u32;
+        while j < src && f64::from(j) < end {
+            let w = (end.min(f64::from(j) + 1.0) - start.max(f64::from(j))) / step;
+            if w > 0.0 {
+                taps.push((j as usize, w as f32));
+            }
+            j += 1;
+        }
+        out.push(taps);
+    }
+    Some(out)
+}
+
+/// ASDReader patch: `data` (`src` samples of `N` channels) shrunk to `dst` by area averaging:
+/// each target sample is the mean of the source samples it covers, weighted by how much of each
+/// it covers. Unlike nearest sampling it drops nothing (no speckled, aliased shrink), and unlike
+/// a wide filter it blends nothing outside the covered area, so blocks that line up with target
+/// samples keep their exact values (#624). Rows first, then columns. `None` when a buffer would
+/// be over the image limit or can't be allocated, or the target is not smaller.
+fn area_shrink<const N: usize>(data: &[u8], src: (u32, u32), dst: (u32, u32)) -> Option<Vec<u8>> {
+    if source_byte_len(src.0, src.1, N, MAX_IMAGE_PIXELS)? != data.len() {
+        return None;
+    }
+    let (xs, ys) = (area_weights(src.0, dst.0)?, area_weights(src.1, dst.1)?);
+    let mut rows = image_buffer(source_byte_len(dst.0, src.1, N, MAX_IMAGE_PIXELS)?)?;
+    let to_u8 = |v: f32| v.round().clamp(0.0, 255.0) as u8;
+    for row in data.chunks_exact(src.0 as usize * N) {
+        for taps in &xs {
+            let mut acc = [0f32; N];
+            for &(j, w) in taps {
+                let px = row.get(j * N..j * N + N)?;
+                for (a, &v) in acc.iter_mut().zip(px) {
+                    *a += w * f32::from(v);
+                }
+            }
+            rows.extend(acc.map(to_u8));
+        }
+    }
+    let mut out = image_buffer(source_byte_len(dst.0, dst.1, N, MAX_IMAGE_PIXELS)?)?;
+    let row_len = dst.0 as usize * N;
+    let mut acc = Vec::new();
+    acc.try_reserve_exact(row_len).ok()?;
+    for taps in &ys {
+        acc.clear();
+        acc.resize(row_len, 0f32);
+        for &(j, w) in taps {
+            let row = rows.get(j * row_len..(j + 1) * row_len)?;
+            for (a, &v) in acc.iter_mut().zip(row) {
+                *a += w * f32::from(v);
+            }
+        }
+        out.extend(acc.iter().map(|&v| to_u8(v)));
+    }
+    Some(out)
+}
+
 /// ASDReader patch: allocation failures in image conversion/resampling keep the renderer alive.
 fn image_buffer(len: usize) -> Option<Vec<u8>> {
     let mut out = Vec::new();
@@ -691,14 +779,14 @@ impl Renderer {
         new_width: u32,
         new_height: u32,
         pixel_format: ImagePixelFormat,
-        interpolate: bool,
+        filter: Shrink,
     ) -> (Vec<u8>, u32, u32) {
-        // ASDReader patch (#624): `/Interpolate` governs the pre-minification pass too. Using
-        // Catmull-Rom here for an image that did not request interpolation blends hard edges
-        // before ImageQuality::Low gets a chance to sample it. Keep the pre-resize (and its
-        // bounded memory/performance behaviour), but use nearest-neighbour when interpolation
-        // is disabled. PDF's default for `/Interpolate` is false.
+        // ASDReader patch (#624): Catmull-Rom only for an image that asks for interpolation; it
+        // blends neighbouring samples, which made scans and rasterized text soft. Nearest for the
+        // rest that reach here (Type 3 glyph images); area-averaged images go through
+        // `area_shrink` instead. See `Shrink`.
         let nearest = Scaler::new(ResamplingFunction::Nearest);
+        let interpolate = filter == Shrink::CatmullRom;
         let scaler = if interpolate { &self.scaler } else { &nearest };
         let resized = match pixel_format {
             ImagePixelFormat::Luma => self.resize_image_data_impl::<1>(
@@ -891,10 +979,27 @@ impl Renderer {
                 return;
             }
         }
-        let mut quality = if interpolate {
-            ImageQuality::Medium
+        // ASDReader patch: images are smoothed as Foxit, Acrobat and poppler draw them, whatever
+        // their `/Interpolate` (false, PDF's default, is what almost every image has). Nearest
+        // sampling dropped the samples between those it took, so shrunk photos and scans broke
+        // into speckles and enlarged ones into blocks. A shrunk image is area-averaged, which
+        // keeps blocks that line up with device pixels their exact colours (#624); an enlarged one
+        // is drawn bilinear, unless it doesn't ask for interpolation and is enlarged 4× or more
+        // (barcodes, QR codes, pixel art keep hard edges, as in poppler). Type 3 glyph images that
+        // don't ask keep nearest sampling.
+        let shrink = if interpolate {
+            Shrink::CatmullRom
+        } else if self.in_type3_glyph {
+            Shrink::Nearest
         } else {
+            Shrink::Area
+        };
+        let smooth = shrink != Shrink::Nearest;
+        let hard_edges = !interpolate && (self.in_type3_glyph || x_scale >= 4.0 || y_scale >= 4.0);
+        let mut quality = if hard_edges {
             ImageQuality::Low
+        } else {
+            ImageQuality::Medium
         };
         let has_alpha = alpha_data.is_some();
         let mut may_have_transparency = has_alpha || self.force_images_may_have_transparency();
@@ -928,11 +1033,11 @@ impl Renderer {
         if requested_resize && self.in_type3_glyph && interpolate {
             quality = ImageQuality::High;
         }
-        // ASDReader patch: an axis-aligned, interpolated image that is shrunk lands on whole device
+        // ASDReader patch: an axis-aligned, smoothed image that is shrunk lands on whole device
         // pixels. It is shrunk once to exactly its snapped device rectangle and drawn 1:1 at the
         // snapped corner. Otherwise the shrunk raster (rounded up to a whole size) is sampled a
         // second time at a fractional scale and offset, which blurs scans and photos.
-        let snapped = if interpolate
+        let snapped = if smooth
             && requested_resize
             && !self.in_type3_glyph
             && (new_width, new_height) != (source_width, source_height)
@@ -944,11 +1049,11 @@ impl Renderer {
         let (new_width, new_height) = snapped.map_or((new_width, new_height), |s| (s.0, s.1));
         let needs_resize = (new_width, new_height) != (source_width, source_height);
 
-        // ASDReader patch (#624): a minified image with a soft mask that is not interpolated is
-        // nearest-sampled straight into premultiplied target RGBA. That skips the full-resolution
+        // ASDReader patch (#624): a minified image with a soft mask that is nearest-sampled (a Type 3
+        // glyph image) is sampled straight into premultiplied target RGBA. That skips the full-resolution
         // RGBA copy below and the premultiply pass after it.
         let direct = match &alpha_data {
-            Some(alpha) if needs_resize && !interpolate => nearest_premultiplied_rgba(
+            Some(alpha) if needs_resize && !smooth => nearest_premultiplied_rgba(
                 &image_data,
                 &alpha.data,
                 (source_width, source_height),
@@ -997,9 +1102,33 @@ impl Renderer {
                 (rgba, ImagePixelFormat::Rgba)
             }
         };
-        let (data, mut img_width, mut img_height) = if premultiplied {
+        // Area averaging weights each colour by its alpha (premultiplied first), so a transparent
+        // sample's colour doesn't bleed into the mean.
+        let (data, premultiplied) = if shrink == Shrink::Area && needs_resize && matches!(format, ImagePixelFormat::Rgba) {
+            let mut data = data;
+            premultiply_rgba(&mut data);
+            (data, true)
+        } else {
+            (data, premultiplied)
+        };
+        let area = if shrink == Shrink::Area && needs_resize {
+            let shrunk = match format {
+                ImagePixelFormat::Luma => area_shrink::<1>(&data, (source_width, source_height), (new_width, new_height)),
+                ImagePixelFormat::Rgb => area_shrink::<3>(&data, (source_width, source_height), (new_width, new_height)),
+                ImagePixelFormat::Rgba => area_shrink::<4>(&data, (source_width, source_height), (new_width, new_height)),
+            };
+            if shrunk.is_none() {
+                log::warn!("Image area averaging exceeded its buffer limit; drawing the source resolution");
+            }
+            shrunk
+        } else {
+            None
+        };
+        let (data, mut img_width, mut img_height) = if let Some(shrunk) = area {
+            (shrunk, new_width, new_height)
+        } else if premultiplied && shrink != Shrink::Area {
             (data, new_width, new_height)
-        } else if needs_resize {
+        } else if needs_resize && shrink != Shrink::Area {
             self.resize_image_data(
                 data,
                 source_width,
@@ -1007,7 +1136,7 @@ impl Renderer {
                 new_width,
                 new_height,
                 format,
-                interpolate,
+                shrink,
             )
         } else {
             (data, source_width, source_height)
