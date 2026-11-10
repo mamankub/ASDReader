@@ -23,7 +23,7 @@ permissions:
 
 jobs:
   freebsd:
-    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ false && github.repository_owner == 'mamankub' }} # Owner paused non-Linux/Windows-x64 coverage (2026-11-10).
     uses: ./.github/workflows/shared-freebsd.yml
     with:
       asdesign-fonts-ref: c76dcbc93b13d3b6981c12602bc545ea7ec3e67a

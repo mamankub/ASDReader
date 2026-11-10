@@ -56,14 +56,14 @@ permissions:
 
 jobs:
   freebsd:
-    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ false && github.repository_owner == 'mamankub' }} # Owner paused non-Linux/Windows-x64 coverage (2026-11-10).
     name: FreeBSD 15 ${{ matrix.arch }} (build + test)
     runs-on: ["self-hosted", "Linux", "X64", "asd-ci", "ubuntu-24.04"]
     timeout-minutes: 300
     strategy:
       fail-fast: false
       matrix:
-        arch: ${{ fromJSON(inputs.architectures != '' && inputs.architectures || ((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && '["x86_64"]' || '["x86_64","aarch64"]')) }}
+        arch: ["x86_64"]
     env:
       CARGO_BUILD_EXTRA_ARGS: ${{ inputs.cargo-build-extra-args }}
       CARGO_TEST_EXTRA_ARGS: ${{ inputs.cargo-test-extra-args }}
