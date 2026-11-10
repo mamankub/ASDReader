@@ -52,8 +52,9 @@ env:
 
 jobs:
   package:
+    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     name: package (cross-compiled on x64)
-    runs-on: windows-latest
+    runs-on: ["self-hosted", "Windows", "X64", "asd-ci"]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -85,9 +86,10 @@ jobs:
           retention-days: 7
 
   install:
+    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     name: install and run on ARM64
     needs: package
-    runs-on: windows-11-arm
+    runs-on: ["self-hosted", "Windows", "ARM64", "asd-ci"]
     timeout-minutes: 30
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

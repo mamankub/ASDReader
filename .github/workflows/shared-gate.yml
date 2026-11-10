@@ -100,8 +100,9 @@ permissions:
 
 jobs:
   gate:
+    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     name: gate (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ fromJSON('{"ubuntu-latest":["self-hosted","Linux","X64","asd-ci","ubuntu-24.04"],"ubuntu-24.04":["self-hosted","Linux","X64","asd-ci","ubuntu-24.04"],"ubuntu-22.04":["self-hosted","Linux","X64","asd-ci","ubuntu-22.04"],"ubuntu-24.04-arm":["self-hosted","Linux","ARM64","asd-ci","ubuntu-24.04"],"ubuntu-22.04-arm":["self-hosted","Linux","ARM64","asd-ci","ubuntu-22.04"],"windows-latest":["self-hosted","Windows","X64","asd-ci"],"windows-2022":["self-hosted","Windows","X64","asd-ci"],"windows-2025":["self-hosted","Windows","X64","asd-ci"],"windows-11-arm":["self-hosted","Windows","ARM64","asd-ci"],"macos-latest":["self-hosted","macOS","ARM64","asd-ci"],"macos-14":["self-hosted","macOS","ARM64","asd-ci"],"macos-15":["self-hosted","macOS","ARM64","asd-ci"],"macos-15-xlarge":["self-hosted","macOS","ARM64","asd-ci"],"macos-13":["self-hosted","macOS","X64","asd-ci"],"macos-15-intel":["self-hosted","macOS","X64","asd-ci"]}')[matrix.os] }}
     timeout-minutes: ${{ inputs.timeout-minutes }}
     strategy:
       # A failing leg must not cancel the others and hide their failures.
@@ -166,7 +167,7 @@ jobs:
 
       # Nothing waits on it: the space is free before the build needs it.
       - name: Free disk space
-        if: runner.os == 'Linux' && inputs.free-disk-space
+        if: ${{ runner.environment == 'github-hosted' && (runner.os == 'Linux' && inputs.free-disk-space) }}
         run: |
           nohup sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup \
             /opt/hostedtoolcache/CodeQL </dev/null >/dev/null 2>&1 &

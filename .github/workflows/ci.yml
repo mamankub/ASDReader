@@ -23,9 +23,9 @@ concurrency:
 jobs:
   # The gate doesn't check where dependencies come from: none may be a git source.
   git-sources:
-    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
+    if: ${{ (github.event.action != 'labeled' || github.event.label.name == 'full-ci') && (github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) }}
     name: No git dependencies
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "Linux", "X64", "asd-ci", "ubuntu-24.04"]
     permissions:
       contents: read
     steps:
@@ -64,8 +64,7 @@ jobs:
           PY
 
   gate:
-    if: github.event.action != 'labeled' || github.event.label.name == 'full-ci'
-    # Tracks @main so suite-wide CI fixes reach every app without a PR in each repository.
+    if: ${{ (github.event.action != 'labeled' || github.event.label.name == 'full-ci') && (github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) }}
     uses: ./.github/workflows/shared-gate.yml
     with:
       # Windows on main, manual runs and pull requests labelled `full-ci`. No macOS on PRs or main:

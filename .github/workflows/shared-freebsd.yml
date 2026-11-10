@@ -56,8 +56,9 @@ permissions:
 
 jobs:
   freebsd:
+    if: ${{ github.repository_owner == 'mamankub' && github.actor == 'mamankub' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     name: FreeBSD 15 ${{ matrix.arch }} (build + test)
-    runs-on: ubuntu-latest
+    runs-on: ["self-hosted", "Linux", "X64", "asd-ci", "ubuntu-24.04"]
     timeout-minutes: 300
     strategy:
       fail-fast: false

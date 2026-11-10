@@ -1,4 +1,6 @@
 # actionlint: self-hosted runner labels the workflows may use.
 self-hosted-runner:
   labels:
-    - macos-release
+  - macos-release
+  - asd-ci
+  - asd-library-ci
