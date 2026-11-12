@@ -1,6 +1,8 @@
 *~
 plan/
 /target
+# Alternate CARGO_TARGET_DIR some agent runs use; never tracked, but keeps `git status` clean.
+/target-craft
 /dist
 /corpus
 /log
