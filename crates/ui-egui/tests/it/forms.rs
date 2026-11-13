@@ -487,21 +487,65 @@ fn saved_value(path: &std::path::Path, name: &str) -> Vec<String> {
     app.session.get(app.views[0].id).unwrap().form.iter().find(|f| f.name == name).unwrap().value.clone()
 }
 
+/// What the app was doing, for a save that produced no file: a refused or failed save says so in a
+/// toast instead of throwing.
+fn save_state(h: &Harness<'static, ASDReaderApp>) -> String {
+    let state = h.state();
+    let view = state.views.first();
+    format!(
+        "toast={:?} dialog={} active={:?} views={} dirty={:?} focus={} draft={:?} notice={:?} pending_edit={} save_override={:?}",
+        state.toast.as_ref().map(|t| t.0.clone()),
+        state.dialog.is_some(),
+        state.active,
+        state.views.len(),
+        view.and_then(|v| state.session.get(v.id)).map(|d| d.dirty),
+        view.is_some_and(|v| v.forms.focus.is_some()),
+        view.and_then(|v| v.forms.focus.as_ref()).map(|f| f.text.clone()),
+        view.and_then(|v| v.forms.notice.clone()),
+        view.is_some_and(|v| v.pending_edit.is_some()),
+        state.save_override.as_deref().map(str::to_string),
+    )
+}
+
 /// Step frames until the save has written `path`, instead of assuming it is there after a fixed
 /// number of frames. The write is atomic, so the file appears only when it is complete.
-fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path) {
+fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path, case: &str) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut frames = 0u32;
+    let mut first_toast: Option<String> = None;
     while !path.exists() {
-        assert!(std::time::Instant::now() < deadline, "the save never wrote {}", path.display());
+        if first_toast.is_none() {
+            first_toast = h.state().toast.as_ref().map(|t| t.0.clone());
+        }
+        if std::time::Instant::now() >= deadline {
+            // A staging file left behind says the write itself failed rather than never starting.
+            let mut left: Vec<String> = std::fs::read_dir(path.parent().unwrap())
+                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+                .unwrap_or_default();
+            left.sort();
+            panic!(
+                "{case}: the save never wrote {} after {frames} frames. first toast seen: {first_toast:?} \
+                 files next to it: {left:?} {}",
+                path.display(),
+                save_state(h)
+            );
+        }
         h.run_steps(1);
+        frames += 1;
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     // One more frame so the app has seen its own save before the test looks at its state.
     h.run_steps(1);
 }
 
+/// A fresh directory for one test. The counter makes each call its own directory: two tests ran in
+/// parallel threads of this binary share the process id, and both used "same-frame", so each one's
+/// `remove_dir_all` deleted the other's directory mid-test and its save failed with
+/// "The system cannot find the path specified" (os error 3).
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("asdreader-forms-{name}-{}", std::process::id()));
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("asdreader-forms-{name}-{}-{unique}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -575,7 +619,7 @@ fn tabbing_back_to_the_same_field_then_saving_keeps_the_committed_value() {
             h.run_steps(3);
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
         }
-        wait_for_file(&mut h, &out);
+        wait_for_file(&mut h, &out, case);
         assert_eq!(saved_value(&out, "qty"), ["42"], "{case}: saving cannot restore the old value");
         assert_eq!(value(&h, "qty"), ["42"], "{case}");
         // One typing action is one history entry, even after saving. Escape closes the
@@ -647,6 +691,7 @@ fn typing_and_saving_in_the_same_frame_saves_the_last_keystrokes() {
     let out = dir.join("saved.pdf");
     let mut h = harness();
     type_then_save_in_one_frame(&mut h, "name", "Browser", egui::Event::Text(" Form 123".into()), &out);
+    wait_for_file(&mut h, &out, "same-frame typing");
     assert_eq!(saved_value(&out, "name"), ["Browser Form 123"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
