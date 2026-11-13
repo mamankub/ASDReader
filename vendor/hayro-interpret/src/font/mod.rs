@@ -530,8 +530,9 @@ pub enum FontQuery {
     Standard(StandardFont),
     /// A query for a font that is not embedded in the PDF file.
     ///
-    /// Note that this type of query is currently not supported,
-    /// but will be implemented in the future.
+    /// ASDReader patch: sent for a composite (Type 0) font (`is_composite`) and for a simple
+    /// TrueType/Type1 font whose name is not one of the standard 14. Return `None` to keep the
+    /// bundled stand-in.
     Fallback(FallbackFontQuery),
 }
 
@@ -560,6 +561,11 @@ pub struct FallbackFontQuery {
     pub is_small_cap: bool,
     /// The character collection (registry/ordering) if this is a CID font.
     pub character_collection: Option<CharacterCollection>,
+    /// ASDReader patch: the font is a Type 0 (composite) font. A simple TrueType/Type 1 font and a
+    /// Type 0 font both reach the resolver as a `FontQuery::Fallback`; `character_collection` cannot
+    /// tell them apart (a Type 0 font whose descendant has no `/CIDSystemInfo`, or only the
+    /// `Identity` ordering, has none either).
+    pub is_composite: bool,
 }
 
 impl FallbackFontQuery {
@@ -606,6 +612,15 @@ impl FallbackFontQuery {
             .as_ref()
             .is_some_and(|s| s.contains("Bold"));
 
+        // ASDReader patch: a weight heavier than regular is bold to the 14 standard fonts, which
+        // have no other (see `names_a_heavy_weight`); a descriptor weight of 600 (semibold) or more
+        // is too.
+        data.is_bold |= data.font_weight >= 600
+            || data
+                .post_script_name
+                .as_ref()
+                .is_some_and(|s| names_a_heavy_weight(&s.to_ascii_lowercase()));
+
         data
     }
 
@@ -650,8 +665,21 @@ impl Default for FallbackFontQuery {
             is_bold: false,
             is_small_cap: false,
             character_collection: None,
+            is_composite: false,
         }
     }
+}
+
+/// ASDReader patch: whether a lower-cased font name spells a weight that the 14 standard fonts only
+/// have as bold: `bold` (and `semibold`, `extrabold`…), `demi`, and `black` or `heavy` as a style
+/// (`Arial-Black`, `Arial,Black`, `ArialBlack`, `Helvetica-Heavy`). `black` and `heavy` count only
+/// after a separator or at the end of the name: `Blackadder ITC` is a script family, not a weight.
+pub(crate) fn names_a_heavy_weight(lower: &str) -> bool {
+    lower.contains("bold")
+        || lower.contains("demi")
+        || lower.ends_with("black")
+        || lower.ends_with("heavy")
+        || lower.split(['-', ',', ' ']).skip(1).any(|part| part.contains("black") || part.contains("heavy"))
 }
 
 /// Convert a glyph name to a Unicode character, if possible.

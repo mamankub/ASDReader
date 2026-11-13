@@ -77,10 +77,55 @@ impl RenderConfig {
         InterpreterSettings {
             ocg_overrides: self.layers.clone(),
             hide_comments: self.hide_comments,
-            font_resolver: Arc::new(move |query| japanese_fallback(query).or_else(|| standard(query))),
+            font_resolver: Arc::new(move |query| {
+                japanese_fallback(query).or_else(|| installed_by_name(query)).or_else(|| thai_stand_in(query)).or_else(|| standard(query))
+            }),
             ..InterpreterSettings::default()
         }
     }
+}
+
+/// The face installed on this machine that a font the PDF does not embed is named after (`ArialMT`,
+/// `Tahoma-Bold`, `AngsanaNew`), when the desktop app has named a provider of installed faces
+/// (`asdreader_fonts::named`). Without one (the CLI, the web build) or without a face of that name
+/// and style this is `None` and the bundled stand-in is drawn as before. The face is only drawn
+/// with: it is never embedded in a document or shipped (AGENTS.md §1.4).
+fn installed_by_name(query: &FontQuery) -> Option<(FontData, u32)> {
+    let FontQuery::Fallback(f) = query else { return None };
+    let name = f.post_script_name.as_deref().filter(|n| !n.is_empty())?;
+    let request = asdreader_fonts::named::FaceRequest {
+        post_script_name: name.to_string(),
+        family: f.font_family.clone(),
+        bold: f.is_bold,
+        italic: f.is_italic,
+        weight: f.font_weight,
+    };
+    let face = asdreader_fonts::named::named_face(&request)?;
+    Some((face.bytes, face.index))
+}
+
+/// A Thai face for a composite (Type 0) font that names a family that draws Thai (Cordia New,
+/// Angsana New, TH Sarabun New, Tahoma, Arial Unicode MS…) when the document does not embed it and
+/// no installed face of that name was found: the stand-ins for the standard 14 have no Thai, so such
+/// text drew as unrelated Latin glyphs. An installed looped Thai face the desktop app has named
+/// comes first (Thai readers take the loopless Noto Sans Thai for a display face, not a text one),
+/// then the Noto Sans Thai of asdesign-fonts, which also holds the Latin letters, digits and
+/// punctuation a Thai document mixes in. The CID is read as Unicode through the font's
+/// `/ToUnicode`, so without one hayro still has no way to know the text. `None` for a simple font,
+/// for a family that does not draw Thai, and when ASDReader was built without asdesign-fonts and no
+/// Thai face is installed. Only drawn with: never embedded or shipped (AGENTS.md §1.4).
+fn thai_stand_in(query: &FontQuery) -> Option<(FontData, u32)> {
+    let FontQuery::Fallback(f) = query else { return None };
+    if !f.is_composite || !asdreader_fonts::named::is_thai_capable_family(f.post_script_name.as_deref()?) {
+        return None;
+    }
+    let installed = asdreader_fonts::installed::installed_thai_faces();
+    if let Some(face) = installed.iter().find(|face| face.bold == f.is_bold).or_else(|| installed.first()) {
+        let data: FontData = face.bytes.clone();
+        return Some((data, 0));
+    }
+    let face = asdreader_fonts::document_thai_font()?;
+    Some((Arc::new(face.bytes), 0))
 }
 
 /// A Japanese face from asdesign-fonts for a CID font of the Adobe-Japan1 collection that the PDF

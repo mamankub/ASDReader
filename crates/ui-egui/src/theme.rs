@@ -187,6 +187,10 @@ pub fn install_fonts(ctx: &egui::Context) {
     // Thai face; read when first needed. The web build reads no installed fonts.
     #[cfg(not(target_arch = "wasm32"))]
     asdreader_fonts::installed::set_installed_thai_provider(crate::system_fonts::document_thai_faces);
+    // A PDF font that is not embedded (`/BaseFont /ArialMT`) is drawn with the face of that name
+    // installed here, when there is one: drawn with only, never embedded or shipped (AGENTS.md §1.4).
+    #[cfg(not(target_arch = "wasm32"))]
+    asdreader_fonts::named::set_named_face_provider(crate::system_fonts::named_face);
     install_fonts_for(ctx, CjkPreference::Default);
 }
 

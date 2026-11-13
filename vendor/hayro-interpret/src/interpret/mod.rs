@@ -134,6 +134,11 @@ impl Default for InterpreterSettings {
             #[cfg(feature = "embed-fonts")]
             font_resolver: Arc::new(|query| match query {
                 FontQuery::Standard(s) => Some(s.get_font_data()),
+                // ASDReader patch: a simple font is asked for by name before its bundled stand-in
+                // is chosen, and the stand-in is picked by the font itself when this resolver has
+                // nothing better; so a simple font gets no answer here. A composite (Type 0) font
+                // keeps the stand-in picked from its flags.
+                FontQuery::Fallback(f) if !f.is_composite => None,
                 FontQuery::Fallback(f) => Some(f.pick_standard_font().get_font_data()),
             }),
             #[cfg(feature = "embed-cmaps")]

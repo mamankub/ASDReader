@@ -88,6 +88,7 @@ impl Type0Font {
                     } else {
                         let mut query = FallbackFontQuery::new(dict);
                         query.character_collection = character_collection.clone();
+                        query.is_composite = true;
 
                         warn!(
                             "unable to load CID font {} ({:?}), attempting fallback",

@@ -3,8 +3,8 @@ use crate::font::blob::{CffFontBlob, OpenTypeFontBlob};
 use crate::font::generated::{glyph_names, metrics, standard, symbol, zapf_dings};
 use crate::font::true_type::{Width, read_encoding, read_widths};
 use crate::font::{
-    Encoding, FontData, FontQuery, glyph_name_to_unicode, normalized_glyph_name, stretch_glyph,
-    strip_subset_prefix,
+    Encoding, FallbackFontQuery, FontData, FontQuery, glyph_name_to_unicode, normalized_glyph_name,
+    stretch_glyph, strip_subset_prefix,
 };
 use hayro_syntax::object::Dict;
 use hayro_syntax::object::Name;
@@ -237,9 +237,9 @@ pub(crate) fn select_standard_font(
     // keywords that appear in the name.
     let lower = name.to_ascii_lowercase();
 
-    let is_bold = descriptor.get::<u32>(FONT_WEIGHT).is_some_and(|w| w >= 700)
-        || lower.contains("bold")
-        || lower.contains("demi");
+    let is_bold = descriptor.get::<u32>(FONT_WEIGHT).is_some_and(|w| w >= 600)
+        // ASDReader patch: `black` and `heavy` styles too (see `names_a_heavy_weight`).
+        || crate::font::names_a_heavy_weight(&lower);
     let is_italic = descriptor
         .get::<f32>(ITALIC_ANGLE)
         .is_some_and(|a| a != 0.0)
@@ -382,8 +382,25 @@ impl StandardKind {
             encoding = Encoding::BuiltIn;
         }
 
-        let (blob, index) = resolver(&FontQuery::Standard(base_font))?;
-        let base_font_blob = StandardFontBlob::from_data(blob, index)?;
+        // ASDReader patch: a font that is not one of the 14 (`fallback`) first asks the resolver for
+        // itself by name, weight and stretch (a `FontQuery::Fallback` with no character collection:
+        // a simple font), so a caller that has the real face (one installed on the machine) can draw
+        // it. Without an answer, or when the answer is not a font program, the bundled stand-in for
+        // `base_font` is used exactly as before. An exact standard-14 name never asks: its metrics
+        // are already exact.
+        let named = if fallback {
+            resolver(&FontQuery::Fallback(FallbackFontQuery::new(dict)))
+                .and_then(|(blob, index)| StandardFontBlob::from_data(blob, index))
+        } else {
+            None
+        };
+        let base_font_blob = match named {
+            Some(blob) => blob,
+            None => {
+                let (blob, index) = resolver(&FontQuery::Standard(base_font))?;
+                StandardFontBlob::from_data(blob, index)?
+            }
+        };
 
         Some(Self {
             base_font,
