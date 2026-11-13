@@ -91,7 +91,7 @@ jobs:
       # Windows checks what differs by platform: the build (with resources) and the tests.
       # TEMPORARY diagnostic branch only: repeat the one test and print its output. Do not merge.
       windows-command: |
-        for i in 1 2 3; do
+        for i in 1 2 3 4; do
           echo "##### attempt $i"
-          cargo test -p asdreader-ui-egui --test it --locked -- --nocapture || true
+          cargo test -p asdreader-ui-egui --test it forms::tabbing_back_to_the_same_field --locked -- --nocapture || true
         done
