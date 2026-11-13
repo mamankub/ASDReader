@@ -211,7 +211,10 @@ jobs:
         id: cache-profile
         shell: bash
         run: |
-          python - <<'PYTHON'
+          # The owner's Linux runner image ships `python3` only; the Windows one has both.
+          py=python3
+          "$py" -c "" 2>/dev/null || py=python
+          "$py" - <<'PYTHON'
           import hashlib
           import json
           import os
