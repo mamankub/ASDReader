@@ -69,7 +69,8 @@ jobs:
     with:
       # Windows on main, manual runs and pull requests labelled `full-ci`. No macOS on PRs or main:
       # the org's 5 macOS slots are kept for release builds, and release.yml builds macOS.
-      os: ${{ (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'full-ci')) && '["ubuntu-24.04","windows-latest"]' || '["ubuntu-24.04"]' }}
+      # TEMPORARY diagnostic branch only: Windows leg alone, focused command below. Do not merge.
+      os: '["windows-latest"]'
       # Same asdesign-fonts commit as release.yml and freebsd.yml.
       asdesign-fonts-ref: c76dcbc93b13d3b6981c12602bc545ea7ec3e67a
       require-asdesign-fonts: true
@@ -88,6 +89,9 @@ jobs:
       linux-env: ASDREADER_ORACLES_REQUIRED=1
       windows-env: ASDREADER_REQUIRE_WINRES=1
       # Windows checks what differs by platform: the build (with resources) and the tests.
+      # TEMPORARY diagnostic branch only: repeat the one test and print its output. Do not merge.
       windows-command: |
-        cargo clippy --workspace --all-targets --locked -- -D warnings
-        cargo test --workspace --locked
+        for i in 1 2 3 4; do
+          echo "##### attempt $i"
+          cargo test -p asdreader-ui-egui --test it forms::tabbing_back_to_the_same_field --locked -- --nocapture || true
+        done
