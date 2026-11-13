@@ -524,9 +524,23 @@ fn save_state(h: &Harness<'static, ASDReaderApp>) -> String {
 fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path, case: &str) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
     let mut frames = 0u32;
+    let mut first_toast: Option<String> = None;
     while !path.exists() {
+        if first_toast.is_none() {
+            first_toast = h.state().toast.as_ref().map(|t| t.0.clone());
+        }
         if std::time::Instant::now() >= deadline {
-            panic!("{case}: the save never wrote {} after {frames} frames. {}", path.display(), save_state(h));
+            // A staging file left behind says the write itself failed rather than never starting.
+            let mut left: Vec<String> = std::fs::read_dir(path.parent().unwrap())
+                .map(|d| d.filter_map(|e| e.ok()).map(|e| e.file_name().to_string_lossy().into_owned()).collect())
+                .unwrap_or_default();
+            left.sort();
+            panic!(
+                "{case}: the save never wrote {} after {frames} frames. first toast seen: {first_toast:?} \
+                 files next to it: {left:?} {}",
+                path.display(),
+                save_state(h)
+            );
         }
         h.run_steps(1);
         frames += 1;
