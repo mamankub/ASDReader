@@ -134,14 +134,35 @@ fn describe(node: &Node<'_>, depth: usize, out: &mut String) {
     }
 }
 
-/// Compares the panel with `tests/snapshots/panel_<name>.txt`, or writes it with `UPDATE_SNAPSHOTS`.
-fn check(h: &Harness<'static, ASDReaderApp>, name: &str) -> Result<(), String> {
+/// The panel's AccessKit tree as text.
+fn describe_panel(h: &Harness<'static, ASDReaderApp>) -> String {
     let mut got = String::new();
     describe(&panel(h), 0, &mut got);
+    got
+}
+
+/// [`describe_panel`] once the panel stops changing. The search panel settles which result is
+/// selected on a later frame than the one that found the matches, so a snapshot taken in between
+/// shows the wrong row selected on a slow machine.
+fn describe_panel_settled(h: &mut Harness<'static, ASDReaderApp>) -> String {
+    let mut previous = describe_panel(h);
+    for _ in 0..120 {
+        h.run_steps(1);
+        let now = describe_panel(h);
+        if now == previous {
+            return now;
+        }
+        previous = now;
+    }
+    previous
+}
+
+/// Compares the panel with `tests/snapshots/panel_<name>.txt`, or writes it with `UPDATE_SNAPSHOTS`.
+fn check_text(name: &str, got: &str) -> Result<(), String> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/snapshots").join(format!("panel_{name}.txt"));
     if std::env::var_os("UPDATE_SNAPSHOTS").is_some() {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        std::fs::write(&path, &got).unwrap();
+        std::fs::write(&path, got).unwrap();
         return Ok(());
     }
     match std::fs::read_to_string(&path) {
@@ -235,9 +256,11 @@ fn open(p: RightPanel) -> (Harness<'static, ASDReaderApp>, &'static str) {
 fn every_panel_matches_its_snapshot() {
     let mut failures = Vec::new();
     for p in ALL {
-        let (h, name) = open(p);
+        let (mut h, name) = open(p);
         assert_eq!(h.state().right, Some(p), "{name} opens its own panel");
-        if let Err(e) = check(&h, name) {
+        // Let the panel finish settling before it is read (see `describe_panel_settled`).
+        let got = describe_panel_settled(&mut h);
+        if let Err(e) = check_text(name, &got) {
             failures.push(e);
         }
     }
