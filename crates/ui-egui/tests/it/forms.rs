@@ -505,13 +505,15 @@ fn save_state(h: &Harness<'static, ASDReaderApp>) -> String {
     let state = h.state();
     let view = state.views.first();
     format!(
-        "toast={:?} dialog={} active={:?} views={} dirty={:?} focus={} pending_edit={} save_override={:?}",
+        "toast={:?} dialog={} active={:?} views={} dirty={:?} focus={} draft={:?} notice={:?} pending_edit={} save_override={:?}",
         state.toast.as_ref().map(|t| t.0.clone()),
         state.dialog.is_some(),
         state.active,
         state.views.len(),
         view.and_then(|v| state.session.get(v.id)).map(|d| d.dirty),
         view.is_some_and(|v| v.forms.focus.is_some()),
+        view.and_then(|v| v.forms.focus.as_ref()).map(|f| f.text.clone()),
+        view.and_then(|v| v.forms.notice.clone()),
         view.is_some_and(|v| v.pending_edit.is_some()),
         state.save_override.as_deref().map(str::to_string),
     )
