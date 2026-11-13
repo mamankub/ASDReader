@@ -489,11 +489,31 @@ fn saved_value(path: &std::path::Path, name: &str) -> Vec<String> {
 
 /// Step frames until the save has written `path`, instead of assuming it is there after a fixed
 /// number of frames. The write is atomic, so the file appears only when it is complete.
-fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path) {
+fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path, case: &str) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut frames = 0u32;
     while !path.exists() {
-        assert!(std::time::Instant::now() < deadline, "the save never wrote {}", path.display());
+        if std::time::Instant::now() >= deadline {
+            // A save that was refused or failed says so in a toast, not by throwing; report what
+            // the app was doing instead of only that the file is missing.
+            let state = h.state();
+            let view = state.views.first();
+            panic!(
+                "{case}: the save never wrote {} after {frames} frames. toast={:?} dialog={} \
+                 active={:?} views={} dirty={:?} focus={} pending_edit={} save_override={:?}",
+                path.display(),
+                state.toast.as_ref().map(|t| t.0.clone()),
+                state.dialog.is_some(),
+                state.active,
+                state.views.len(),
+                view.and_then(|v| state.session.get(v.id)).map(|d| d.dirty),
+                view.is_some_and(|v| v.forms.focus.is_some()),
+                view.is_some_and(|v| v.pending_edit.is_some()),
+                state.save_override.as_deref().map(|p| p.to_string()),
+            );
+        }
         h.run_steps(1);
+        frames += 1;
         std::thread::sleep(std::time::Duration::from_millis(10));
     }
     // One more frame so the app has seen its own save before the test looks at its state.
@@ -575,7 +595,7 @@ fn tabbing_back_to_the_same_field_then_saving_keeps_the_committed_value() {
             h.run_steps(3);
             h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::S);
         }
-        wait_for_file(&mut h, &out);
+        wait_for_file(&mut h, &out, case);
         assert_eq!(saved_value(&out, "qty"), ["42"], "{case}: saving cannot restore the old value");
         assert_eq!(value(&h, "qty"), ["42"], "{case}");
         // One typing action is one history entry, even after saving. Escape closes the
