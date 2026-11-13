@@ -15,6 +15,7 @@ mod encodings;
 pub mod fallback;
 pub mod glyph_text;
 pub mod installed;
+pub mod named;
 pub mod pdf;
 mod script;
 mod shaping;

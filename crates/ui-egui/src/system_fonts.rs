@@ -18,6 +18,10 @@ use egui::FontData;
 
 #[cfg(all(unix, not(target_os = "macos"), not(target_arch = "wasm32")))]
 mod fontconfig;
+mod named_faces;
+
+/// The installed face a PDF font that is not embedded is named after (`asdreader_fonts::named`).
+pub use named_faces::named_face;
 
 /// Larger files are not read: a font path is still untrusted input.
 const MAX_BYTES: u64 = 32 << 20;
