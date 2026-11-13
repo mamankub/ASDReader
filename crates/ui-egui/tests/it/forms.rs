@@ -4,8 +4,6 @@ use asdreader_ui_egui::ASDReaderApp;
 use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 
-use crate::support;
-
 fn harness() -> Harness<'static, ASDReaderApp> {
     let mut h = Harness::builder().with_size(egui::vec2(1400.0, 900.0)).build_eframe(|_cc| {
         let mut app = ASDReaderApp::new();
@@ -29,16 +27,6 @@ fn harness() -> Harness<'static, ASDReaderApp> {
 fn value(h: &Harness<'static, ASDReaderApp>, name: &str) -> Vec<String> {
     let s = h.state();
     s.session.get(s.views[0].id).unwrap().form.iter().find(|f| f.name == name).unwrap().value.clone()
-}
-
-/// Step frames until the field's editor has taken keyboard focus. `Focus::request_focus` is the
-/// one-shot ask the editor clears once egui's focus is on it: ⌘A or typing sent before that frame is
-/// dropped, or appended to the old value instead of replacing it (which a validating field then
-/// refuses, so an ⌘S queued behind it never runs).
-fn wait_for_editor_focus(h: &mut Harness<'static, ASDReaderApp>, name: &str) {
-    support::wait_until(h, "the field's editor takes focus", |app| {
-        app.views[0].forms.focus.as_ref().is_some_and(|f| f.name == name && !f.request_focus)
-    });
 }
 
 /// Click the centre of a field's widget.
@@ -550,8 +538,14 @@ fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path,
     h.run_steps(1);
 }
 
+/// A fresh directory for one test. The counter makes each call its own directory: two tests ran in
+/// parallel threads of this binary share the process id, and both used "same-frame", so each one's
+/// `remove_dir_all` deleted the other's directory mid-test and its save failed with
+/// "The system cannot find the path specified" (os error 3).
 fn scratch(name: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!("asdreader-forms-{name}-{}", std::process::id()));
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let unique = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = std::env::temp_dir().join(format!("asdreader-forms-{name}-{}-{unique}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     dir
@@ -613,7 +607,6 @@ fn tabbing_back_to_the_same_field_then_saving_keeps_the_committed_value() {
         });
         h.run_steps(6);
         click_field(&mut h, "qty", 0);
-        wait_for_editor_focus(&mut h, "qty");
         h.key_press_modifiers(egui::Modifiers::COMMAND, egui::Key::A);
         h.event(egui::Event::Text("42".into()));
         h.run_steps(2);
@@ -685,7 +678,6 @@ fn one_frame(h: &mut Harness<'static, ASDReaderApp>, events: Vec<egui::Event>) {
 /// Type `text` into field `name`, then press ⌘S in the same frame as `last` (more input).
 fn type_then_save_in_one_frame(h: &mut Harness<'static, ASDReaderApp>, name: &str, text: &str, last: egui::Event, out: &std::path::Path) {
     click_field(h, name, 0);
-    wait_for_editor_focus(h, name);
     h.event(egui::Event::Text(text.into()));
     h.run_steps(2);
     h.state_mut().save_override = Some(out.to_string_lossy().into_owned());
