@@ -487,6 +487,24 @@ fn saved_value(path: &std::path::Path, name: &str) -> Vec<String> {
     app.session.get(app.views[0].id).unwrap().form.iter().find(|f| f.name == name).unwrap().value.clone()
 }
 
+/// What the app was doing, for a save that produced no file: a refused or failed save says so in a
+/// toast instead of throwing.
+fn save_state(h: &Harness<'static, ASDReaderApp>) -> String {
+    let state = h.state();
+    let view = state.views.first();
+    format!(
+        "toast={:?} dialog={} active={:?} views={} dirty={:?} focus={} pending_edit={} save_override={:?}",
+        state.toast.as_ref().map(|t| t.0.clone()),
+        state.dialog.is_some(),
+        state.active,
+        state.views.len(),
+        view.and_then(|v| state.session.get(v.id)).map(|d| d.dirty),
+        view.is_some_and(|v| v.forms.focus.is_some()),
+        view.is_some_and(|v| v.pending_edit.is_some()),
+        state.save_override.as_deref().map(str::to_string),
+    )
+}
+
 /// Step frames until the save has written `path`, instead of assuming it is there after a fixed
 /// number of frames. The write is atomic, so the file appears only when it is complete.
 fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path, case: &str) {
@@ -494,23 +512,7 @@ fn wait_for_file(h: &mut Harness<'static, ASDReaderApp>, path: &std::path::Path,
     let mut frames = 0u32;
     while !path.exists() {
         if std::time::Instant::now() >= deadline {
-            // A save that was refused or failed says so in a toast, not by throwing; report what
-            // the app was doing instead of only that the file is missing.
-            let state = h.state();
-            let view = state.views.first();
-            panic!(
-                "{case}: the save never wrote {} after {frames} frames. toast={:?} dialog={} \
-                 active={:?} views={} dirty={:?} focus={} pending_edit={} save_override={:?}",
-                path.display(),
-                state.toast.as_ref().map(|t| t.0.clone()),
-                state.dialog.is_some(),
-                state.active,
-                state.views.len(),
-                view.and_then(|v| state.session.get(v.id)).map(|d| d.dirty),
-                view.is_some_and(|v| v.forms.focus.is_some()),
-                view.is_some_and(|v| v.pending_edit.is_some()),
-                state.save_override.as_deref().map(|p| p.to_string()),
-            );
+            panic!("{case}: the save never wrote {} after {frames} frames. {}", path.display(), save_state(h));
         }
         h.run_steps(1);
         frames += 1;
@@ -667,6 +669,7 @@ fn typing_and_saving_in_the_same_frame_saves_the_last_keystrokes() {
     let out = dir.join("saved.pdf");
     let mut h = harness();
     type_then_save_in_one_frame(&mut h, "name", "Browser", egui::Event::Text(" Form 123".into()), &out);
+    wait_for_file(&mut h, &out, "same-frame typing");
     assert_eq!(saved_value(&out, "name"), ["Browser Form 123"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
